@@ -1,9 +1,15 @@
 # Studio S3c: account workspaces (design)
 
-Date: 2026-09-30 · Status: design approved section by section (sections 1–6, 2026-09-30); written spec awaiting owner review. No implementation plan until S1 is finished, so the plan builds on S1's final schema.
+Date: 2026-09-30 · Status (stop card, 2026-09-30):
+- §0 goal and scope, §1 data model: **approved** (given by the owner before this design).
+- §2 pages: **approved** (with the Experiments nav item, added only when S3c is built).
+- §3 producers, §4 results, §5 API/data/migration/rollback, §6 roadmap: **approved** in chat, one section at a time.
+- The written spec as a whole, and ADR-42 (draft in 05): **written, awaiting owner review**.
+- §7 open points, the coordinator's addendum D1–D10 (not received in this session), the per-page "home" lines for ADR-44 and the notification policy for ADR-45: **not started**.
+- Implementation plan: **not started**, on purpose: it waits until S1 is finished, so it builds on S1's final schema.
 
 Decision: ADR-42 (draft in [docs/studio/05](../../studio/05-proposed-adrs.md)), which replaces ADR-35's "blueprints are files" part.
-Background: ADR-25, 26, 29, 35, 38, 41; [01](../../studio/01-vision-and-strategy.md), [07](../../studio/07-channel-portfolio.md), [08 §2](../../studio/08-dashboard-and-operations.md#2-dashboard-information-architecture-nextjs), [09](../../studio/09-account-registry.md); the S1 spec and plan (2026-09-29); the S3a spec (2026-09-29).
+Background: ADR-25, 26, 29, 35, 38, 41, 43–46; [01](../../studio/01-vision-and-strategy.md), [07](../../studio/07-channel-portfolio.md), [08 §2](../../studio/08-dashboard-and-operations.md#2-dashboard-information-architecture-nextjs), [09](../../studio/09-account-registry.md); the S1 spec and plan (2026-09-29); the S3a spec (2026-09-29).
 
 ## 0. Goal and scope
 
@@ -23,7 +29,8 @@ An **experiment** ties them together: a change, measured over a window, then kep
 **Facts designed against (coordinator audit, 2026-09-30):**
 - S1 Tasks 1–13 are built; 14–21 aren't. S1 Task 18 adds `/accounts` and `/sources` routes and CLI (reused here). The DB and `blueprints/` reach Modal only in S1 Task 21. `PostingOverview.accounts` is `[]` until S1 Task 17. Hashtags come from env until S1 Task 15.
 - S1 freezes migration 0001 as explicit DDL (Task 13b, log #84). S3c's migration is 0002.
-- `content_items` already carries `producer_version` (git SHA; legacy Dict items keep `"plan-c"`, log #78/#85) and a license from the source or job permission (#75). `setup_version` is a new, separate column.
+- `content_items` already carries `producer_version`, now **derived from the output logic** (ADR-43: stage versions, prompt names and model ids; the git SHA is only `build`; legacy Dict items keep `"plan-c"`) and a license from the source or job permission (#75). `setup_version` is a new, separate column: `producer_version` says which code made an item, `setup_version` which account setup.
+- Accepted after this design was approved, to apply in the plan: **ADR-44** (one home per task: each page in 08 §2 gets its Telegram role; experiment decisions and setup edits are dashboard tasks; Telegram only deep-links to them), **ADR-45** (notification budget: e.g. "experiment needs a decision" is digest-level, not instant), **ADR-46** (daily reconcile).
 - Contract rule (#49): `GET /posting` and `GET /jobs/{id}` change only additively; otherwise `web/openapi.json` is regenerated in the same checkpoint.
 - Vercel previews are build-only (no login there, log #83). Checks run locally and in production.
 

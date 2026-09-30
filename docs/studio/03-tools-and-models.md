@@ -14,6 +14,9 @@ Research date: 2026-09-29. **Estimates** are marked (est.). Everything is to be 
   - IndexTTS (commercial use needs written permission).
   - MusicGen weights, YuE2.
   - The MMS forced aligner (CC-BY-NC).
+  - The FusioniX LoRA for Wan/InfiniteTalk (CC BY-NC-SA). GFPGAN's non-commercial parts. RetinaFace weights converted from InsightFace (pulled in by EchoMimicV3's preview path). `Kim_Vocal_2.onnx` (no license; LongCat's vocal separator). Found in X2, 2026-09-30.
+- **Internal metrics only, never in the product:** SyncNet's `syncnet_v2.model` (no stated license), used with YuNet instead of its unlicensed S3FD detector (X2).
+- **Open, owner ruling needed (log O7):** models pretrained on non-commercial data with permissively licensed weights, e.g. `chinese-wav2vec2-base` (MIT weights, pretrained on WenetSpeech, which is non-commercial). InfiniteTalk and EchoMimic Flash use it; LongCat 1.5 doesn't.
 - **Libraries:** LGPL used unmodified as a dependency is allowed; the allowlist above is for models and vendored code.
 
 ## Media models (self-hosted on Modal)

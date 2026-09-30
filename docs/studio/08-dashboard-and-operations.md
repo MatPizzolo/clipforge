@@ -65,31 +65,64 @@ Anomalies (escalation above target, a false pass, a budget breach) go on the fir
 
 ## 2. Dashboard information architecture (Next.js)
 
-| Page | What it shows | Primary actions |
-|---|---|---|
-| **Home** | Today across all accounts: posts scheduled or published, review inbox count, escalation rate, spend vs budget, anomalies, a banner for any source permission expiring within 14 days, and experiments that **need a decision** (S3c) | Jump to the inbox or the experiment |
-| **Review inbox** | Items in `review`/`fix`, with video preview (R2), per-platform copy, gate answers and confidences, and the reason for escalation | Approve, edit copy, reject (with reason), re-render |
-| **Calendar** | Week view per account and platform: scheduled, published, failed | Drag to reschedule, pause an account |
-| **Accounts** (S3c) | The **studio map**: every account grouped by category (`clips`, `story`, `band`, `avatar`, `model`) with status, blueprint and version, tier, recent posting and running experiments. **Workspaces** per category (playbook, rules, defaults, blueprints), blueprint (pillars, series, briefs, money, prompts) and account (effective setup with where each value comes from, versions and diffs, results, experiments, notes, its sources, health). Every save is a new version (ADR-42) | Create from a blueprint; edit the setup (with a note); reset an override; diff and restore versions; apply a category or blueprint version to its accounts; add a note; start an experiment |
-| **Experiments** (S3c) | Across all accounts: **needs a decision**, running (progress, before vs during so far), drafts, and ideas (open idea notes). Each experiment: hypothesis, change (from and to version), one metric, window, cost preview, result with a verdict (likely better / no clear difference / likely worse) and a "too few items" warning | Start one from an idea or a setup change; stop; keep or revert with a reason; add the learning to the category playbook |
-| **Sources** | Every source (kind, account, status) with its permission record: type, granted date and by whom, evidence link, platforms, monetization and translation allowed, expiry, restrictions; campaign rules; change history | Add a source, edit it, pause or end it (the database is the only copy, since S1) |
-| **Personas** | Voice sample, face references, LoRA versions, a consistency score (from X3's method) | Regenerate, retire |
-| **Produce** | Submit jobs (clip a source, picked from Sources so credit and permission come with it; story brief or topic batch, band, avatar offer, dub a winner); **batch planner** ("10 scripts for account X this week") | Queue batches with a cost estimate |
-| **Decisions** | The ledger: filter by decision, lane, judge, account; calibration chart vs audit outcomes; threshold settings | Adjust thresholds (logged) |
-| **Stats** | Per item and account: views, retention (where available), followers; **winners** (top decile) | Queue a dub, clone a series |
-| **Money** | Program progress (YPP, TikTok Rewards, Facebook CMP), clicks, conversions, revenue vs cost per account, campaign submissions (Whop) | Import CSV, mark a campaign submission |
-| **Costs** | GPU, LLM and Judge costs per stage, item and account; budget burn-down | Change budgets |
-| **Desk** (after S7) | Inbound events by lane (comments, DMs, emails, submissions, offers, trends) with drafts | Send a draft (manually), mark handled |
-| **Funnel** (later) | Bio-page visits, email signups, sequence performance, product sales | — |
+| Page | What it shows | Primary actions | Telegram's role (ADR-44) |
+|---|---|---|---|
+| **Home** | Today across all accounts: posts scheduled or published, review inbox count, escalation rate, spend vs budget, anomalies, a banner for any source permission expiring within 14 days, and experiments that **need a decision** (S3c) | Jump to the inbox or the experiment | Digest at 09:00 links here (ADR-45) |
+| **Jobs** (S3a, built) | A job-id lookup, recent jobs (kept in the browser until S3 has a jobs list from S1's `jobs` table), and the job page: clips, progress, errors, cost, download link | Look up a job; resume a failed one (S3) | The failure alert carries [Resume] (deliberate duplicate: safe and cached, one tap) and [Open]; `/status <job_id>` and typed `/resume` retire when this page has Resume |
+| **Review inbox** | Items in `review`/`fix`, with video preview (signed Volume links; R2 only if needed, ADR-28), per-platform copy, gate answers and confidences, and the reason for escalation | Approve, edit copy, reject (with reason), re-render | Telegram gets a review card (✅ / 🗑 / Open) only for items due within 2 h; editing copy happens only here. Before S2 this page is a queue manager (skip, reject, reorder, posted correction), not a second posting flow |
+| **Calendar** | Week view per account and platform: scheduled, published, failed | Drag to reschedule, pause an account | `/status` in Telegram is a short read-only summary with a link here. The per-account pause here is the same writer as `/pause` (deliberate duplicate: the brake must work from the phone) |
+| **Accounts** (S3c) | The **studio map**: every account grouped by category (`clips`, `story`, `band`, `avatar`, `model`) with status, blueprint and version, tier, recent posting and running experiments. **Workspaces** per category (playbook, rules, defaults, blueprints), blueprint (pillars, series, briefs, money, prompts) and account (effective setup with where each value comes from, versions and diffs, results, experiments, notes, its sources, health). Every save is a new version (ADR-42) | Create from a blueprint; edit the setup (with a note); reset an override; diff and restore versions; apply a category or blueprint version to its accounts; add a note; start an experiment | none (notes and edits only here) |
+| **Experiments** (S3c) | Across all accounts: **needs a decision**, running (progress, before vs during so far), drafts, and ideas (open idea notes). Each experiment: hypothesis, change (from and to version), one metric, window, cost preview, result with a verdict (likely better / no clear difference / likely worse) and a "too few items" warning | Start one from an idea or a setup change; stop; keep or revert with a reason; add the learning to the category playbook | the digest lists "needs a decision"; keep or revert is decided only here |
+| **Sources** | Every source (kind, account, status) with its permission record: type, granted date and by whom, evidence link, platforms, monetization and translation allowed, expiry, restrictions; campaign rules; change history | Add a source, edit it, pause or end it (the database is the only copy, since S1) | an instant alert when an expired permission starts holding clips; the digest lists permissions expiring within 14 days |
+| **Personas** | Voice sample, face references, LoRA versions, a consistency score (from X3's method) | Regenerate, retire | none |
+| **Produce** | Submit jobs (clip a source, picked from Sources so credit and permission come with it; story brief or topic batch, band, avatar offer, dub a winner); **batch planner** ("10 scripts for account X this week") | Queue batches with a cost estimate | `/clip` stays in Telegram until this page ships, then retires (ADR-44) |
+| **Decisions** | The ledger: filter by decision, lane, judge, account; calibration chart vs audit outcomes; threshold settings | Adjust thresholds (logged) | none |
+| **Stats** | Per item and account: views, retention (where available), followers; **winners** (top decile) | Queue a dub, clone a series | none (digest line: yesterday's posts) |
+| **Money** | Program progress (YPP, TikTok Rewards, Facebook CMP), clicks, conversions, revenue vs cost per account, campaign submissions (Whop) | Import CSV, mark a campaign submission | none |
+| **Costs** | GPU, LLM and Judge costs per stage, item and account; budget burn-down | Change budgets | an instant alert on a budget breach |
+| **Desk** (after S7) | Inbound events by lane (comments, DMs, emails, submissions, offers, trends) with drafts | Send a draft (manually), mark handled | none |
+| **Funnel** (later) | Bio-page visits, email signups, sequence performance, product sales | — | none |
 
 Implementation notes:
 - **Server components** call the Modal `admin` endpoint from Vercel route handlers, with proxy-auth headers plus the bearer token (02 §8).
-- The typed client is generated by hey-api. TanStack Query polls every 2–5 s on live pages.
-- Media plays from R2 URLs.
+- The typed client is generated by hey-api (types and zod schemas). TanStack Query polls Home every 15 s and a running job every 5 s, and not at all while the tab is hidden (log #50).
+- Media plays from signed, expiring Volume links (ADR-13, ADR-28); R2 only if those prove unreliable.
 - No direct database access from Vercel (ADR-2).
 - **Phone and laptop:** every page works on both. On a phone: bottom tabs and one column. On a laptop (≥ 1024 px): a sidebar, multi-column pages, and tables where lists get long (clips, sources, posts). Telegram and the phone remain the quick path; the laptop is for review batches, planning and setup.
 
+### 2b. Two surfaces, one product (ADR-44, ADR-45)
+
+**One home per task.** The column above names Telegram's role for each page. Telegram does push and single-tap, time-bound decisions away from the desk; the dashboard does everything that needs context, comparison, editing, bulk actions, history, experiments or money. Tasks in both surfaces, each on purpose:
+
+| Task | Why both | Shared backend |
+|---|---|---|
+| Assisted posting (✅ per platform, ⏭, 🗑 + reason) | Posting happens in the phone apps at the slot; the dashboard corrects a mistake later | `posting/actions.py` (S1 addendum), actor `telegram:<user id>` or `web:<login>` |
+| Pause / go | The brake must work from the phone; the laptop toggles one account | `posting/actions.py` `pause`, plus a Dict brake key from S2 |
+| Review approve / reject (from S2) | Items due within 2 h need a decision away from the desk; batches are faster on the laptop | the S2 review service |
+| Resume a failed job | One safe tap from the alert; the job page shows the context | `service.resume_job` |
+
+**Staying in sync.** A dashboard action redraws or deletes every Telegram message of that item (its buttons end in the new state); a Telegram tap shows on the dashboard's next poll. Both surfaces follow ADR-14's one-writer rule and the same claim keys.
+
+**Notification policy (ADR-45):**
+
+| Event | Where |
+|---|---|
+| Assisted clip at a slot; review item due within 2 h; a publish failed for a post due today; a job failed with less than 1 day of queue left; `/pause` confirmation; Upload-Post disconnected; budget breach; an expired permission holding clips; the database unavailable at the tick | **instant** |
+| Other job failures, held clips, accounts with under 3 days of queue, permissions expiring within 14 days, experiments needing a decision, sample-tier spot checks, review backlog, cost vs budget, yesterday's posts | **digest** at 09:00 (owner's time zone), anomalies on the first line |
+| Job done, clips rendered, successful posts, version saves, source edits, stats | **dashboard only**. A Telegram card already sent is edited in place ("Posted ✓ TT·IG·YT"), which uses no budget |
+
+- **Quiet hours:** 23:00–08:00; only brake-worthy events (publishing broken across accounts, spend over 2× the daily budget) break through.
+- **Rate limits:** one alert per (kind, subject) per hour, deduped by a Dict claim `notify:<kind>:<subject>:<hour>`; at most 20 instant messages an hour, the rest folded into "N more → dashboard".
+- **Ops alerts:** silent failures (channel jobs, enqueue, tick, keep-alive, mirror, verify differences) go through `ops_alert()`; an alert failure never fails a step.
+
+**Deep links.** Telegram messages carry URL buttons built from `DASHBOARD_URL`: `/jobs/<id>`, `/accounts/<id>`, `/sources/<id>`, `/experiments/<id>`, `/experiments?needs=decision`, `/review?account=<id>`. Login keeps the target (`callbackUrl`, relative paths only, log #99).
+
+**Identity.** One owner: the Telegram user id in `TELEGRAM_ALLOWED_USER_IDS` and the GitHub account whose verified email is `OWNER_EMAIL`. Every write records which one acted.
+
+**Telegram after S2.** It keeps review cards, alerts, the brake, the digest and the AssistedPublisher fallback. `/clip` retires when Produce ships; `/status <job_id>` and typed `/resume` retire when the job page has Resume; the ✅ taps stay only for accounts on the fallback.
+
 ## 3. Notion mirror (one-way)
+
 
 - **What gets mirrored:**
   - the planning pack (`docs/studio/*`, as pages under a "ClipForge Studio" parent);

@@ -2,8 +2,8 @@
 
 The single list of **what exists or is planned**: every content category and every account, with the ids the code uses. [07](07-channel-portfolio.md) explains **why** each concept exists (niche, money, risks). This file says **what** each account is.
 
-- **Until S3:** this file plus the `blueprints/` files are the source of truth.
-- **After S3:** the database is the source of truth, and this file mirrors it (the dashboard's Accounts page lists the same rows).
+- **Until S3c** (account workspaces): this file plus the `blueprints/` files are the source of truth.
+- **After S3c:** the database is the source of truth, and this file mirrors it (the dashboard's Accounts page lists the same rows).
 - **Rule:** an account is created here first (status `idea`), then gets a blueprint, then `clipforge account create`. Update this file in the same session that changes an account.
 
 Last updated: 2026-09-29.

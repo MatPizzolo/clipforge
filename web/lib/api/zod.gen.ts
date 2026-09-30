@@ -3,6 +3,53 @@
 import * as z from 'zod';
 
 /**
+ * AccountCreate
+ */
+export const zAccountCreate = z.object({
+    blueprint: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+    handle: z.string().regex(/^[A-Za-z0-9._]{1,30}$/),
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).nullish(),
+    language: z.enum(['en', 'es']),
+    posting_from_env: z.boolean().optional().default(false)
+});
+
+/**
+ * BackfillReport
+ *
+ * Result of `jobs backfill`.
+ */
+export const zBackfillReport = z.object({
+    dry_run: z.boolean(),
+    failed: z.array(z.string()).optional(),
+    from_dict: z.int().optional().default(0),
+    from_metadata: z.int().optional().default(0),
+    written: z.int().optional().default(0)
+});
+
+/**
+ * BrandKit
+ */
+export const zBrandKit = z.object({
+    bio_link: z.string().nullish(),
+    caption_preset: z.string().optional().default('default'),
+    cta: z.string().nullish()
+});
+
+/**
+ * CampaignRules
+ */
+export const zCampaignRules = z.object({
+    deadline: z.iso.datetime({ offset: true, local: true }).nullish(),
+    rate_per_1k: z.number().nullish(),
+    required_links: z.array(z.url().min(1)).optional(),
+    required_tags: z.array(z.string()).optional(),
+    rules: z.string().optional().default(''),
+    sponsored: z.boolean().optional().default(true),
+    submission_url: z.url().min(1).nullish(),
+    url: z.url().min(1).nullish()
+});
+
+/**
  * ChannelRef
  *
  * The channel a job's video came from; jobs with one are queued for posting (ADR-23).
@@ -63,6 +110,44 @@ export const zPermission = z.enum([
 ]);
 
 /**
+ * Platform
+ */
+export const zPlatform = z.enum([
+    'tiktok',
+    'instagram',
+    'youtube',
+    'facebook'
+]);
+
+/**
+ * AccountEdit
+ */
+export const zAccountEdit = z.object({
+    chat_id: z.int().nullish(),
+    clear_chat: z.boolean().optional().default(false),
+    handles: z.record(z.string(), z.string()).optional(),
+    hashtags: z.array(z.string()).nullish(),
+    review_tier: z.enum([
+        'review',
+        'sample',
+        'auto'
+    ]).nullish(),
+    slots: z.array(z.string()).nullish(),
+    timezone: z.string().nullish()
+});
+
+/**
+ * PlatformProfile
+ */
+export const zPlatformProfile = z.object({
+    enabled: z.boolean().optional().default(true),
+    handle: z.string().regex(/^[A-Za-z0-9._]{1,30}$/).nullish(),
+    hashtags: z.array(z.string()).optional(),
+    max_len: z.number().nullish(),
+    min_len: z.number().nullish()
+});
+
+/**
  * PostStatus
  *
  * Derived from a clip's keys, never stored (spec §4).
@@ -101,7 +186,25 @@ export const zAccountPosting = z.object({
     next_slot: z.iso.datetime({ offset: true, local: true }).nullish(),
     paused: z.boolean(),
     per_day: z.int().optional().default(0),
+    timezone: z.string().optional().default('UTC'),
     waiting: z.int().optional().default(0)
+});
+
+/**
+ * ImportReport
+ *
+ * Result of `posting import` (Dict queue -> Postgres, spec §5.5).
+ */
+export const zImportReport = z.object({
+    already: z.int().optional().default(0),
+    by_status: z.record(z.string(), z.int()).optional(),
+    dict_items: z.int().optional().default(0),
+    dry_run: z.boolean(),
+    failed: z.array(z.string()).optional(),
+    from_snapshot: z.int().optional().default(0),
+    imported: z.int().optional().default(0),
+    missing_source: z.array(z.string()).optional(),
+    paused: z.boolean().optional().default(false)
 });
 
 /**
@@ -119,6 +222,104 @@ export const zPostingOverview = z.object({
     per_day: z.int(),
     problem: z.string().nullish(),
     waiting: z.int()
+});
+
+/**
+ * PostingSchedule
+ */
+export const zPostingSchedule = z.object({
+    chat_id: z.int().nullish(),
+    hashtags: z.array(z.string()).optional(),
+    slots: z.array(z.string()).optional(),
+    timezone: z.string().optional().default('America/New_York')
+});
+
+/**
+ * Account
+ */
+export const zAccount = z.object({
+    blueprint: z.string(),
+    blueprint_version: z.int(),
+    brand: zBrandKit.optional(),
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+    kind: z.enum([
+        'clips',
+        'story',
+        'band',
+        'avatar',
+        'model'
+    ]),
+    language: z.enum(['en', 'es']),
+    monthly_budget_usd: z.number().optional().default(0),
+    niche: z.string(),
+    paired_account_id: z.string().nullish(),
+    persona_id: z.string().nullish(),
+    platforms: z.record(z.string(), zPlatformProfile),
+    posting: zPostingSchedule.optional(),
+    review_tier: z.enum([
+        'review',
+        'sample',
+        'auto'
+    ]).optional().default('review')
+});
+
+/**
+ * SourceEvent
+ *
+ * One change to a source (source_events): who, when, before and after.
+ */
+export const zSourceEvent = z.object({
+    action: z.enum([
+        'created',
+        'updated',
+        'imported'
+    ]),
+    actor: z.string(),
+    after: z.record(z.string(), z.unknown()),
+    at: z.iso.datetime({ offset: true, local: true }),
+    before: z.record(z.string(), z.unknown()).nullish(),
+    source_id: z.string()
+});
+
+/**
+ * SourcePermission
+ *
+ * The legal basis for posting a source's content (a business record, not config).
+ */
+export const zSourcePermission = z.object({
+    evidence_url: z.url().min(1).nullish(),
+    expires_at: z.iso.datetime({ offset: true, local: true }).nullish(),
+    granted_at: z.iso.date().nullish(),
+    granted_by: z.string().nullish(),
+    monetization_allowed: z.boolean().nullish(),
+    platforms: z.array(zPlatform).min(1).optional(),
+    restrictions: z.string().optional().default(''),
+    translation_allowed: z.boolean().nullish(),
+    type: zPermission
+});
+
+/**
+ * Source
+ */
+export const zSource = z.object({
+    account_id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+    campaign: zCampaignRules.nullish(),
+    creator_handles: z.record(z.string(), z.string()).optional(),
+    credit_name: z.string(),
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+    kind: z.enum([
+        'channel',
+        'campaign',
+        'own'
+    ]).optional().default('channel'),
+    notes: z.string().optional().default(''),
+    permission: zSourcePermission,
+    status: z.enum([
+        'active',
+        'paused',
+        'ended'
+    ]).optional().default('active'),
+    url: z.url().min(1).nullish()
 });
 
 /**
@@ -215,6 +416,18 @@ export const zJobView = z.object({
 });
 
 /**
+ * Submission
+ *
+ * A campaign clip's post, to paste into the campaign's form (spec §6.3).
+ */
+export const zSubmission = z.object({
+    item_id: z.string(),
+    platform: zPlatform,
+    posted_at: z.iso.datetime({ offset: true, local: true }),
+    url: z.string().nullish()
+});
+
+/**
  * TelegramTarget
  *
  * Where the Telegram notifier reports a job (the chat that sent it).
@@ -258,6 +471,19 @@ export const zHttpValidationError = z.object({
 });
 
 /**
+ * VerifyReport
+ *
+ * Dict versus Postgres for one account.
+ */
+export const zVerifyReport = z.object({
+    account_id: z.string(),
+    dict_items: z.int().optional().default(0),
+    differences: z.int().optional().default(0),
+    first: z.array(z.string()).optional(),
+    postgres_items: z.int().optional().default(0)
+});
+
+/**
  * CostSummary
  */
 export const zCostSummaryWritable = z.object({
@@ -283,6 +509,56 @@ export const zJobViewWritable = z.object({
     updated_at: z.iso.datetime({ offset: true, local: true })
 });
 
+export const zGetAccountsAccountsGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+/**
+ * Response Get Accounts Accounts Get
+ *
+ * Successful Response
+ */
+export const zGetAccountsAccountsGetResponse = z.array(zAccount);
+
+export const zPostAccountAccountsPostBody = zAccountCreate;
+
+export const zPostAccountAccountsPostHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+/**
+ * Successful Response
+ */
+export const zPostAccountAccountsPostResponse = zAccount;
+
+export const zGetAccountAccountsAccountIdGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zGetAccountAccountsAccountIdGetPath = z.object({
+    account_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetAccountAccountsAccountIdGetResponse = zAccount;
+
+export const zPatchAccountAccountsAccountIdPatchBody = zAccountEdit;
+
+export const zPatchAccountAccountsAccountIdPatchHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zPatchAccountAccountsAccountIdPatchPath = z.object({
+    account_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zPatchAccountAccountsAccountIdPatchResponse = zAccount;
+
 export const zPostJobJobsPostBody = zJobInput;
 
 export const zPostJobJobsPostHeaders = z.object({
@@ -295,6 +571,19 @@ export const zPostJobJobsPostHeaders = z.object({
  * Successful Response
  */
 export const zPostJobJobsPostResponse = z.record(z.string(), z.string());
+
+export const zPostJobsBackfillJobsBackfillPostHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zPostJobsBackfillJobsBackfillPostQuery = z.object({
+    dry_run: z.boolean().optional().default(false)
+});
+
+/**
+ * Successful Response
+ */
+export const zPostJobsBackfillJobsBackfillPostResponse = zBackfillReport;
 
 export const zGetJobJobsJobIdGetHeaders = z.object({
     authorization: z.string().nullish()
@@ -340,6 +629,19 @@ export const zGetPostingPostingGetHeaders = z.object({
  */
 export const zGetPostingPostingGetResponse = zPostingOverview;
 
+export const zPostPostingImportPostingImportPostHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zPostPostingImportPostingImportPostQuery = z.object({
+    dry_run: z.boolean().optional().default(false)
+});
+
+/**
+ * Successful Response
+ */
+export const zPostPostingImportPostingImportPostResponse = zImportReport;
+
 export const zPostPostingRebuildPostingRebuildPostHeaders = z.object({
     authorization: z.string().nullish()
 });
@@ -365,6 +667,101 @@ export const zPostPostingRestorePostingRestorePostQuery = z.object({
  * Successful Response
  */
 export const zPostPostingRestorePostingRestorePostResponse = z.record(z.string(), z.int());
+
+export const zGetPostingVerifyPostingVerifyGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetPostingVerifyPostingVerifyGetResponse = zVerifyReport;
+
+export const zGetSourcesSourcesGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+/**
+ * Response Get Sources Sources Get
+ *
+ * Successful Response
+ */
+export const zGetSourcesSourcesGetResponse = z.array(zSource);
+
+export const zPostSourceSourcesPostBody = zSource;
+
+export const zPostSourceSourcesPostHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+export const zPostSourceSourcesPostQuery = z.object({
+    action: z.enum(['created', 'imported']).optional().default('created')
+});
+
+/**
+ * Successful Response
+ */
+export const zPostSourceSourcesPostResponse = zSource;
+
+export const zGetSourceSourcesSourceIdGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zGetSourceSourcesSourceIdGetPath = z.object({
+    source_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetSourceSourcesSourceIdGetResponse = zSource;
+
+export const zPutSourceSourcesSourceIdPutBody = zSource;
+
+export const zPutSourceSourcesSourceIdPutHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+export const zPutSourceSourcesSourceIdPutPath = z.object({
+    source_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zPutSourceSourcesSourceIdPutResponse = zSource;
+
+export const zGetSourceEventsSourcesSourceIdEventsGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zGetSourceEventsSourcesSourceIdEventsGetPath = z.object({
+    source_id: z.string()
+});
+
+/**
+ * Response Get Source Events Sources  Source Id  Events Get
+ *
+ * Successful Response
+ */
+export const zGetSourceEventsSourcesSourceIdEventsGetResponse = z.array(zSourceEvent);
+
+export const zGetSubmissionsSourcesSourceIdSubmissionsGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zGetSubmissionsSourcesSourceIdSubmissionsGetPath = z.object({
+    source_id: z.string()
+});
+
+/**
+ * Response Get Submissions Sources  Source Id  Submissions Get
+ *
+ * Successful Response
+ */
+export const zGetSubmissionsSourcesSourceIdSubmissionsGetResponse = z.array(zSubmission);
 
 /**
  * Body

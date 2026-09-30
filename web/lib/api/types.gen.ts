@@ -5,6 +5,122 @@ export type ClientOptions = {
 };
 
 /**
+ * Account
+ */
+export type Account = {
+    /**
+     * Blueprint
+     */
+    blueprint: string;
+    /**
+     * Blueprint Version
+     */
+    blueprint_version: number;
+    brand?: BrandKit;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: 'clips' | 'story' | 'band' | 'avatar' | 'model';
+    /**
+     * Language
+     */
+    language: 'en' | 'es';
+    /**
+     * Monthly Budget Usd
+     */
+    monthly_budget_usd?: number;
+    /**
+     * Niche
+     */
+    niche: string;
+    /**
+     * Paired Account Id
+     */
+    paired_account_id?: string | null;
+    /**
+     * Persona Id
+     */
+    persona_id?: string | null;
+    /**
+     * Platforms
+     */
+    platforms: {
+        [key in Platform]?: PlatformProfile;
+    };
+    posting?: PostingSchedule;
+    /**
+     * Review Tier
+     */
+    review_tier?: 'review' | 'sample' | 'auto';
+};
+
+/**
+ * AccountCreate
+ */
+export type AccountCreate = {
+    /**
+     * Blueprint
+     */
+    blueprint: string;
+    /**
+     * Handle
+     */
+    handle: string;
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Language
+     */
+    language: 'en' | 'es';
+    /**
+     * Posting From Env
+     */
+    posting_from_env?: boolean;
+};
+
+/**
+ * AccountEdit
+ */
+export type AccountEdit = {
+    /**
+     * Chat Id
+     */
+    chat_id?: number | null;
+    /**
+     * Clear Chat
+     */
+    clear_chat?: boolean;
+    /**
+     * Handles
+     */
+    handles?: {
+        [key in Platform]?: string;
+    };
+    /**
+     * Hashtags
+     */
+    hashtags?: Array<string> | null;
+    /**
+     * Review Tier
+     */
+    review_tier?: 'review' | 'sample' | 'auto' | null;
+    /**
+     * Slots
+     */
+    slots?: Array<string> | null;
+    /**
+     * Timezone
+     */
+    timezone?: string | null;
+};
+
+/**
  * AccountPosting
  */
 export type AccountPosting = {
@@ -41,9 +157,97 @@ export type AccountPosting = {
      */
     per_day?: number;
     /**
+     * Timezone
+     */
+    timezone?: string;
+    /**
      * Waiting
      */
     waiting?: number;
+};
+
+/**
+ * BackfillReport
+ *
+ * Result of `jobs backfill`.
+ */
+export type BackfillReport = {
+    /**
+     * Dry Run
+     */
+    dry_run: boolean;
+    /**
+     * Failed
+     */
+    failed?: Array<string>;
+    /**
+     * From Dict
+     */
+    from_dict?: number;
+    /**
+     * From Metadata
+     */
+    from_metadata?: number;
+    /**
+     * Written
+     */
+    written?: number;
+};
+
+/**
+ * BrandKit
+ */
+export type BrandKit = {
+    /**
+     * Bio Link
+     */
+    bio_link?: string | null;
+    /**
+     * Caption Preset
+     */
+    caption_preset?: string;
+    /**
+     * Cta
+     */
+    cta?: string | null;
+};
+
+/**
+ * CampaignRules
+ */
+export type CampaignRules = {
+    /**
+     * Deadline
+     */
+    deadline?: string | null;
+    /**
+     * Rate Per 1K
+     */
+    rate_per_1k?: number | null;
+    /**
+     * Required Links
+     */
+    required_links?: Array<string>;
+    /**
+     * Required Tags
+     */
+    required_tags?: Array<string>;
+    /**
+     * Rules
+     */
+    rules?: string;
+    /**
+     * Sponsored
+     */
+    sponsored?: boolean;
+    /**
+     * Submission Url
+     */
+    submission_url?: string | null;
+    /**
+     * Url
+     */
+    url?: string | null;
 };
 
 /**
@@ -193,6 +397,52 @@ export type HttpValidationError = {
 };
 
 /**
+ * ImportReport
+ *
+ * Result of `posting import` (Dict queue -> Postgres, spec §5.5).
+ */
+export type ImportReport = {
+    /**
+     * Already
+     */
+    already?: number;
+    /**
+     * By Status
+     */
+    by_status?: {
+        [key in PostStatus]?: number;
+    };
+    /**
+     * Dict Items
+     */
+    dict_items?: number;
+    /**
+     * Dry Run
+     */
+    dry_run: boolean;
+    /**
+     * Failed
+     */
+    failed?: Array<string>;
+    /**
+     * From Snapshot
+     */
+    from_snapshot?: number;
+    /**
+     * Imported
+     */
+    imported?: number;
+    /**
+     * Missing Source
+     */
+    missing_source?: Array<string>;
+    /**
+     * Paused
+     */
+    paused?: boolean;
+};
+
+/**
  * JobError
  */
 export type JobError = {
@@ -287,6 +537,37 @@ export type JobView = {
 export type Permission = 'own' | 'creator_agreement' | 'clipping_program' | 'cc_by' | 'public_domain';
 
 /**
+ * Platform
+ */
+export type Platform = 'tiktok' | 'instagram' | 'youtube' | 'facebook';
+
+/**
+ * PlatformProfile
+ */
+export type PlatformProfile = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Handle
+     */
+    handle?: string | null;
+    /**
+     * Hashtags
+     */
+    hashtags?: Array<string>;
+    /**
+     * Max Len
+     */
+    max_len?: number | null;
+    /**
+     * Min Len
+     */
+    min_len?: number | null;
+};
+
+/**
  * PostStatus
  *
  * Derived from a clip's keys, never stored (spec §4).
@@ -338,6 +619,28 @@ export type PostingOverview = {
 };
 
 /**
+ * PostingSchedule
+ */
+export type PostingSchedule = {
+    /**
+     * Chat Id
+     */
+    chat_id?: number | null;
+    /**
+     * Hashtags
+     */
+    hashtags?: Array<string>;
+    /**
+     * Slots
+     */
+    slots?: Array<string>;
+    /**
+     * Timezone
+     */
+    timezone?: string;
+};
+
+/**
  * Progress
  */
 export type Progress = {
@@ -354,6 +657,125 @@ export type Progress = {
      */
     pct: number;
     stage: StageName;
+};
+
+/**
+ * Source
+ */
+export type Source = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    campaign?: CampaignRules | null;
+    /**
+     * Creator Handles
+     */
+    creator_handles?: {
+        [key in Platform]?: string;
+    };
+    /**
+     * Credit Name
+     */
+    credit_name: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind?: 'channel' | 'campaign' | 'own';
+    /**
+     * Notes
+     */
+    notes?: string;
+    permission: SourcePermission;
+    /**
+     * Status
+     */
+    status?: 'active' | 'paused' | 'ended';
+    /**
+     * Url
+     */
+    url?: string | null;
+};
+
+/**
+ * SourceEvent
+ *
+ * One change to a source (source_events): who, when, before and after.
+ */
+export type SourceEvent = {
+    /**
+     * Action
+     */
+    action: 'created' | 'updated' | 'imported';
+    /**
+     * Actor
+     */
+    actor: string;
+    /**
+     * After
+     */
+    after: {
+        [key: string]: unknown;
+    };
+    /**
+     * At
+     */
+    at: string;
+    /**
+     * Before
+     */
+    before?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Source Id
+     */
+    source_id: string;
+};
+
+/**
+ * SourcePermission
+ *
+ * The legal basis for posting a source's content (a business record, not config).
+ */
+export type SourcePermission = {
+    /**
+     * Evidence Url
+     */
+    evidence_url?: string | null;
+    /**
+     * Expires At
+     */
+    expires_at?: string | null;
+    /**
+     * Granted At
+     */
+    granted_at?: string | null;
+    /**
+     * Granted By
+     */
+    granted_by?: string | null;
+    /**
+     * Monetization Allowed
+     */
+    monetization_allowed?: boolean | null;
+    /**
+     * Platforms
+     */
+    platforms?: Array<Platform>;
+    /**
+     * Restrictions
+     */
+    restrictions?: string;
+    /**
+     * Translation Allowed
+     */
+    translation_allowed?: boolean | null;
+    type: Permission;
 };
 
 /**
@@ -409,6 +831,27 @@ export type StageCost = {
 export type StageName = 'ingest' | 'transcribe' | 'highlights' | 'reframe' | 'captions' | 'render' | 'package';
 
 /**
+ * Submission
+ *
+ * A campaign clip's post, to paste into the campaign's form (spec §6.3).
+ */
+export type Submission = {
+    /**
+     * Item Id
+     */
+    item_id: string;
+    platform: Platform;
+    /**
+     * Posted At
+     */
+    posted_at: string;
+    /**
+     * Url
+     */
+    url?: string | null;
+};
+
+/**
  * TelegramTarget
  *
  * Where the Telegram notifier reports a job (the chat that sent it).
@@ -450,6 +893,34 @@ export type ValidationError = {
      * Error Type
      */
     type: string;
+};
+
+/**
+ * VerifyReport
+ *
+ * Dict versus Postgres for one account.
+ */
+export type VerifyReport = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Dict Items
+     */
+    dict_items?: number;
+    /**
+     * Differences
+     */
+    differences?: number;
+    /**
+     * First
+     */
+    first?: Array<string>;
+    /**
+     * Postgres Items
+     */
+    postgres_items?: number;
 };
 
 /**
@@ -499,6 +970,142 @@ export type JobViewWritable = {
     updated_at: string;
 };
 
+export type GetAccountsAccountsGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/accounts';
+};
+
+export type GetAccountsAccountsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAccountsAccountsGetError = GetAccountsAccountsGetErrors[keyof GetAccountsAccountsGetErrors];
+
+export type GetAccountsAccountsGetResponses = {
+    /**
+     * Response Get Accounts Accounts Get
+     *
+     * Successful Response
+     */
+    200: Array<Account>;
+};
+
+export type GetAccountsAccountsGetResponse = GetAccountsAccountsGetResponses[keyof GetAccountsAccountsGetResponses];
+
+export type PostAccountAccountsPostData = {
+    body: AccountCreate;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/accounts';
+};
+
+export type PostAccountAccountsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostAccountAccountsPostError = PostAccountAccountsPostErrors[keyof PostAccountAccountsPostErrors];
+
+export type PostAccountAccountsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: Account;
+};
+
+export type PostAccountAccountsPostResponse = PostAccountAccountsPostResponses[keyof PostAccountAccountsPostResponses];
+
+export type GetAccountAccountsAccountIdGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/accounts/{account_id}';
+};
+
+export type GetAccountAccountsAccountIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAccountAccountsAccountIdGetError = GetAccountAccountsAccountIdGetErrors[keyof GetAccountAccountsAccountIdGetErrors];
+
+export type GetAccountAccountsAccountIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: Account;
+};
+
+export type GetAccountAccountsAccountIdGetResponse = GetAccountAccountsAccountIdGetResponses[keyof GetAccountAccountsAccountIdGetResponses];
+
+export type PatchAccountAccountsAccountIdPatchData = {
+    body: AccountEdit;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/accounts/{account_id}';
+};
+
+export type PatchAccountAccountsAccountIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchAccountAccountsAccountIdPatchError = PatchAccountAccountsAccountIdPatchErrors[keyof PatchAccountAccountsAccountIdPatchErrors];
+
+export type PatchAccountAccountsAccountIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: Account;
+};
+
+export type PatchAccountAccountsAccountIdPatchResponse = PatchAccountAccountsAccountIdPatchResponses[keyof PatchAccountAccountsAccountIdPatchResponses];
+
 export type PostJobJobsPostData = {
     body: JobInput;
     headers?: {
@@ -533,6 +1140,42 @@ export type PostJobJobsPostResponses = {
 };
 
 export type PostJobJobsPostResponse = PostJobJobsPostResponses[keyof PostJobJobsPostResponses];
+
+export type PostJobsBackfillJobsBackfillPostData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Dry Run
+         */
+        dry_run?: boolean;
+    };
+    url: '/jobs/backfill';
+};
+
+export type PostJobsBackfillJobsBackfillPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostJobsBackfillJobsBackfillPostError = PostJobsBackfillJobsBackfillPostErrors[keyof PostJobsBackfillJobsBackfillPostErrors];
+
+export type PostJobsBackfillJobsBackfillPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: BackfillReport;
+};
+
+export type PostJobsBackfillJobsBackfillPostResponse = PostJobsBackfillJobsBackfillPostResponses[keyof PostJobsBackfillJobsBackfillPostResponses];
 
 export type GetJobJobsJobIdGetData = {
     body?: never;
@@ -674,6 +1317,42 @@ export type GetPostingPostingGetResponses = {
 
 export type GetPostingPostingGetResponse = GetPostingPostingGetResponses[keyof GetPostingPostingGetResponses];
 
+export type PostPostingImportPostingImportPostData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Dry Run
+         */
+        dry_run?: boolean;
+    };
+    url: '/posting/import';
+};
+
+export type PostPostingImportPostingImportPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostPostingImportPostingImportPostError = PostPostingImportPostingImportPostErrors[keyof PostPostingImportPostingImportPostErrors];
+
+export type PostPostingImportPostingImportPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportReport;
+};
+
+export type PostPostingImportPostingImportPostResponse = PostPostingImportPostingImportPostResponses[keyof PostPostingImportPostingImportPostResponses];
+
 export type PostPostingRebuildPostingRebuildPostData = {
     body?: never;
     headers?: {
@@ -748,6 +1427,262 @@ export type PostPostingRestorePostingRestorePostResponses = {
 };
 
 export type PostPostingRestorePostingRestorePostResponse = PostPostingRestorePostingRestorePostResponses[keyof PostPostingRestorePostingRestorePostResponses];
+
+export type GetPostingVerifyPostingVerifyGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/posting/verify';
+};
+
+export type GetPostingVerifyPostingVerifyGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPostingVerifyPostingVerifyGetError = GetPostingVerifyPostingVerifyGetErrors[keyof GetPostingVerifyPostingVerifyGetErrors];
+
+export type GetPostingVerifyPostingVerifyGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: VerifyReport;
+};
+
+export type GetPostingVerifyPostingVerifyGetResponse = GetPostingVerifyPostingVerifyGetResponses[keyof GetPostingVerifyPostingVerifyGetResponses];
+
+export type GetSourcesSourcesGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/sources';
+};
+
+export type GetSourcesSourcesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetSourcesSourcesGetError = GetSourcesSourcesGetErrors[keyof GetSourcesSourcesGetErrors];
+
+export type GetSourcesSourcesGetResponses = {
+    /**
+     * Response Get Sources Sources Get
+     *
+     * Successful Response
+     */
+    200: Array<Source>;
+};
+
+export type GetSourcesSourcesGetResponse = GetSourcesSourcesGetResponses[keyof GetSourcesSourcesGetResponses];
+
+export type PostSourceSourcesPostData = {
+    body: Source;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Action
+         */
+        action?: 'created' | 'imported';
+    };
+    url: '/sources';
+};
+
+export type PostSourceSourcesPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostSourceSourcesPostError = PostSourceSourcesPostErrors[keyof PostSourceSourcesPostErrors];
+
+export type PostSourceSourcesPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: Source;
+};
+
+export type PostSourceSourcesPostResponse = PostSourceSourcesPostResponses[keyof PostSourceSourcesPostResponses];
+
+export type GetSourceSourcesSourceIdGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Source Id
+         */
+        source_id: string;
+    };
+    query?: never;
+    url: '/sources/{source_id}';
+};
+
+export type GetSourceSourcesSourceIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetSourceSourcesSourceIdGetError = GetSourceSourcesSourceIdGetErrors[keyof GetSourceSourcesSourceIdGetErrors];
+
+export type GetSourceSourcesSourceIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: Source;
+};
+
+export type GetSourceSourcesSourceIdGetResponse = GetSourceSourcesSourceIdGetResponses[keyof GetSourceSourcesSourceIdGetResponses];
+
+export type PutSourceSourcesSourceIdPutData = {
+    body: Source;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path: {
+        /**
+         * Source Id
+         */
+        source_id: string;
+    };
+    query?: never;
+    url: '/sources/{source_id}';
+};
+
+export type PutSourceSourcesSourceIdPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutSourceSourcesSourceIdPutError = PutSourceSourcesSourceIdPutErrors[keyof PutSourceSourcesSourceIdPutErrors];
+
+export type PutSourceSourcesSourceIdPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: Source;
+};
+
+export type PutSourceSourcesSourceIdPutResponse = PutSourceSourcesSourceIdPutResponses[keyof PutSourceSourcesSourceIdPutResponses];
+
+export type GetSourceEventsSourcesSourceIdEventsGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Source Id
+         */
+        source_id: string;
+    };
+    query?: never;
+    url: '/sources/{source_id}/events';
+};
+
+export type GetSourceEventsSourcesSourceIdEventsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetSourceEventsSourcesSourceIdEventsGetError = GetSourceEventsSourcesSourceIdEventsGetErrors[keyof GetSourceEventsSourcesSourceIdEventsGetErrors];
+
+export type GetSourceEventsSourcesSourceIdEventsGetResponses = {
+    /**
+     * Response Get Source Events Sources  Source Id  Events Get
+     *
+     * Successful Response
+     */
+    200: Array<SourceEvent>;
+};
+
+export type GetSourceEventsSourcesSourceIdEventsGetResponse = GetSourceEventsSourcesSourceIdEventsGetResponses[keyof GetSourceEventsSourcesSourceIdEventsGetResponses];
+
+export type GetSubmissionsSourcesSourceIdSubmissionsGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Source Id
+         */
+        source_id: string;
+    };
+    query?: never;
+    url: '/sources/{source_id}/submissions';
+};
+
+export type GetSubmissionsSourcesSourceIdSubmissionsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetSubmissionsSourcesSourceIdSubmissionsGetError = GetSubmissionsSourcesSourceIdSubmissionsGetErrors[keyof GetSubmissionsSourcesSourceIdSubmissionsGetErrors];
+
+export type GetSubmissionsSourcesSourceIdSubmissionsGetResponses = {
+    /**
+     * Response Get Submissions Sources  Source Id  Submissions Get
+     *
+     * Successful Response
+     */
+    200: Array<Submission>;
+};
+
+export type GetSubmissionsSourcesSourceIdSubmissionsGetResponse = GetSubmissionsSourcesSourceIdSubmissionsGetResponses[keyof GetSubmissionsSourcesSourceIdSubmissionsGetResponses];
 
 export type TelegramWebhookTelegramWebhookPostData = {
     /**
