@@ -20,7 +20,8 @@ As `scripts/scopes.toml` allows for `s3a/`.
 ## Actions
 1. **Task 12:** a real local GitHub login, using the local OAuth app, on the laptop.
 2. **Task 13:** `vercel deploy` (a preview), then production only after the owner's OK. The owner logs in on the phone and on the laptop.
-3. Tick S3a in `docs/studio/04` and `ROADMAP.md`, add one `web/` line to `CLAUDE.md`, and fix the S3a plan's file map (it predates checkpoint G, the bypass, the fix card and the deep links).
+3. Before the production deploy, clear `npm audit`'s 4 high-severity findings in `web/` (seen 2026-09-30), or record why each one doesn't reach the deployed app.
+4. Tick S3a in `docs/studio/04` and `ROADMAP.md`, add one `web/` line to `CLAUDE.md`, and fix the S3a plan's file map (it predates checkpoint G, the bypass, the fix card and the deep links).
 
 ## Done when
 - `scripts/check.sh --web --e2e` is green.
