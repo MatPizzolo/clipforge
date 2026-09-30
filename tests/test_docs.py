@@ -21,10 +21,8 @@ _LINK = re.compile(r"(?<!!)\[[^\]\n]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 _FENCE = re.compile(r"^(```|~~~).*?^\1", re.MULTILINE | re.DOTALL)
 _CODE = re.compile(r"`[^`\n]*`")
 
-# 05 still carries full copies of the ADRs accepted in the 2026-09-29 kickoff review. They go
-# when the owner of 05 trims them (card 001 report, open issue); a new copy fails this test, and
-# so does a stale entry here once its copy is gone.
-KNOWN_05_COPIES = {25, 26, 28, 29, 30, 31, 34, 35, 38, 39}
+# Accepted ADRs that 05 may still repeat in full (card 001 trimmed the last ones; keep it empty).
+KNOWN_05_COPIES: set[int] = set()
 
 
 def log_numbers() -> list[int]:
@@ -117,9 +115,18 @@ def test_relative_links_resolve(path: Path) -> None:
         resolved = (
             (ROOT / file_part.lstrip("/")) if file_part.startswith("/") else path.parent / file_part
         )
-        if not resolved.exists():
+        anchor = target.split("#", 1)[1] if "#" in target else ""
+        checks_anchor = bool(anchor) and resolved.suffix == ".md"
+        if not resolved.exists() or (checks_anchor and anchor not in heading_slugs(resolved)):
             broken.append(target)
     assert broken == []
+
+
+def heading_slugs(path: Path) -> set[str]:
+    """GitHub's anchors for a file's headings: lowercase, punctuation dropped, spaces to '-'."""
+    text = _FENCE.sub("", path.read_text())
+    headings = re.findall(r"^#{1,6}\s+(.+?)\s*#*$", text, re.MULTILINE)
+    return {re.sub(r"[^\w\- ]", "", h.lower()).replace(" ", "-") for h in headings}
 
 
 def test_link_pattern_finds_links() -> None:

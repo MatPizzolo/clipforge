@@ -24,6 +24,8 @@ allow = [
     "CLAUDE.md",
     "STATUS.md",
     "README.md",
+    # card 001 only (the owner's addition at checkpoint B): trim the accepted-ADR copies
+    "docs/studio/05-proposed-adrs.md",
 ]
 deny = [".claude/skills/neon*/**"]
 
@@ -45,6 +47,9 @@ allow = [
     "CLAUDE.md",
     "docs/superpowers/**/*s1*",
     "STATUS.md",
+    # the API contract and the dashboard's generated client, regenerated with S1's route changes
+    "web/openapi.json",
+    "web/lib/api/**",
 ]
 
 [prefix."s3c/"]

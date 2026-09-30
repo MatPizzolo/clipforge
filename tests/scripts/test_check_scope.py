@@ -192,3 +192,24 @@ def test_every_card_branch_has_a_scope() -> None:
         text = card.read_text()
         branch = text.split("Branch: `", 1)[1].split("`", 1)[0]
         assert scope.scope_for(branch, scopes) is not None, f"{card.name}: {branch}"
+
+
+def test_s1_may_regenerate_the_api_contract_and_client(repo: Path) -> None:
+    git(repo, "checkout", "-q", "-b", "s1/finish", "origin/main")
+    (repo / "web" / "lib" / "api" / "zod").mkdir(parents=True)
+    (repo / "web" / "openapi.json").write_text("{}\n")
+    (repo / "web" / "lib" / "api" / "zod" / "gen.ts").write_text("export {}\n")
+    problems, _ = run(repo, "s1/finish")
+    assert problems == []
+
+
+def test_s1_other_web_files_still_fail(repo: Path) -> None:
+    git(repo, "checkout", "-q", "-b", "s1/finish", "origin/main")
+    (repo / "web" / "lib").mkdir(parents=True)
+    (repo / "web" / "lib" / "callback.ts").write_text("export {}\n")
+    (repo / "web" / "package.json").write_text("{}\n")
+    problems, _ = run(repo, "s1/finish")
+    assert problems == [
+        "web/lib/callback.ts: outside s1/'s scope",
+        "web/package.json: outside s1/'s scope",
+    ]

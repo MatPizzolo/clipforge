@@ -28,9 +28,9 @@ For the record, and for a re-deploy:
    POSTING_SLOTS=08:00,10:30,13:00,16:00,19:00,21:30
    POSTING_HASHTAGS=<tags, comma-separated, without #>
    ```
-2. Deploy, register the webhook (needed for button taps), then build the queue:
+2. Deploy (from `main`, through `scripts/deploy.sh`), register the webhook (needed for button taps), then build the queue:
    ```
-   uv run modal deploy src/clipforge/app.py
+   scripts/deploy.sh --dry-run && scripts/deploy.sh --reason "<why>"
    uv run clipforge set-webhook
    uv run clipforge status --rebuild
    ```
@@ -41,10 +41,10 @@ For the record, and for a re-deploy:
 
 **Stopping and starting the app.** You stopped the `clipforge` app on the night of 2026-09-29. S1 redeployed it on 2026-09-30 with your OK: once to restart it, and once for the PyAV pin (log #70). **It's running now**, Dict-only (`STATE_READS=dict`, no database connected). While the app is stopped, the posting slots, button taps, `/status`, the daily keep-alive and the API the dashboard reads are all off.
 - Check the state with `uv run modal app list`.
-- Start it with `uv run modal deploy src/clipforge/app.py`, but only when the session that owns `src/` (S1) says the code is at a clean checkpoint. A deploy ships whatever is in `src/` right now.
+- Start it with `scripts/deploy.sh --reason "restart"` on `main` (run `--dry-run` first), but only when the session that owns `src/` (S1) says the code is at a clean checkpoint. A deploy ships whatever is in `src/` right now.
 - More than 7 days stopped means Dict entries can expire. Then run `uv run clipforge status --restore` after the deploy.
 
-**Deploy blackout** (decision log #108), until S1's slot guard is verified in production: **don't deploy from each posting slot until 30 minutes after it.** With the default slots (New York time) that means no deploys during 08:00–08:30, 10:30–11:00, 13:00–13:30, 16:00–16:30, 19:00–19:30 and 21:30–22:00. If you changed `POSTING_SLOTS`, use your own times. Reason: a claim-key change can send the same slot twice (#77).
+**Deploy blackout** (decision log #108), until S1's slot guard is verified in production: **don't deploy from each posting slot until 30 minutes after it.** `scripts/deploy.sh` enforces it from `POSTING_SLOTS` and `POSTING_TIMEZONE` in `.env` (the defaults when unset), and has no override. With the default slots (New York time) that means no deploys during 08:00–08:30, 10:30–11:00, 13:00–13:30, 16:00–16:30, 19:00–19:30 and 21:30–22:00. If you changed `POSTING_SLOTS`, use your own times. Reason: a claim-key change can send the same slot twice (#77).
 
 ⏳ **Still open:** the phone test that the S0 session asked for: `/status`, `/next`, ✅ on and off, ⏭ Skip, 🗑 Reject with a reason, `/pause`, `/go`. Report the result to the S0 session. It then checks the next scheduled slot and the 07:00 UTC keep-alive run after the 2026-09-30 redeploy.
 
@@ -97,7 +97,14 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 
 Decision-log number ranges per branch prefix are in each card and in `scripts/scopes.toml` (`coord/` #1–199, S1 #200–249, S3c #250–299, S3a #300–319, X2 #320–339, S4 #340–379, X0 #380–399). A conflict in `docs/studio/10` is two blocks added at the end: keep both, in number order; gaps are fine.
 
-### 3.3 Worktrees by hand (only until card 001 adds `scripts/worktree.sh`)
+### 3.3 Worktrees
+
+```
+scripts/worktree.sh s1/finish            # ../clipForge-s1: branch from origin/main (or the existing branch), .env and web/.env.local copied, uv sync, npm ci
+scripts/worktree.sh --remove s1/finish   # after its PR is merged (refuses otherwise)
+```
+
+By hand, if the script can't be used:
 
 ```
 cd ~/code/clipForge && git fetch origin
@@ -145,7 +152,7 @@ Approve each checkpoint the S1 session reports. With no git repo, a checkpoint j
    ```
 2. Deploy. The Dict stays the primary, and Postgres gets a copy of every write:
    ```
-   uv run modal deploy src/clipforge/app.py
+   scripts/deploy.sh --reason "S1 rollout 4c.2: dual write"
    ```
 3. Create the three accounts:
    ```
@@ -173,7 +180,7 @@ Approve each checkpoint the S1 session reports. With no git repo, a checkpoint j
    ```
 7. Switch reads to Postgres: set `STATE_READS=postgres` in `clipforge-secrets` and `.env`, then:
    ```
-   uv run modal deploy src/clipforge/app.py
+   scripts/deploy.sh --reason "S1 rollout 4c.7: reads from Postgres" --rollout-step 4c.7
    ```
    Watch one day of slots and taps. The verify also runs daily inside the 07:00 UTC keep-alive.
 8. After **7 days** with a clean verify every day: a later session removes the Dict copy and the keep-alive (ADR-24 retires).
@@ -329,10 +336,10 @@ shred -u /tmp/clipforge-secrets.env
 ```
 No redeploy is needed: the deployed app doesn't use the database yet.
 
-**Protect `main`** (after card 001 is merged, so the checks exist): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check`, `web` and `scope` to pass, block force pushes. On a free personal account, protection on a private repo may need GitHub Pro; without it, keep the PR flow by convention and CI still runs on every PR.
+**Protect `main`** (after card 001 is merged, so the checks exist): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check` and `scope` to pass (not `web`: it runs only when `web/`, `src/` or the contract changes, and a required check that never runs blocks the merge), block force pushes. On a free personal account, protection on a private repo may need GitHub Pro; without it, keep the PR flow by convention and CI still runs on every PR.
 
 **Still left, and when:**
-- The Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variable `DEPLOY_ENABLED=true`: only after `ci.yml` runs `alembic upgrade head` before `modal deploy` and skips web-only pushes (S1 Task 21b). Until then you deploy by hand, outside the blackout (§1).
+- The Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variable `DEPLOY_ENABLED=true`: only after `ci.yml` runs `alembic upgrade head` before `modal deploy` and skips web-only pushes (S1 Task 21b). Until then you deploy with `scripts/deploy.sh` from `main` (§1); it refuses inside the blackout.
 - In Vercel, connect the repo with Root Directory `web` when you do the Vercel steps (§5b).
 - From the pause on, every parallel session gets its own git worktree (§3).
 

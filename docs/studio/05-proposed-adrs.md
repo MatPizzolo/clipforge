@@ -4,21 +4,9 @@ Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 3
 
 ---
 
-## ADR-25: Multi-account studio with one content-item seam
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md)
-Context: ClipForge serves one brand from one producer (podcast clips). The owner wants 20+ accounts across four kinds (clips, AI stories, bands, AI-avatar affiliate) in English and Spanish, all from one repo.
-Decision:
-- Every producer ends in a `ContentItem`: video, per-platform copy, AI-disclosure and sponsored flags, credits, asset licenses, cost, account.
-- Distribution (queue, review, publish, analytics) consumes only `ContentItem`s.
-- An `Account` holds its platforms and per-platform rules, review tier, persona, brand kit, budget and paired-language account.
-- `channels.toml` sources become `sources` rows owned by accounts.
-Consequences: New content types are new producers only. The clip producer gains a small wrapper step. The ADR-23 `PostItem` is replaced by `ContentItem` + `posts` rows.
+**ADR-25: Multi-account studio with one content-item seam**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-25-multi-account-studio-with-one-content-item-seam).
 
-## ADR-26: Postgres (Neon) for durable state; Dict only for hot step state
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md; supersedes ADR-5; retires ADR-24 once migrated)
-Context: Modal Dict entries expire after 7 days of inactivity, and ADR-24 works around that with keep-alives. The dashboard needs queries across accounts, dates and platforms (calendar, stats, money) that a key-value scan can't serve. Modal Volumes aren't safe for a database with many writers.
-Decision: Neon Postgres, reached through the pooled endpoint with SQLAlchemy 2 + psycopg 3, holds everything durable. Migrations use Alembic. The Dict keeps only in-flight job and step keys and claims (ADR-14); `job:*` summaries move to a `jobs` table too, so nothing durable depends on a Dict entry surviving 7 idle days. The dashboard reaches the data only through the FastAPI API (ADR-2).
-Consequences: One new managed dependency, free until it's outgrown. Tests need a local Postgres, and CI a Postgres service. Alembic runs in the deploy job before `modal deploy`. During the switch a setting points reads back at the Dict for rollback. The ADR-24 keep-alive and snapshot are removed a week after the migration is verified.
+**ADR-26: Postgres (Neon) for durable state; Dict only for hot step state**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-26-postgres-neon-for-durable-state-dict-only-for-hot-step-state).
 
 ## ADR-27: One dispatcher cron
 Date: 2026-09-29 · Status: Proposed
@@ -26,41 +14,13 @@ Context: Modal Starter allows 5 deployed crons. Today there is 1 (sweeper); plan
 Decision: When a 5th periodic task is needed (S7), one `dispatcher` function runs every 5 minutes and calls each periodic task when it's due. Last-run markers live in the Dict, and the dispatcher opens a database connection only when a task is due, so Neon can still scale to zero.
 Consequences: Adding a periodic task needs no new cron. One slow task can delay the others, so each task has a time budget and heavy work is spawned.
 
-## ADR-28: Publishing through Upload-Post behind a Publisher protocol
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md; updates ADR-3 and ADR-23's "API publishing gets its own ADR")
-Context: TikTok's own API allows only private posts until an app audit passes. Doing that audit and Meta's app review ourselves is slow. At ~25 accounts × 4 platforms, Upload-Post costs about $50–147/mo. Alternatives: Zernio (~$318/mo), Ayrshare (~$599/mo), self-hosted Postiz (we'd need our own audits).
-Decision:
-- A `Publisher` protocol with two implementations: `UploadPostPublisher` (primary) and `AssistedPublisher` (the Telegram manual flow from ADR-23).
-- Media is served by URL: signed, expiring Volume links first (ADR-13's mechanism), Cloudflare R2 only if those prove unreliable.
-- `ai_disclosure` maps to every platform's AI flag.
-- Signed webhooks update the `posts` rows.
-Consequences: A vendor dependency that can be swapped. Official YouTube and Instagram publishers can be added later behind the same protocol.
+**ADR-28: Publishing through Upload-Post behind a Publisher protocol**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-28-publishing-through-upload-post-behind-a-publisher-protocol).
 
-## ADR-29: Tiered review with an always-on policy gate
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md)
-Context: At 20+ accounts, approving every post by hand is 100+ taps a day. Platforms punish undisclosed AI, mass-produced content and false claims.
-Decision:
-- Each account has a review tier: `review` (every item), `sample` (auto-post, ~10% spot checks, daily digest) or `auto`.
-- A new account, a new format and a new producer version all start in `review`.
-- A pure policy gate runs on every item. The LLM claim check joins it with the Judge (ADR-36) in S6, when AI content first appears; clips make no product claims. It checks disclosure, #ad, credits, license manifest, cross-account duplicates, and health and earnings claims.
-- Any violation sends the item to `review`.
-Consequences: Owner time scales with how new the content is, not with volume. Reject reasons feed the ranker.
+**ADR-29: Tiered review with an always-on policy gate**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-29-tiered-review-with-an-always-on-policy-gate).
 
-## ADR-30: Self-hosted open media models on Modal, license-gated
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md)
-Context: The owner rules out paid voice and avatar SaaS, and the target is 20+ accounts. Open models now cover voice (Qwen3-TTS), images (Z-Image), talking heads (InfiniteTalk), music (ACE-Step) and b-roll (Wan2.2). Many popular models are non-commercial (InsightFace packs, FLUX.1-dev, Qwen-Image 2.1, F5-TTS, XTTS, MusicGen).
-Decision:
-- Each model runs as a `modal.Cls` media server, with weights on a `clipforge-models` Volume, memory snapshots, and GPU step methods inside the class so nothing waits idle (ADR-12).
-- Stage logic uses Modal-free protocols in `media/`.
-- `media/registry.toml` pins every model's revision and license. A test fails for licenses outside the allowlist.
-- Personas are fully synthetic (a designed voice and a generated face with a LoRA).
-Consequences: Cents per video instead of a subscription per seat. We maintain GPU images and pins. Spikes X1–X4 must confirm quality and cost before each producer is built.
+**ADR-30: Self-hosted open media models on Modal, license-gated**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-30-self-hosted-open-media-models-on-modal-license-gated).
 
-## ADR-31: Timeline as the single render input
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md)
-Context: Clips crop a source video, while stories, bands and avatars assemble stills, generated clips, talking heads, narration and music. Separate renderers would drift apart in captions, loudness and size limits (ADR-18/20).
-Decision: A `Timeline` contract (visual segments, audio tracks, captions, title card, asset sources) is the only input to `render`. The clip producer moves onto it first, keeping identical output properties.
-Consequences: One ffmpeg + libass path, with the ADR-20 polish applying everywhere. `render.STAGE_VERSION` bumps once.
+**ADR-31: Timeline as the single render input**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-31-timeline-as-the-single-render-input).
 
 ## ADR-32: Two LLM quality levels
 Date: 2026-09-29 · Status: Deferred (kickoff review: bulk text is under $5/month even at 19 accounts; revisit if LLM spend passes $50/month)
@@ -79,21 +39,9 @@ Decision:
 - Conversions are imported from APIs where they exist (ClickBank, Hotmart) and from CSV otherwise (Skool, Amazon, TikTok Shop).
 Consequences: Revenue per video and per account in the dashboard, which is the "scale the winners" loop.
 
-## ADR-34: Local download helper
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md; keeps ADR-10 for the cloud; ADR-17 stays deferred)
-Context: YouTube blocks Modal's egress IPs. The owner's home connection works, and permitted sources such as creator agreements still need downloading.
-Decision: `clipforge fetch` runs yt-dlp locally, with Deno and the bgutil PO-token plugin, into `videos/<channel>/`. It only downloads for sources whose permission is recorded. yoinks is fine for manual use.
-Consequences: The laptop is needed only to fetch sources. Everything else stays serverless.
+**ADR-34: Local download helper**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-34-local-download-helper).
 
-## ADR-35: Channels as blueprint instances
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md)
-Context: The portfolio (07) has 15 concepts in 5 categories, about 19 accounts with Spanish pairs, and it has to grow further. Designing each channel by hand doesn't scale, and YouTube's inauthentic-content rule penalizes templated sameness.
-Decision:
-- Each channel concept is a versioned blueprint (`blueprints/<name>.toml`): niche, pillars, rotating series formats, voice and visual briefs, platform defaults, money sources, a compliance profile, and prompt names.
-- An account is a blueprint plus a language, persona, handles, posting profile, budget and review tier.
-- Producers rotate series and structure per item and log the variation.
-- EN/ES pairs share a blueprint and link through `paired_account_id`. The Spanish side is a native adaptation.
-Consequences: A new account is one command plus platform sign-ups. Blueprint changes are reviewable diffs. The policy gate reads the compliance profile.
+**ADR-35: Channels as blueprint instances**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-35-channels-as-blueprint-instances).
 
 ## ADR-36: Judge protocol for decisions, with TypeSafe Jev as a candidate
 Date: 2026-09-29 · Status: Proposed (build in S6 with the first AI content; Jev adoption depends on spike X5)
@@ -114,23 +62,9 @@ Decision:
 - A daily Telegram morning message reports the cost split, the escalation rate and audit findings.
 Consequences: The auto-post rate becomes a measured, tunable number. Adds one table and a daily job.
 
-## ADR-38: Next.js as the operational dashboard, Notion as a one-way mirror
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md)
-Context: The owner wants one place to run the studio and a readable, shareable planning space. Notion's API is rate-limited (about 3 req/s), can't play R2 video, and allows manual schema edits. A two-way sync would create two sources of truth.
-Decision: All operations (accounts, queue, review, thresholds, stats, money, costs) live in the Next.js dashboard over the FastAPI API and Postgres. A `notion_mirror` task writes the planning pack, SOPs and weekly reports to Notion one way, and never reads edits back. The pages say so.
-Consequences: Notion is for reading, sharing and thinking. Every change goes through the dashboard or repo.
+**ADR-38: Next.js as the operational dashboard, Notion as a one-way mirror**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-38-nextjs-as-the-operational-dashboard-notion-as-a-one-way-mirror).
 
-## ADR-39: AI model / influencer category with provenance kept
-Date: 2026-09-29 · Status: Accepted (2026-09-29; copied to docs/DECISIONS.md)
-Context: Lifestyle AI personas earn from brand deals and affiliate storefronts. Common playbooks strip AI metadata to pass as human, scrape real people's photos for training, and swap faces onto real people's videos.
-Decision:
-- Category E uses fully synthetic personas, trained only on their own generated images.
-- Provenance metadata (C2PA/IPTC) and platform AI labels are always kept.
-- "AI creator" goes in the bio.
-- No face or body swaps onto real people's footage.
-- Sponsored posts are disclosed. No sexual content.
-- `ContentItem` gains media kinds `carousel` and `image`.
-Consequences: Platform-compliant accounts that can take brand deals openly. Some "indistinguishable from real" growth tactics are deliberately off the table.
+**ADR-39: AI model / influencer category with provenance kept**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-39-ai-model--influencer-category-with-provenance-kept).
 
 ## ADR-40: Funnel and own products (deferred build)
 Date: 2026-09-29 · Status: Proposed (build in S14)
