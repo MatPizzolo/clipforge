@@ -1,0 +1,105 @@
+# What each branch prefix may change (card 001, decision log #127).
+# Read by scripts/check_scope.py (CI and scripts/check.sh) and .claude/hooks/scope_guard.py.
+#
+# Globs are relative to the repo root: `*` matches within one path segment, `**` any number of
+# segments. `deny` wins over `allow`. On every branch, two more things are always allowed:
+# - its own reports: docs/reports/*-<stream>-*
+# - appended rows in docs/studio/10-decision-log.md whose numbers fall in `log`
+#   (plus turning an existing row's status into "superseded by N" for an N it appends).
+# `main` is exempt from the check. Change a card's scope here in the same PR as the card.
+
+[prefix."x0/"]
+stream = "x0"
+log = [380, 399]
+allow = [
+    ".claude/**",
+    "scripts/**",
+    "tests/test_docs.py",
+    "tests/scripts/**",
+    ".github/workflows/**",
+    "docs/ops/**",
+    "docs/templates/**",
+    "docs/cards/README.md",
+    "docs/studio/11-owner-runbook.md",
+    "CLAUDE.md",
+    "STATUS.md",
+    "README.md",
+]
+deny = [".claude/skills/neon*/**"]
+
+[prefix."s1/"]
+stream = "s1"
+log = [200, 249]
+allow = [
+    "src/**",
+    "tests/**",
+    "alembic/**",
+    "alembic.ini",
+    "blueprints/**",
+    "pyproject.toml",
+    "uv.lock",
+    ".github/workflows/ci.yml",
+    ".env.example",
+    "docs/ARCHITECTURE.md",
+    "docs/DECISIONS.md",
+    "CLAUDE.md",
+    "docs/superpowers/**/*s1*",
+    "STATUS.md",
+]
+
+[prefix."s3c/"]
+stream = "s3c"
+log = [250, 299]
+allow = [
+    "docs/superpowers/specs/*s3-workspaces*",
+    "docs/superpowers/plans/*s3c*",
+    "docs/studio/04-roadmap.md",
+    "docs/studio/05-proposed-adrs.md",
+    "docs/studio/06-session-prompts.md",
+    "docs/studio/08-dashboard-and-operations.md",
+]
+
+[prefix."s3a/"]
+stream = "s3a"
+log = [300, 319]
+allow = [
+    "web/**",
+    "scripts/export_openapi.py",
+    ".github/workflows/web.yml",
+    "docs/superpowers/**/*s3a*",
+    "ROADMAP.md",
+    "docs/studio/04-roadmap.md",
+    "CLAUDE.md",
+]
+
+[prefix."x2/"]
+stream = "x2"
+log = [320, 339]
+allow = [
+    "docs/studio/03-tools-and-models.md",
+    "docs/studio/04-roadmap.md",
+    "docs/studio/spikes/**",
+]
+
+[prefix."s4/"]
+stream = "s4"
+log = [340, 379]
+allow = [
+    "src/**",
+    "tests/**",
+    "docs/superpowers/**/*s4*",
+    "docs/ARCHITECTURE.md",
+    "CLAUDE.md",
+]
+
+[prefix."coord/"]
+stream = "coord"
+log = [1, 199]
+allow = [
+    "docs/**",
+    "STATUS.md",
+    "ROADMAP.md",
+    "README.md",
+    "CLAUDE.md",
+    ".gitignore",
+]
