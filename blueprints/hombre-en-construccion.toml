@@ -1,0 +1,46 @@
+# Blueprint (ADR-35). Bump `version` on any meaningful change; accounts record the version
+# they were created from. Source: docs/studio/07, section A; ids and platforms: 09.
+# Primary platform: TikTok (shapes the format only; every enabled platform gets every video).
+name = "hombre-en-construccion"
+version = 1
+category = "clips"
+languages = ["es"]
+niche = "Clips de pódcast en español para hombres: disciplina, relaciones, dinero y fe"
+pillars = ["disciplina", "relaciones", "dinero", "fe"]
+voice_brief = "Momentos directos y honestos; adaptación nativa en español neutro latinoamericano, no traducción."
+visual_style = "Encuadre 9:16 centrado en la cara (ADR-19/21), subtítulos Anton con palabras clave en amarillo, título gancho (ADR-18/20)."
+money = ["TikTok Creator Rewards (US y MX)", "retainers de pódcasts en español"]
+
+# draft: owner edits
+[[series]]
+name = "Verdad incómoda"
+description = "Una frase directa sobre disciplina o dinero, y luego el razonamiento que la sostiene."
+
+# draft: owner edits
+[[series]]
+name = "Relaciones sin filtro"
+description = "Un invitado señala un error común en las relaciones y dice qué hacer en su lugar."
+
+# draft: owner edits
+[[series]]
+name = "Fe y disciplina"
+description = "Una historia en la que la fe ayudó a alguien a superar una etapa difícil."
+
+[compliance]
+require_credit = true
+
+[platform_defaults.tiktok]
+enabled = true
+
+[platform_defaults.instagram]
+enabled = true
+
+[platform_defaults.youtube]
+enabled = true
+
+[platform_defaults.facebook]
+enabled = true
+
+[prompts]
+highlights = "highlights_v1"
+keywords = "keywords_v2"

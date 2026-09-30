@@ -1,0 +1,96 @@
+# CLAUDE.md
+
+Guidance for Claude Code in this repository. Read this first, then the relevant doc below before changing code.
+
+- Architecture and stage contracts: @docs/ARCHITECTURE.md
+- Current plan and next tasks: @ROADMAP.md
+- Past decisions (don't relitigate without a new ADR): @docs/DECISIONS.md
+
+## Project summary
+
+ClipForge is a pipeline that turns long videos into 9:16 short clips and writes them to an output folder. Interfaces (Telegram bot, web app) are thin clients over one job API. Everything runs serverless on Modal (ADR-9): the API, the Telegram webhook and each pipeline step. Nothing runs locally except development.
+
+## Stack
+
+- Python 3.12, managed with `uv` (never use pip directly)
+- Modal for GPU functions, web endpoints, Volumes and Dicts
+- faster-whisper / WhisperX for transcription
+- Anthropic API (`claude-haiku-4-5` default) for highlight selection and post copy
+- ffmpeg + libass for rendering; PySceneDetect + MediaPipe for reframing
+- FastAPI for the job API (Modal `@asgi_app`), python-telegram-bot for the bot in webhook mode (no polling `Application`)
+- pydantic v2 for every data contract
+
+## Commands
+
+```bash
+uv sync                                  # install
+uv run pytest -q                         # all tests
+uv run pytest -q -m "not gpu and not slow"   # fast tests (run these before every commit)
+uv run ruff check . && uv run ruff format .
+uv run mypy src
+uv run modal run src/clipforge/app.py::doctor   # local ffmpeg + Modal GPU environment check
+uv run modal serve src/clipforge/app.py          # dev: hot-reload web endpoints on Modal
+uv run modal run src/clipforge/app.py::smoke    # one real job on Modal (~$0.01)
+uv run modal deploy src/clipforge/app.py         # deploy the app
+uv run clipforge run --input <url>               # submit a job to the deployed API
+uv run clipforge clip [videos/<channel>/<file>] [--fetch]   # videos/ inbox → jobs (ADR-22); --fetch downloads the clips
+uv run clipforge status [<id>] [--rebuild|--restore [DATE]] / resume <id>     # read or continue a job; no id: the posting overview
+uv run clipforge set-webhook                     # point Telegram at the deployed API
+uv run clipforge eval --set evals/v1     # highlight eval (see docs/EVALS.md)
+```
+
+## Layout
+
+```
+src/clipforge/
+  app.py            # Modal app: step functions, web endpoints, cron (the only modal importer)
+  doctor.py         # environment checks (local half of `doctor`)
+  hashing.py        # file hashes and stage cache keys
+  ffmpeg.py         # ffmpeg/ffprobe wrappers (media_info, probe_info, run)
+  prompts.py        # versioned prompt loader (prompts/<name>_v<N>.md + metadata.json)
+  llm.py            # LLMClient protocol + AnthropicClient
+  links.py          # signed, expiring zip links (ADR-13)
+  runtime.py        # Modal adapters (DictKV, ModalVolume, FunctionSpawner) + build_deps
+  smoke.py          # checks for the Modal smoke job (app.py::smoke)
+  cli.py            # `clipforge run|clip|status|resume|set-webhook` (thin API client)
+  inbox.py          # videos/ inbox for `clipforge clip`: channels.toml, channel folders, ledger, Volume paths
+  api/main.py       # FastAPI job API + Telegram webhook route
+  bot/              # Telegram: telegram.py (PTB sync bridge), messages, notifier, commands, webhook, context, posting (ADR-23)
+  stages/           # one module per stage + segmenting.py (sentences/windows) + shots.py/faces.py/speakers.py (reframe helpers) + runner.py (PipelineStages)
+    ingest.py transcribe.py highlights.py reframe.py captions.py render.py package.py
+  models.py         # pydantic contracts shared by stages
+  jobs.py           # DictJobStore, JobContext, cached_stage (ADR-14)
+  pipeline/         # step chain (Modal-free): deps.py interfaces, steps.py, selection.py, errors.py
+  posting/          # posting queue (ADR-23): repo (PostingRepo: Dict/Sql/Dual), backend, queue rules, enqueue, slots, keepalive (ADR-24 snapshot/restore)
+  service.py        # job service: create_job, get_job_view, resume_job (API, bot and CLI use it)
+  config.py         # settings from env
+prompts/            # versioned prompts, loaded by filename
+assets/             # fonts/ (Anton, OFL) and models/ (YuNet face model, MIT)
+tests/              # mirrors src/ layout; fixtures in tests/fixtures/
+evals/              # eval sets and results
+```
+
+## Rules
+
+1. **Stages are pure and resumable.** Each stage takes a pydantic input, writes its output to its cache directory (`/jobs/cache/<stage>/<key>/`, ADR-8), and returns a pydantic output. If the output already exists for the same input hash, skip the work. Never make a later stage re-run an earlier one. Stage modules never import Modal.
+2. **Contracts live in `models.py`.** Change a contract there first, then update producer and consumer, then tests.
+3. **Report progress.** Long-running stages call `ctx.report(stage, pct, message)` on the `jobs.JobContext` they receive. The bot and web app depend on this.
+4. **Prompts are files, not strings.** Load them from `prompts/<name>_v<N>.md`. Never edit a released prompt version in place; create the next version and record it in `metadata.json`.
+5. **LLM output is JSON-validated.** Parse with pydantic; on failure retry that call once with the validation error. For highlights, this applies per transcript window: a window that fails twice is dropped and recorded in the job metadata, and the stage fails clearly only if more than 25% of windows fail or no candidates remain.
+6. **Process only selected segments on GPU.** Reframing and rendering run per clip, never on the full source video.
+7. **Log cost.** Every stage records GPU seconds and LLM tokens in the job metadata.
+8. **No secrets in code or logs.** Use `config.py` / Modal secrets. Never print tokens.
+9. **Content policy.** Don't add features whose purpose is to evade copyright detection (e.g. mirroring, pitch-shifting, cropping to beat Content ID). See docs/SOURCING.md.
+
+## Testing
+
+- Unit-test stages with tiny fixtures in `tests/fixtures/` (a 10-second clip, a short transcript JSON).
+- Mark GPU tests `@pytest.mark.gpu` and network/LLM tests `@pytest.mark.slow`; mock the Anthropic client in fast tests.
+- For ffmpeg changes, assert on output properties (duration, resolution 1080x1920, stream count) with ffprobe, not on bytes.
+
+## Working style
+
+- Before a non-trivial change, state a short plan and which files you'll touch.
+- Keep PRs to one roadmap item. Tick the checkbox in ROADMAP.md when done.
+- If you make an architectural choice, add an ADR to docs/DECISIONS.md.
+- Prefer boring, explicit code over clever abstractions. Type hints everywhere.

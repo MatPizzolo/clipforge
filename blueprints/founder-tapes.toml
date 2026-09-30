@@ -1,0 +1,47 @@
+# Blueprint (ADR-35). Bump `version` on any meaningful change; accounts record the version
+# they were created from. Source: docs/studio/07, section A; ids and platforms: 09.
+# Primary platform: TikTok (shapes the format only; every enabled platform gets every video).
+name = "founder-tapes"
+version = 1
+category = "clips"
+languages = ["en"]
+niche = "Business podcast clips: founders' origin stories, sales, hiring and money lessons"
+pillars = ["origin stories", "sales tactics", "hiring", "money lessons"]
+voice_brief = "A founder's concrete, specific lesson: numbers, decisions and mistakes. Never 'buy X'."
+visual_style = "Face-centered 9:16 (ADR-19/21), Anton captions with yellow key words, hook title card (ADR-18/20)."
+money = ["Whop business and finance campaigns", "TikTok Creator Rewards"]
+
+# draft: owner edits
+[[series]]
+name = "How they started"
+description = "The founder explains the first customer, the first dollar or the first big decision."
+
+# draft: owner edits
+[[series]]
+name = "The sales move"
+description = "One concrete sales tactic, with the exact words or numbers used."
+
+# draft: owner edits
+[[series]]
+name = "Expensive lesson"
+description = "A mistake that cost real money, and what the founder changed afterwards."
+
+[compliance]
+require_credit = true
+banned_claims = ["buy-x"]
+
+[platform_defaults.tiktok]
+enabled = true
+
+[platform_defaults.instagram]
+enabled = true
+
+[platform_defaults.youtube]
+enabled = true
+
+[platform_defaults.facebook]
+enabled = true
+
+[prompts]
+highlights = "highlights_v1"
+keywords = "keywords_v2"

@@ -1,0 +1,41 @@
+{
+  "language": "en",
+  "language_probability": 0.98,
+  "duration_s": 10.0,
+  "model": "fixture",
+  "segments": [
+    {
+      "start": 0.2,
+      "end": 4.1,
+      "text": "The ocean is the great teacher. It humbles you.",
+      "words": [
+        {"text": "The", "start": 0.2, "end": 0.4},
+        {"text": "ocean", "start": 0.45, "end": 0.9},
+        {"text": "is", "start": 0.95, "end": 1.05},
+        {"text": "the", "start": 1.1, "end": 1.2},
+        {"text": "great", "start": 1.25, "end": 1.6},
+        {"text": "teacher.", "start": 1.65, "end": 2.2},
+        {"text": "It", "start": 2.8, "end": 2.95},
+        {"text": "humbles", "start": 3.0, "end": 3.5},
+        {"text": "you.", "start": 3.55, "end": 4.1}
+      ]
+    },
+    {
+      "start": 4.6,
+      "end": 9.4,
+      "text": "You learn to listen before you move, every single day.",
+      "words": [
+        {"text": "You", "start": 4.6, "end": 4.8},
+        {"text": "learn", "start": 4.85, "end": 5.2},
+        {"text": "to", "start": 5.25, "end": 5.35},
+        {"text": "listen", "start": 5.4, "end": 5.9},
+        {"text": "before", "start": 5.95, "end": 6.3},
+        {"text": "you", "start": 6.35, "end": 6.5},
+        {"text": "move,", "start": 6.55, "end": 7.0},
+        {"text": "every", "start": 7.6, "end": 7.9},
+        {"text": "single", "start": 7.95, "end": 8.4},
+        {"text": "day.", "start": 8.45, "end": 9.4}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+[project]
+name = "clipforge"
+version = "0.1.0"
+description = "Turn long-form videos into 9:16 short clips"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.14",
+    "anthropic>=1.8",
+    "fastapi>=0.141",
+    "httpx>=0.28",
+    "modal>=1.5",
+    "opencv-python-headless>=5.0",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "python-telegram-bot>=22.8",
+    "sqlalchemy>=2.0.36",
+]
+
+[project.scripts]
+clipforge = "clipforge.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.11",
+    "pytest>=8.3",
+    "ruff>=0.6",
+    "testcontainers[postgres]>=4.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clipforge"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Code blocks in Markdown (plans, specs) are fragments, not modules.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "gpu: runs on a GPU (Modal); excluded from fast tests",
+    "slow: network, real LLM calls or long media work; excluded from fast tests",
+]
+
+[[tool.mypy.overrides]]
+# Installed only in the Modal GPU image (and the optional asr-local extra).
+module = ["faster_whisper", "faster_whisper.*", "ctranslate2", "av"]
+ignore_missing_imports = true

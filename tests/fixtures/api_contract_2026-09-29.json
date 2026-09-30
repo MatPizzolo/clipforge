@@ -1,0 +1,547 @@
+{
+  "ChannelProgress": {
+    "$defs": {
+      "PostStatus": {
+        "description": "Derived from a clip's keys, never stored (spec \u00a74).",
+        "enum": [
+          "queued",
+          "sent",
+          "partly_posted",
+          "posted",
+          "skipped",
+          "rejected",
+          "unavailable"
+        ],
+        "title": "PostStatus",
+        "type": "string"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "counts": {
+        "additionalProperties": {
+          "type": "integer"
+        },
+        "propertyNames": {
+          "$ref": "#/$defs/PostStatus"
+        },
+        "title": "Counts",
+        "type": "object"
+      },
+      "episodes_clipped": {
+        "default": 0,
+        "title": "Episodes Clipped",
+        "type": "integer"
+      },
+      "episodes_clipping": {
+        "default": 0,
+        "title": "Episodes Clipping",
+        "type": "integer"
+      },
+      "episodes_failed": {
+        "default": 0,
+        "title": "Episodes Failed",
+        "type": "integer"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "slug": {
+        "title": "Slug",
+        "type": "string"
+      }
+    },
+    "required": [
+      "slug",
+      "name"
+    ],
+    "title": "ChannelProgress",
+    "type": "object"
+  },
+  "JobView": {
+    "$defs": {
+      "ClipState": {
+        "description": "Working state of one clip (`job:<id>:clip:<clip_id>`), written only by its clip step.",
+        "properties": {
+          "clip_id": {
+            "title": "Clip Id",
+            "type": "string"
+          },
+          "cost": {
+            "items": {
+              "$ref": "#/$defs/StageCost"
+            },
+            "title": "Cost",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/JobError"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Progress"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "result_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result Ref"
+          },
+          "spec_ref": {
+            "title": "Spec Ref",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/ClipStatus",
+            "default": "pending"
+          },
+          "telegram_sent": {
+            "default": false,
+            "title": "Telegram Sent",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clip_id",
+          "spec_ref",
+          "updated_at"
+        ],
+        "title": "ClipState",
+        "type": "object"
+      },
+      "ClipStatus": {
+        "enum": [
+          "pending",
+          "running",
+          "done",
+          "failed"
+        ],
+        "title": "ClipStatus",
+        "type": "string"
+      },
+      "CostSummary": {
+        "properties": {
+          "stages": {
+            "items": {
+              "$ref": "#/$defs/StageCost"
+            },
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "title": "CostSummary",
+        "type": "object"
+      },
+      "JobError": {
+        "properties": {
+          "error_type": {
+            "title": "Error Type",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "stage": {
+            "$ref": "#/$defs/StageName"
+          }
+        },
+        "required": [
+          "stage",
+          "error_type",
+          "message"
+        ],
+        "title": "JobError",
+        "type": "object"
+      },
+      "JobStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "done",
+          "failed"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "Progress": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "pct": {
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Pct",
+            "type": "number"
+          },
+          "stage": {
+            "$ref": "#/$defs/StageName"
+          }
+        },
+        "required": [
+          "stage",
+          "pct",
+          "at"
+        ],
+        "title": "Progress",
+        "type": "object"
+      },
+      "StageCost": {
+        "properties": {
+          "cached": {
+            "default": false,
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "clip_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Clip Id"
+          },
+          "gpu_s": {
+            "default": 0.0,
+            "title": "Gpu S",
+            "type": "number"
+          },
+          "gpu_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Gpu Type"
+          },
+          "llm_calls": {
+            "default": 0,
+            "title": "Llm Calls",
+            "type": "integer"
+          },
+          "llm_input_tokens": {
+            "default": 0,
+            "title": "Llm Input Tokens",
+            "type": "integer"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Llm Model"
+          },
+          "llm_output_tokens": {
+            "default": 0,
+            "title": "Llm Output Tokens",
+            "type": "integer"
+          },
+          "stage": {
+            "$ref": "#/$defs/StageName"
+          },
+          "usd_estimate": {
+            "default": 0.0,
+            "title": "Usd Estimate",
+            "type": "number"
+          },
+          "wall_s": {
+            "default": 0.0,
+            "title": "Wall S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "title": "StageCost",
+        "type": "object"
+      },
+      "StageName": {
+        "enum": [
+          "ingest",
+          "transcribe",
+          "highlights",
+          "reframe",
+          "captions",
+          "render",
+          "package"
+        ],
+        "title": "StageName",
+        "type": "string"
+      }
+    },
+    "description": "What the API returns: the core record merged with its clips, and the total cost.",
+    "properties": {
+      "clips": {
+        "items": {
+          "$ref": "#/$defs/ClipState"
+        },
+        "title": "Clips",
+        "type": "array"
+      },
+      "cost": {
+        "$ref": "#/$defs/CostSummary"
+      },
+      "created_at": {
+        "format": "date-time",
+        "title": "Created At",
+        "type": "string"
+      },
+      "download_url": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Download Url"
+      },
+      "error": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/JobError"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "job_id": {
+        "title": "Job Id",
+        "type": "string"
+      },
+      "output_zip": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Output Zip"
+      },
+      "progress": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Progress"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "stage": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/StageName"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "status": {
+        "$ref": "#/$defs/JobStatus"
+      },
+      "updated_at": {
+        "format": "date-time",
+        "title": "Updated At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "job_id",
+      "status",
+      "stage",
+      "clips",
+      "cost",
+      "created_at",
+      "updated_at"
+    ],
+    "title": "JobView",
+    "type": "object"
+  },
+  "PostingOverview": {
+    "$defs": {
+      "ChannelProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/$defs/PostStatus"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "episodes_clipped": {
+            "default": 0,
+            "title": "Episodes Clipped",
+            "type": "integer"
+          },
+          "episodes_clipping": {
+            "default": 0,
+            "title": "Episodes Clipping",
+            "type": "integer"
+          },
+          "episodes_failed": {
+            "default": 0,
+            "title": "Episodes Failed",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ],
+        "title": "ChannelProgress",
+        "type": "object"
+      },
+      "PostStatus": {
+        "description": "Derived from a clip's keys, never stored (spec \u00a74).",
+        "enum": [
+          "queued",
+          "sent",
+          "partly_posted",
+          "posted",
+          "skipped",
+          "rejected",
+          "unavailable"
+        ],
+        "title": "PostStatus",
+        "type": "string"
+      }
+    },
+    "additionalProperties": false,
+    "description": "What `/status`, `GET /posting` and `clipforge status` show (spec \u00a79).",
+    "properties": {
+      "channels": {
+        "items": {
+          "$ref": "#/$defs/ChannelProgress"
+        },
+        "title": "Channels",
+        "type": "array"
+      },
+      "days_left": {
+        "title": "Days Left",
+        "type": "integer"
+      },
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "next_slot": {
+        "anyOf": [
+          {
+            "format": "date-time",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Next Slot"
+      },
+      "paused": {
+        "title": "Paused",
+        "type": "boolean"
+      },
+      "per_day": {
+        "title": "Per Day",
+        "type": "integer"
+      },
+      "problem": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Problem"
+      },
+      "waiting": {
+        "title": "Waiting",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "enabled",
+      "paused",
+      "channels",
+      "waiting",
+      "days_left",
+      "per_day",
+      "next_slot"
+    ],
+    "title": "PostingOverview",
+    "type": "object"
+  }
+}

@@ -1,0 +1,46 @@
+# Blueprint (ADR-35). Bump `version` on any meaningful change; accounts record the version
+# they were created from. Source: docs/studio/07, section A; ids and platforms: 09.
+# Primary platform: TikTok (shapes the format only; every enabled platform gets every video).
+name = "realtalk-clips"
+version = 1
+category = "clips"
+languages = ["en"]
+niche = "Self-improvement podcast clips for men: discipline, dating, money mindset, faith"
+pillars = ["discipline", "dating", "money mindset", "faith"]
+voice_brief = "Blunt, honest moments where a guest says what the viewer needs to hear. No filler intros."
+visual_style = "Face-centered 9:16 (ADR-19/21), Anton captions with yellow key words, hook title card (ADR-18/20)."
+money = ["creator deal", "TikTok Creator Rewards", "Skool affiliate"]
+
+# draft: owner edits
+[[series]]
+name = "Hard truth"
+description = "One blunt line about discipline or money, then the reasoning behind it."
+
+# draft: owner edits
+[[series]]
+name = "Dating reality check"
+description = "A guest calls out a common dating mistake and says what to do instead."
+
+# draft: owner edits
+[[series]]
+name = "Faith and grit"
+description = "A story where faith carried someone through a hard stretch."
+
+[compliance]
+require_credit = true
+
+[platform_defaults.tiktok]
+enabled = true
+
+[platform_defaults.instagram]
+enabled = true
+
+[platform_defaults.youtube]
+enabled = true
+
+[platform_defaults.facebook]
+enabled = true
+
+[prompts]
+highlights = "highlights_v1"
+keywords = "keywords_v2"

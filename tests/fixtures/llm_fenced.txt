@@ -1,0 +1,5 @@
+Here are the clips I found:
+
+```json
+{"clips": [{"start": 36.9, "end": 76.3, "score": 0.86, "hook": "Every wave is different so you learn to listen.", "title": "Listen before you move", "reason": "Clear claim with a payoff.", "confidence": "high"}]}
+```

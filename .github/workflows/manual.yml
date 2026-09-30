@@ -1,0 +1,24 @@
+name: Manual GPU checks
+
+# Costs Modal money (about $0.01 per run), so it never runs automatically (ADR-16).
+on:
+  workflow_dispatch:
+
+jobs:
+  gpu:
+    runs-on: ubuntu-24.04
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ffmpeg (with libass)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Local + GPU environment check
+        run: uv run modal run src/clipforge/app.py::doctor
+      - name: Smoke job on Modal (10 s fixture, about $0.01)
+        run: uv run modal run src/clipforge/app.py::smoke

@@ -1,0 +1,65 @@
+name: web
+
+on:
+  push:
+    paths:
+      - "web/**"
+      - "scripts/export_openapi.py"
+      # Everything the OpenAPI export imports or installs:
+      - "src/clipforge/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "scripts/export_openapi.py"
+      # Everything the OpenAPI export imports or installs:
+      - "src/clipforge/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/web.yml"
+
+# Read-only: this workflow never deploys or writes.
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - name: OpenAPI export is up to date
+        run: uv run python scripts/export_openapi.py --check
+      - run: uv run ruff check scripts/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: Generated schemas match openapi.json
+        run: npm run gen:check
+        working-directory: web
+      - run: npm run lint
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm test
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - name: Build + Playwright smoke (mock API)
+        run: npm run e2e
+        working-directory: web
+        env:
+          CI: "true"

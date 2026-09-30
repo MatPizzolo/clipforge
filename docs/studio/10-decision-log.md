@@ -1,0 +1,156 @@
+# 10: Decision log
+
+Every decision the owner has made about ClipForge and the studio, in date order, with where it is recorded in detail.
+- **ADRs** in [docs/DECISIONS.md](../DECISIONS.md) hold architecture decisions and are binding.
+- **This log** also holds business, content and process decisions, which have no ADR.
+- A changed decision is never edited away. It gets status `superseded` and a pointer to the entry that replaced it.
+- **Several sessions write this file at the same time.** Re-read it right before editing. Add rows only by inserting them after the last row, with the next free number. Never rewrite or reformat the whole file. (On 2026-09-29 one session's rewrite dropped another's rows; #61–64 restore them.)
+
+Status: `current`, `superseded` (by entry N), `open` (waiting for the owner).
+
+Last updated: 2026-09-30.
+
+## Platform and architecture
+
+| # | Date | Decision | Status | Recorded in |
+|---|---|---|---|---|
+| 1 | 2026-09-23 | Everything runs serverless on Modal: API, Telegram webhook, pipeline steps, crons. The owner's machine is for development only. | current | ADR-9 |
+| 2 | 2026-09-23 | A local worker on the owner's machine | superseded by 1 | ADR-6 |
+| 3 | 2026-09-23 | Direct media links and Telegram uploads only; no YouTube downloads from the cloud (blocked on Modal IPs) | current | ADR-10 |
+| 4 | 2026-09-23 | Own faster-whisper on a Modal L4, not a transcription API | current | ADR-11 |
+| 5 | 2026-09-23 | Event-driven step chain, stages cached by input, output delivered as Telegram videos plus a signed zip link | current | ADR-8, 12, 13 |
+| 6 | 2026-09-28 | YouTube through a residential proxy: spiked, then deferred on cost (about $3 per 30 min of video) | current (deferred) | ADR-17 |
+| 7 | 2026-09-28 | Clip quality: LLM key words in captions, face-centered crop per shot, retention polish (-14 LUFS, hook title, caption pop), cut to the speaker by mouth motion | current | ADR-18, 19, 20, 21 |
+| 8 | 2026-09-29 | Posting state kept alive against the Modal Dict's 7-day expiry: a daily keep-alive read plus a snapshot on the Volume | current until S1 migrates (see 27) | ADR-24 |
+| 9 | 2026-09-29 | Durable state moves to Neon Postgres (queue **and** job records); the Dict keeps only in-flight step state | current (built in S1) | ADR-26 |
+| 10 | 2026-09-29 | Self-hosted open media models on Modal, license-gated by a registry test; no paid voice or avatar SaaS; LLM credits are the only paid AI | current | ADR-30 |
+| 11 | 2026-09-29 | One `Timeline` contract is the only render input | current (built in S4) | ADR-31 |
+| 12 | 2026-09-29 | The Next.js dashboard on Vercel Pro is the operational system; Notion is a one-way mirror | current | ADR-38 |
+| 13 | 2026-09-29 | The dashboard calls a separate `admin` Modal endpoint with proxy auth; the public `web` endpoint stays open for webhooks, download links and `/go` | current (built in S3) | ADR-38, 02 §8 |
+| 14 | 2026-09-29 | One dispatcher cron, but only when a 5th cron is needed (S7), with markers in the Dict so Neon can scale to zero | current (proposed ADR) | ADR-27 draft in 05 |
+| 15 | 2026-09-29 | LLM router over free tiers for bulk text | deferred (savings under $5/month) | ADR-32 draft in 05 |
+| 16 | 2026-09-29 | Postgres driver: psycopg 3 (LGPL-3.0, used unmodified) is allowed; libraries used unmodified under LGPL are fine | current | S1 spec, 03 |
+
+## Distribution and posting
+
+| # | Date | Decision | Status | Recorded in |
+|---|---|---|---|---|
+| 17 | 2026-09-28 | One network brand, **realtalk.clipsdaily**, in the men's-growth niche, on TikTok, Instagram Reels and YouTube Shorts. Not one account per creator | current | memory, 09 #1 |
+| 18 | 2026-09-28 | Post every clip scoring ≥ 0.80, 5–7 a day spaced 2–3 h apart, the same day on all platforms, the creator credited in every caption; only channels in the same niche | current | ADR-23, posting spec |
+| 19 | 2026-09-28 | Sources are channel folders plus `videos/channels.toml` with credit and permission; `clipforge clip` submits and exits | superseded by 58 (the folder mapping stays) | ADR-22 |
+| 20 | 2026-09-28 | Phone-first posting assistant on Modal (Telegram, ✅ per platform, ⏭ Skip, 🗑 Reject with reason); a local day-folder queue was dropped; no "test on TikTok first" | current | ADR-23 |
+| 21 | 2026-09-29 | Postiz: not now. Self-hosted doesn't fit ADR-9; Postiz cloud is an option if hand-posting gets tedious | superseded by 22 | ROADMAP "Later" |
+| 22 | 2026-09-29 | Publishing through **Upload-Post** behind a `Publisher` protocol; the Telegram flow stays as the fallback. Media by signed Volume links first, R2 only if needed | current (built in S2) | ADR-28 |
+| 23 | 2026-09-29 | Tiered review per account (`review`, `sample`, `auto`), and a policy gate on every item | current (built in S2) | ADR-29 |
+| 24 | 2026-09-29 | The Judge, the decision ledger, lanes, audit and the morning message ship **with publishing** | superseded by 25 | 08 (earlier text) |
+| 25 | 2026-09-29 | They ship with the first AI producer (S6). S2 has only pure gate checks, because clips make no product claims | current | 04, ADR-36/37 drafts |
+| 26 | 2026-09-29 | Tracking links (`GET /go/<slug>`) and conversion import | current (proposed ADR) | ADR-33 draft in 05 |
+| 27 | 2026-09-29 | Queue migration (S1): write to Postgres and the Dict, choose reads with `STATE_READS`, verify the two stores daily inside the keep-alive cron; drop the Dict writes and the keep-alive a week after the switch | current | S1 spec |
+| 28 | 2026-09-29 | `paused` is runtime state (its own row), not account config; posting slots are the only timing source; `POSTING_*` settings are read only in Dict mode | current | S1 spec |
+| 29 | 2026-09-29 | Each clip records the platforms it's due on; "posted everywhere" means all of those. Facebook joins as a platform | current | S1 spec |
+| 30 | 2026-09-29 | Per-platform post copy (`ContentItem.copy`) arrives in S2; until then captions are built at send time | current | S1 spec |
+
+## Accounts and content
+
+| # | Date | Decision | Status | Recorded in |
+|---|---|---|---|---|
+| 31 | 2026-09-23 | The owner only submits permitted content; `JobInput.permission` stays on every job | current | memory, SOURCING.md |
+| 32 | 2026-09-29 | ClipForge becomes a multi-account studio in one repo, in English (US) and Spanish, scaling to 20+ accounts, with translated versions of the winners | current | 01, ADR-25 |
+| 33 | 2026-09-29 | Five categories: podcast clips, AI narrated stories, music bands, AI-avatar affiliate, AI model/influencer | current | 01, 09 §1 |
+| 34 | 2026-09-29 | Adapted Reddit posts are out (terms and copyright); stories are Claude originals and researched facts | current | 01 |
+| 35 | 2026-09-29 | Avatars and AI models are fully synthetic; no real person's likeness; provenance metadata kept; synthetic-only training data; no face swaps; no sexual content | current | ADR-39 |
+| 36 | 2026-09-29 | Channels are blueprint instances (`blueprints/<name>.toml`); account ids are `<blueprint>-<lang>` and never change | current | ADR-35, S1 spec, 09 |
+| 37 | 2026-09-29 | Launch waves follow the producers: clips, stories, avatars, bands, then the AI model | current | 07, 09 §3 |
+| 38 | 2026-09-29 | Local download helper (`clipforge fetch`, yt-dlp) for permitted sources only | current (built in S11) | ADR-34 |
+| 39 | 2026-09-29 | Own info products are planned now and built later (S14) | current (proposed ADR) | ADR-40 draft in 05 |
+| 40 | 2026-09-29 | Candidate tools: TypeSafe Jev for decisions (spike X5), xAI X Search for trends, Grok Imagine as an opt-in paid b-roll source | current | 03 |
+
+## Money
+
+| # | Date | Decision | Status | Recorded in |
+|---|---|---|---|---|
+| 41 | 2026-09-29 | AI budget under $50 a month | superseded by 42 | memory (earlier) |
+| 42 | 2026-09-29 | **$100+ a month in total**, growing with revenue. That covers about 5 accounts; the full 19 need about $200 (03), so waves 3–6 wait for revenue | current | 03 cost model |
+
+## Process
+
+| # | Date | Decision | Status | Recorded in |
+|---|---|---|---|---|
+| 43 | 2026-09-23 | The owner does all git. Sessions stop at checkpoints and never run git | current | memory, every prompt |
+| 44 | 2026-09-29 | Session prompts are full action cards (read list, precheck, numbered actions, owner steps, done-when, cost limit, close-out) | current | 06 |
+| 45 | 2026-09-29 | Kickoff review: pack facts corrected; ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39 accepted | current | DECISIONS.md, 05 |
+| 46 | 2026-09-29 | S0 had to post for a week before S1 | superseded by 47 | 04 (earlier text) |
+| 47 | 2026-09-29 | Nothing waits for posting experience. S1 starts once S0's code is finished; the 7-day check runs in the background; the dashboard shell (S3a) starts at once; S3 depends on S1 and runs alongside S2 | current | 04, 06 |
+| 48 | 2026-09-29 | No git repo yet (created later). Until then, parallel sessions share the folder with separate file ownership, and only one session deploys `app.py` | current | ROADMAP "Owner to-do" |
+| 49 | 2026-09-29 | API contract rule: `GET /posting` and `GET /jobs/{id}` change only additively; a breaking change regenerates `web/openapi.json` in the same checkpoint | current | S1 and S3a sessions |
+| 50 | 2026-09-29 | Dashboard shell: shadcn/ui, Auth.js GitHub login for one owner (verified email), 7-day sessions, a mock mode that can't reach production, polling every 15 s on Home and 5 s on running jobs | current | S3a spec and plan |
+| 51 | 2026-09-29 | Voice spike X1: all models compared on the same 3 designed voices; the owner blind-rates 12 samples of 30 s | current | X1 session |
+| 52 | 2026-09-29 | The three wave-1 clip accounts (realtalk, founder.tapes, hombre.en.construccion) enable all four platforms: TikTok, Instagram, YouTube, Facebook. Primary stays TikTok. Clips queued before S1 keep TikTok, Instagram and YouTube | current | S1 spec §6.1, 09 §4 A1 |
+| 53 | 2026-09-29 | `model` (AI model/influencer, ADR-39) is a fifth `Account.kind` and `Blueprint.category` | current | S1 spec §2 |
+| 54 | 2026-09-29 | `jobs.source_id` has no foreign key: a job's row is written best-effort before its source may be synced | current | S1 plan Task 2 |
+| 55 | 2026-09-29 | `content_items.job_id` has no foreign key: the posting import may run before the jobs backfill | current | S1 plan Task 2 |
+| 56 | 2026-09-29 | `post_events` gains the kind `imported`, the audit trail of the one-off Dict import | current | S1 plan Task 11 |
+| 57 | 2026-09-29 | S1 runs subagent-driven (a fresh implementer and reviewer per task); Docker Desktop (WSL integration) is required for the DB tests | current | S1 plan |
+| 58 | 2026-09-29 | Sources live only in the database from S1 on (option B), edited with `clipforge source add\|edit\|list\|show` through bearer API routes that the S3 Sources page will reuse. `channels.toml` is imported once (`clipforge source import-toml`) and then no longer read; the folder `videos/<source-id>/` is the only local mapping. This supersedes "channels.toml is where sources are edited until S3" (S1 spec, same day) and #19 | current | S1 spec §6.3 |
+| 59 | 2026-09-29 | A source is a business record: credit and creator handles; a permission record (type, granted when and by whom, evidence link, platforms, monetization, translation, expiry, restrictions); campaign terms (incl. rate per 1K views, submission URL); notes. Every change writes a `source_events` row (who, when, before, after); there is no delete, only `ended` | current | S1 spec §2, §6.3 |
+| 60 | 2026-09-29 | A paused or ended source, an expired permission, a campaign past its deadline, or a platform the permission doesn't cover holds its clips: they aren't queued, and already-queued ones aren't sent (counted as `held`). One account per source for now | current | S1 spec §5.2, §5.4, §6.3 |
+| 61 | 2026-09-29 | Dashboard test bypass `AUTH_DISABLED=1` works **only on the owner's machine**: refused on every Vercel environment (preview too), at build time and on every request. Previews run on `MOCK_API=1`; production uses GitHub login | current | S3a spec, web/README.md |
+| 62 | 2026-09-29 | Dashboard UI: shadcn 4 components on Base UI, system fonts | current | S3a ledger |
+| 63 | 2026-09-29 | Dashboard sessions end after 7 days **without use**; each request renews them. Rotating `AUTH_SECRET` logs everyone out | current | S3a spec, web/README.md |
+| 64 | 2026-09-29 | Dashboard upstream timeout 25 s, because `GET /posting` takes 6–7 s on the Dict (S1's Postgres should make it fast) | current | S3a spec |
+| 65 | 2026-09-29 | The dashboard works on phone **and laptop**: bottom tabs and one column on a phone; a sidebar, multi-column pages and tables from 1024 px. The navigation already lists the S3 pages (Review, Calendar, Accounts, Sources, Produce, Costs) as "coming in S3" | current (built in S3a checkpoint G) | 08 §2, S3a spec |
+| 66 | 2026-09-29 | The S3 dashboard gets a Sources page (permission record, expiry warning, history, add/edit); Home warns about permissions expiring within 14 days; Accounts shows each account's category and sources; Produce submits from a chosen source | current (built in S3) | 08 §2, 04 S3 |
+| 67 | 2026-09-30 | License rule: GPL-3.0 tools that run only on our own servers and are never distributed are allowed (espeak-ng, Kokoro's Spanish G2P). AGPL stays banned, because it also covers use over a network | current | 03 allowlist, X1 report |
+| 68 | 2026-09-30 | Voice (X1 measurements): Qwen3-TTS runs unbatched behind a guard (token cap from text length, duration check, WER check, one retry); the guard's WER check shares the faster-whisper pass that makes caption word timings (built as one step in S5/S6). A story video now costs ~$0.09–0.13 and scenario 2 ~$215–245 a month (up from ~$200, see 42). The final model choice waits for the owner's blind rating | current | 03, X1 report |
+| 69 | 2026-09-30 | Voice model (X1 verdict, from the owner's blind rating: Qwen 4.5, Kokoro 4.25, Chatterbox 4.0 overall; in Spanish 5.0 / 4.0 / 3.5): **Qwen3-TTS 1.7B Base cloning a VoiceDesign reference** is the primary, **Kokoro-82M** the fallback and bulk tier, and Chatterbox Multilingual is dropped (worst in Spanish, 2 of 15 Spanish files with dropped or invented text). English is re-rated on real scripts in S6. No new ADR: this is the primary 03 and ADR-30 already planned | current | 03, 04 X1, X1 report |
+| 70 | 2026-09-30 | The whisper GPU image pins `av==17.0.0` next to faster-whisper 1.2.1 and CTranslate2 4.8.2 (`app.WHISPER_PINS`), because faster-whisper 1.2.1 breaks on PyAV 18+ and a `uv.lock` change rebuilds that layer (found by X1). `tests/test_app.py` fails if the pins change, and `doctor` prints the `av` version. Verified on an L4 before and after the deploy | current | ADR-11, X1 |
+| 71 | 2026-09-30 | Avatar and dub costs rise with the measured voice cost: an avatar video ~$0.19–0.34, a dub ~$0.08 (story) or ~$0.33 (avatar) | current | 03 cost model (X1) |
+| 72 | 2026-09-30 | TTS guard thresholds (to build in S5): max new tokens = ceil(1.5 × words / 2.0 × codec frames per second, ~12.5, to confirm from the model config); keep a chunk only if its audio is 0.6–1.5 × words / 2.7 s long and its WER is ≤ 15%; one retry with a new seed, then the item goes to review. Never splice in another model's voice | current | docs/studio/spikes/x1-voice.md |
+| 73 | 2026-09-30 | X1 method: the blind set used voice v2 because it gives Kokoro its best presets (af_heart, ef_dora), a fair comparison. Only v2's instruct and clips are kept (Volume `clipforge-models`, `refs/x1/`); v1 and v3 are dropped with `scratch/` | current | x1-voice.md |
+| 74 | 2026-09-30 | Permission facts on a source (monetization, translation) are yes, no or unknown, and a new source's permitted platforms default to all four. At enqueue, a platform the permission doesn't cover is left off the item; at the tick, an already-queued item on an uncovered platform is held (S1 rulings R9, R10) | current | S1 spec §6.3; S1 ledger |
+| 75 | 2026-09-30 | A content item's license comes from its source's permission, or the job's when there's no source. Items still in the Dict read "unrecorded" until they're imported (S1 ruling R12) | current | S1 ledger |
+| 76 | 2026-09-30 | A posting chat needs 1–12 slots; an account with a chat and no slots is refused (S1 ruling R14) | current | S1 accounts/service.py |
+| 77 | 2026-09-30 | Slot and reminder claims are per account (`posting:slot:<account>:<iso>`, `posting:reminded:<account>:<ts>`), deployed 2026-09-30. A deploy within 30 minutes of a slot the old code sent can send that slot once more; noted in the S1 rollout (S1 ruling R16) | current | S1 ledger, S1 rollout notes |
+| 78 | 2026-09-30 | Items read back from the Dict keep `producer_version = "plan-c"`: the Dict format has no version field, and adding one would break a rollback to pre-S1 code. New items get the deployed git SHA (S1 ruling R19) | current | S1 ledger |
+| 79 | 2026-09-30 | Migration 0001 was amended in place for the option-B source columns, since it had never run on Neon (S1 ruling R8). It is to be frozen as explicit DDL before the first `alembic upgrade head` (S1 Task 13b) | current until 13b lands | S1 ledger |
+| 80 | 2026-09-30 | Neon is set up with `neon link` (project `fragrant-violet-23654229`), the Neon MCP server in `.mcp.json` and the Neon agent skills in `.claude/skills/`, at the owner's request. Whether these files go into git is the owner's choice when the repo is created | current | runbook §3, §8 |
+| 81 | 2026-09-30 | Without git, sessions review each task against a snapshot diff kept in their scratchpad, and announce checkpoints to the owner instead of committing (S1 ruling R3) | current until the repo exists | S1 ledger |
+| 82 | 2026-09-30 | Dashboard CI (`.github/workflows/web.yml`) is read-only (`permissions: contents: read`, never deploys) and runs on every change the OpenAPI export depends on: `web/**`, the export script, `src/clipforge/**`, `pyproject.toml`, `uv.lock` | current | S3a spec §3 and §8, `.github/workflows/web.yml` |
+| 83 | 2026-09-30 | A Vercel preview of the dashboard proves only the build and the redirect to `/login` (mock data, no login possible on random preview URLs). Real checks are the local run (11 §5a) and production. Preview logins through `AUTH_REDIRECT_PROXY_URL` stay a "later" option | current | S3a spec §9–10, `web/README.md` |
+| 84 | 2026-09-30 | Migration 0001 is frozen: explicit `op.create_table` / `op.create_index` calls and a matching downgrade, with no import of `db/tables.py`, so later edits to `tables.py` can't change it. A test fails if 0001 references `metadata` or `clipforge.db.tables`; the round-trip and empty-autogenerate tests stay. New tables and columns go in 0002+ (S3 owns 0002). Completes #79 | current | S1 Task 13b, `alembic/versions/0001_initial.py` |
+| 85 | 2026-09-30 | New content items get `producer_version` = the deployed `GIT_SHA` (`settings.git_sha`), or `"unknown"` when it's empty (a manual deploy from this folder, which has no git); `Deps.version` defaults to `"unknown"`, not `"dev"`. Items read back from the Dict keep `"plan-c"` (#78) | superseded by 100 (ADR-43) | S1 Task 13b, `runtime.py`, `posting/enqueue.py` |
+| 86 | 2026-09-30 | The `jobs` row is written after the job is saved, never before: `package_step` saves DONE, then records the row best-effort (as `fail_job` and `create_job` already did), so a DONE job never waits on Neon; a missed row is recreated by `jobs backfill`. The DB connect timeout is 3 s (was 10). `redact` also hides quoted user and role names | current | S1 Task 13b, `pipeline/steps.py`, `db/engine.py` |
+| 87 | 2026-09-30 | The database is the source of truth for categories, blueprints and accounts, as three versioned levels (category → blueprint → account overrides); every save is a full validated snapshot with an author and note; restore saves an old version as a new one. S1's `blueprints/*.toml` and account rows become version 1 (`clipforge setup import`, `setup verify` at 0 differences); copied values are kept as overrides only where they differ, and `kind` always comes from the category. Replaces ADR-35's "blueprints are files" | proposed (ADR-42) | S3c spec §1, §5.4; 05 ADR-42 |
+| 88 | 2026-09-30 | Accounts **pin** their category and blueprint versions; parent saves reach accounts only through "Apply to accounts". `(account_id, version)` is stamped on every content item (`setup_version`) and every send (`post_events.data`); the setup is frozen per job and is never part of a cache key | current (built in S3c) | S3c spec §1.1, §3 |
+| 89 | 2026-09-30 | Every setup field has a change class: live, recut (re-cut cost shown before an experiment: ~$0.07 per source hour for length or prompt, ~$0.12 with language; min_score and n free), format (first 10 items go to `review`, enforced by S2), rules (owner-only, never experimented on), identity | current (built in S3c) | S3c spec §3.3–3.5 |
+| 90 | 2026-09-30 | Experiments: one metric, a window of N days or N items, one running per account, non-identity edits blocked during a run, status derived on read (no new cron). Results compare before vs during on settled outcomes, with a 90% Wilson verdict and a "too few to judge" floor of 10 items per side; views and money join after S7 | current (built in S3c) | S3c spec §4, §5.1 |
+| 91 | 2026-09-30 | Account workspaces are their own roadmap item, **S3c**, in three phases (versions and workspaces; wiring into the clip producer; experiments and results), after S1 and S3's `admin` endpoint. S3 drops its Accounts profile editor. An Experiments nav item is added only when S3c is built | current | 04 S3c, 06 S3c card, 08 §2 |
+| 92 | 2026-09-30 | API input is checked before the database is touched: blueprint names must be slugs (`AccountCreate.blueprint` pattern, and `load_blueprint` refuses a non-slug such as `../x` before building a path, staying pure); account and source ids in URLs are slug-checked first (a bad id is 404 even with no database). Driver errors (`OperationalError`, `InterfaceError`, pool timeout) answer 503 `database unavailable`, never a URL, host or user (S1 rulings R13, R24) | current | S1 Task 18, `api/main.py` |
+| 93 | 2026-09-30 | A permission's `expires_at` and a campaign's `deadline` must carry a time zone (`AwareDatetime`); the CLI turns a date into the end of that day, UTC (S1 ruling R15) | current | S1 Task 9, 19 |
+| 94 | 2026-09-30 | The Telegram video caption names the account only when more than one account posts, so today's single-account messages are unchanged (S1 ruling R20) | current | S1 Task 15, `bot/posting.py` |
+| 95 | 2026-09-30 | If saving a send fails after Telegram delivered the clip, both messages are deleted before the slot is released, so the next tick can't send the same clip twice (S1 ruling R21) | current | S1 Task 15, `bot/posting.py` `_deliver` |
+| 96 | 2026-09-30 | With posting off (no posting account), `/pause` and `/go` still set the default account's flag, as before S1; if that write fails the reply says posting is off (S1 ruling R22) | current | S1 Task 16, `bot/webhook.py` |
+| 97 | 2026-09-30 | The `jobs` row is best-effort on every path: a failed job's row carries the cost spent so far and its `costs` rows (failed jobs have no `metadata.json` for backfill), `resume` writes the running row, and `create_job` spawns the first step before recording (S1 ruling R23) | current | S1 checkpoint D, `pipeline/steps.py`, `service.py` |
+| 98 | 2026-09-30 | Until the S1 rollout is verified, `clipforge clip` falls back to `videos/channels.toml` (today's behaviour, including warn-and-skip for unknown folders) **only** when the API answers 503 `DATABASE_URL is not configured`; any other error stops. The fallback is removed after the rollout (S1 rulings R25, R26) | current until the S1 rollout | S1 Task 19, `cli._sources_or_transition_fallback` |
+| 99 | 2026-09-30 | Dashboard deep links survive login: the proxy redirects a signed-out page visit to `/login?callbackUrl=<path+query>`, and login returns there only for a relative path (starts with `/`, not `//`, not `/login`; anything else goes to Home). `npm run dev` binds to 127.0.0.1, so a local run with `AUTH_DISABLED` and a real token isn't reachable from the network | current | S3a spec §4, `web/lib/callback.ts`, `web/README.md` |
+| 100 | 2026-09-30 | ADR-43 accepted: `producer_version` is derived from the stage versions, prompt names and models; the git SHA is only `build`. Supersedes the rule in #85 (S1 must change its code after the pause) | current | DECISIONS.md ADR-43 |
+| 101 | 2026-09-30 | ADR-44 accepted: one home per task; Telegram pushes and takes single-tap time-bound decisions, the dashboard runs everything else; shared actions go through one backend with an actor | current | DECISIONS.md ADR-44 |
+| 102 | 2026-09-30 | ADR-45 accepted: notification budget (instant / digest / dashboard-only), deduped ops alerts for silent failures | current | DECISIONS.md ADR-45 |
+| 103 | 2026-09-30 | ADR-46 accepted: `posting_keepalive` becomes a daily reconcile (`posting_daily`: backfill, rebuild, snapshot) instead of being retired | current | DECISIONS.md ADR-46 |
+| 104 | 2026-09-30 | `/clip` in Telegram retires only after the dashboard's Produce page ships | current | ADR-44 |
+| 105 | 2026-09-30 | Quiet hours 23:00–08:00 and the daily digest at 09:00, in the owner's time zone (ADR-45) | current | ADR-45 |
+| 106 | 2026-09-30 | Until S2 (Upload-Post) is live, hand-posting through Telegram is limited to the 3 wave-1 accounts (realtalk, founder.tapes, hombre.en.construccion); later accounts get no posting chat | current | runbook §3 |
+| 107 | 2026-09-30 | `DATABASE_URL` comes out of the `clipforge-secrets` Modal secret until S1 rollout step 4c.2, so no deploy can start writing to Postgres before the migration has run. It stays in `.env` for tests and migrations | current | runbook §0, 4a |
+| 108 | 2026-09-30 | Deploy blackout until S1's slot guard is verified: no deploy from each posting slot until 30 minutes after it (runbook §1), because of the claim-key double-send window (#77) | current | runbook §1 |
+| 109 | 2026-09-30 | Before the first push, the CI deploy job is gated behind the repository variable `DEPLOY_ENABLED == 'true'`; it stays unset, and the `MODAL_TOKEN_*` Actions secrets stay unadded, until `ci.yml` runs the Alembic migration first | current | runbook §8, ci.yml |
+| 110 | 2026-09-30 | Coordinator hand-off: work pauses at a clean checkpoint on 2026-09-30 (commit + tag `pause-2026-09-30`); a new coordinator session continues from runbook §3. After that, work sessions run one at a time, or in parallel in separate git worktrees when their files don't overlap | current | runbook §3 |
+| 111 | 2026-09-30 | S1 built ADR-43 (#100): new items carry `producer_version = "clips:" + 8 hex` of the stage versions, prompt names and models (`stages.runner.producer_version`, pinned by a test; `clips:14fcf790` today) and `metadata.json` records it in `versions.producer_version`; the git SHA is `build` on job rows (`jobs.build`, added to the still-unrun 0001) and stays `versions.git_sha` in metadata. One sanitizer (`clipforge/sanitize.py`): `clean` for user-facing job errors (URL queries, userinfo of any scheme incl. `postgresql://`, bot tokens, key=value secrets; filenames stay readable) and `redact` for DB logs (also hosts, IPs, quoted user/role). Logs add a traceback only for non-DB, non-Telegram/httpx errors | current | S1 addendum A1, rulings R27, R29 |
+
+## Open
+
+| # | Question | Needed by | Recommendation |
+|---|---|---|---|
+| O3 | Final handles for founder.tapes and hombre.en.construccion | S1 rollout step 4 (`account create`) | Check availability on TikTok, Instagram, YouTube and Facebook; record them in 09 |
+| O4 | Upload-Post plan | S2 | Basic ($24, 5 profiles) until a 6th account, then Professional ($50, 25) |
+| O5 | Billy Garton Jr.'s permission record: when it was granted, by whom, where the agreement is stored, whether monetization and translations are allowed, any expiry | S1 rollout step 5 (`source edit billy-garton`) | Collect the facts before the rollout; posting holds clips if the permission is expired or doesn't cover a platform |
+| O6 | Series formats for the three clip blueprints (S1 wrote drafts marked `# draft: owner edits`) | before S2's auto-posting | Rewrite after a week of posting shows which pillars work |

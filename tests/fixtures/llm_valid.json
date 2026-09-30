@@ -1,0 +1,20 @@
+{
+  "clips": [
+    {
+      "start": 36.9,
+      "end": 76.3,
+      "score": 0.86,
+      "hook": "Every wave is different so you learn to listen.",
+      "title": "Listen before you move",
+      "reason": "Clear claim with a payoff at the end."
+    },
+    {
+      "start": 220.0,
+      "end": 262.5,
+      "score": 0.72,
+      "hook": "The ocean teaches you patience.",
+      "title": "What the ocean teaches",
+      "reason": "Relatable lesson, standalone."
+    }
+  ]
+}
