@@ -8,7 +8,7 @@ Last updated: 2026-09-30 (the pause, tag `pause-2026-09-30`). Production: the `c
 
 | Card | What | Can start | Runs alongside |
 |---|---|---|---|
-| [001](docs/cards/001-x0-tooling.md) | X0: check.sh, scope check, docs tests, CI, worktree and deploy scripts | now (after `gh` is installed) | nothing (everyone else needs its scripts) |
+| [001](docs/cards/001-x0-tooling.md) | X0: check.sh, scope check, docs tests, CI, worktree and deploy scripts, and `.claude/` guardrails (hooks, permissions, agents, skills) | now (after `gh` is installed) | nothing (everyone else needs its scripts) |
 | [002](docs/cards/002-s1-finish.md) | S1 finish, stop before the rollout | after 001 is merged | 003, 005 |
 | [003](docs/cards/003-s3c-revision.md) | S3c design revision (D3, D4, D10) | after 001 is merged | 002, 004, 005 |
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | 002, 003, 005 (merge after 002) |

@@ -24,7 +24,7 @@ This card builds the checks and scripts that enforce them, so every later card (
 5. `src/clipforge/config.py` (`posting_slots`, `posting_timezone`), `src/clipforge/posting/slots.py`
 
 ## Scope
-- May edit: `scripts/`, `tests/test_docs.py`, `tests/scripts/`, `.github/workflows/`, `docs/ops/`, `docs/templates/`, `docs/cards/README.md`, `docs/studio/11-owner-runbook.md` (commands only), `CLAUDE.md` (the Commands and Sessions sections), `STATUS.md`, `README.md` (the doc map only).
+- May edit: `.claude/**` (settings, hooks, agents, skills, commands; not `.claude/skills/neon*`), `scripts/`, `tests/test_docs.py`, `tests/scripts/`, `.github/workflows/`, `docs/ops/`, `docs/templates/`, `docs/cards/README.md`, `docs/studio/11-owner-runbook.md` (commands only), `CLAUDE.md` (the Commands and Sessions sections), `STATUS.md`, `README.md` (the doc map only).
 - Must not edit: `src/`, other tests, `web/` (except reading), any spec or plan.
 
 ## Actions
@@ -43,7 +43,7 @@ This card builds the checks and scripts that enforce them, so every later card (
 
      | Prefix | Allowed | Log range |
      |---|---|---|
-     | `x0/` | this card's scope | 380–399 |
+     | `x0/` | this card's scope (incl. `.claude/**`) | 380–399 |
      | `s1/` | `src/**`, `tests/**`, `alembic/**`, `alembic.ini`, `blueprints/**`, `pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`, `.env.example`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `CLAUDE.md`, `docs/superpowers/**/*s1*`, `STATUS.md` | 200–249 |
      | `s3c/` | `docs/superpowers/specs/*s3-workspaces*`, `docs/superpowers/plans/*s3c*`, `docs/studio/04-roadmap.md`, `docs/studio/05-proposed-adrs.md`, `docs/studio/06-session-prompts.md`, `docs/studio/08-dashboard-and-operations.md` | 250–299 |
      | `s3a/` | `web/**`, `scripts/export_openapi.py`, `.github/workflows/web.yml`, `docs/superpowers/**/*s3a*`, `ROADMAP.md`, `docs/studio/04-roadmap.md`, `CLAUDE.md` | 300–319 |
@@ -77,15 +77,71 @@ This card builds the checks and scripts that enforce them, so every later card (
    - The runbook's §1 and §8 point to `scripts/deploy.sh` instead of a bare `modal deploy`.
 8. Write the report `docs/reports/001-x0-<date>.md`, and append decision-log rows (#380+) for: `check.sh` as the single gate, the scope rules, and deploys only through `deploy.sh`.
 
+**Checkpoint C: guardrails inside every session (`.claude/`).** Before relying on any format below, check it against the current Claude Code docs (settings, hooks, permissions, sub-agents, skills pages on code.claude.com/docs) and test it. Hook scripts live in `.claude/hooks/`, read the hook JSON on stdin, run in under ~200 ms, and have unit tests in `tests/scripts/test_hooks.py` that feed sample stdin JSON and check the exit code and output. A crashing hook must never block normal work (only an explicit match blocks).
+
+9. **Hooks** in `.claude/settings.json` (committed; per-user overrides go in the gitignored `.claude/settings.local.json`):
+   - **PreToolUse `Bash` guard** (`.claude/hooks/bash_guard.py`). It blocks with a clear reason:
+     - `git commit`, `push`, `merge`, `tag`, `rebase`, `reset --hard`, `checkout -- .`, `clean -f`;
+     - `gh pr merge`, `gh repo …`, `gh secret`, `gh variable`;
+     - `modal deploy`, `modal app stop`, `modal secret …`, `modal volume rm`;
+     - `vercel deploy --prod`, `vercel env …`;
+     - any command that prints `.env`, `web/.env.local` or `.neon` (`cat`, `less`, `grep`, `source` and similar).
+
+     It allows read-only git (`status`, `diff`, `log`, `show`, `ls-files`, `branch --show-current`, `fetch`), plus `scripts/check.sh` and `scripts/check_scope.py`. The message tells the session to give the owner the command instead.
+   - **PreToolUse `Edit|Write|MultiEdit|NotebookEdit` scope guard** (`.claude/hooks/scope_guard.py`):
+     - It denies an edit to a path the current branch prefix may not touch (`scripts/scopes.toml`, the same logic as `check_scope.py`).
+     - It denies any edit to `.env*` (except `.env.example` files), `.neon`, `web/.env.local` and `.claude/settings.local.json`.
+     - It denies a `Write` (full overwrite) of `docs/studio/10-decision-log.md`, so only appending edits get through; that's the 2026-09-30 failure.
+     - On `main` (the coordinator), only `coord/` paths are allowed.
+   - **SessionStart** (matchers `startup`, `resume`, `compact`), in `.claude/hooks/session_context.py`. It injects as additional context:
+     - the branch;
+     - the card whose `Branch:` line matches (its number, title, scope and log range);
+     - the top of `STATUS.md` (the next-cards table);
+     - the rules (no commits or deploys, `scripts/check.sh` before every checkpoint, reports in `docs/reports/`, append-only log in range).
+
+     It also warns when a card session runs on `main`. After compaction this restores the card context.
+   - **Stop** (`.claude/hooks/stop_check.py`):
+     - `scripts/check.sh` writes a marker (`.superpowers/check-ok` with the tree hash from `git stash create` or `git write-tree` of the index plus the working tree) when it's green;
+     - if tracked files changed since the last green marker, block the stop once with "run scripts/check.sh and write your report";
+     - respect `stop_hook_active` so it never loops, and never block when nothing changed.
+10. **Permissions** (same file):
+    - deny reading `.env`, `web/.env.local`, `.neon`;
+    - allow without prompting `scripts/check.sh*`, `scripts/check_scope.py*`, `uv run pytest*`, `uv run ruff*`, `uv run mypy*`, `npm run check|test|lint|typecheck|gen:check|e2e` in `web/`, and read-only git;
+    - ask for `uv run modal run*` (it spends money), `npm install*` and `uv add*`.
+
+    Check whether a Read deny also covers `cat .env` in Bash. The Bash guard covers it either way.
+11. **Agents** in `.claude/agents/` (frontmatter: name, description, tools, model):
+    - `pr-reviewer` (opus; Read, Grep, Glob, Bash). It reviews a branch against its card, `scripts/scopes.toml`, CLAUDE.md rules 1–9 and the accepted ADRs; runs `scripts/check.sh`; reports findings by severity with file:line; and lists changes the card doesn't mention. It never edits.
+    - `security-reviewer` (opus): auth, bearer and proxy auth, webhook secrets, signed links, SSRF, redaction and logs, secrets in code, the AUTH_DISABLED and MOCK_API guards.
+    - `migration-reviewer` (opus): Alembic (frozen revisions, expand-only changes, downgrade, autogenerate empty), the Dict→Postgres rules (ADR-24, 26, 41, 46), rollback through `STATE_READS`.
+    - `docs-auditor` (sonnet): `STATUS.md`, the decision log's rules, the roadmap ticks versus merged work, links, stale docs. It edits nothing; it lists fixes.
+    - Update `pipeline-reviewer`: model opus, plus STAGE_VERSION bumps, ADR-43's derived `producer_version` and cost logging. It runs `scripts/check.sh` instead of bare pytest.
+12. **Skills** in `.claude/skills/<name>/SKILL.md`:
+    - `run-card`: triggered by "Run card docs/cards/…". Read the card and its read-first list; confirm the branch matches the card; restate the scope, actions, checkpoints and cost cap in five lines; then work, stopping at each checkpoint.
+    - `checkpoint`: run `scripts/check.sh` until green; write or update the report from the template; append log rows in range (via `log-append`); stop with the suggested commit message.
+    - `write-report`: fill `docs/templates/handoff-report.md`, with the current `git diff --stat` and the changed file list inlined.
+    - `log-append`: re-read `docs/studio/10`, take the next free number in the branch's range, append rows only, and mark a superseded row's status.
+    - `write-card` (coordinator): build a card from `docs/templates/card.md` and the matching prompt and action card in 06; pick the number and range; add it to `docs/cards/README.md` and `STATUS.md`.
+    - `review-pr` (coordinator): `gh pr view` and `gh pr diff` for a PR, plus its report and card, then the `pr-reviewer` agent; a verdict; update `STATUS.md` and the card's status line.
+    - Migrate `.claude/commands/new-stage.md` and `run-eval.md` into skills with the same behavior. **Delete `.claude/commands/next-task.md`**: it points at ROADMAP.md and conflicts with the card flow.
+    - Keep `.claude/skills/neon*` unchanged.
+13. `CLAUDE.md`'s Sessions section names the skills (`run-card`, `checkpoint`) and the agents (`pr-reviewer` before every merge). The runbook's §3.2 says that the coordinator uses `review-pr`. Append decision-log rows for the hooks, the permissions and the agent and skill set.
+
 ## Checkpoints
 - A: actions 1–3 (check.sh, scope check, docs tests). Suggested commit: `x0: check.sh, scope check and docs tests`.
 - B: actions 4–8. Suggested commit: `x0: CI on check.sh, worktree and deploy scripts`.
+- C: actions 9–13. Suggested commit: `x0: .claude guardrails (hooks, permissions, agents, skills)`. Land it last: once the hooks exist, they apply to this session too.
 
 ## Done when
 - `scripts/check.sh` is green on this branch, and the scope check passes for it.
 - `scripts/check_scope.py` fails on a deliberately out-of-scope change (show the output, then undo it).
 - `scripts/deploy.sh --dry-run` prints every check. Right now it must refuse because the tree isn't `main`; show that.
 - The CI run on the PR is green (the owner confirms).
+- `tests/scripts/test_hooks.py` is green, and a live demonstration works in this session:
+  - `git commit` is blocked;
+  - an edit outside the x0 scope is denied;
+  - a `Write` over the decision log is denied;
+  - after a `/compact`, the SessionStart context names card 001.
 
 ## Owner steps
 - Before:
@@ -97,6 +153,7 @@ This card builds the checks and scripts that enforce them, so every later card (
   ```
   Then open the session in `../clipForge-x0` and paste: `Run card docs/cards/001-x0-tooling.md`.
 - At each checkpoint: `docs/templates/checkpoint.md`.
+- After checkpoint C: approve the project hooks when Claude Code asks you to trust them (first run of a session in the repo).
 - After the merge: turn on branch protection for `main` (runbook §8, "Protect main").
 
 ## Hand-off

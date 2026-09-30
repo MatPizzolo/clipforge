@@ -163,6 +163,7 @@ Last updated: 2026-09-30.
 | 127 | 2026-09-30 | Decision-log number ranges per branch prefix: `coord/` #1–199, S1 #200–249, S3c #250–299, S3a #300–319, X2 #320–339, S4 #340–379, X0 #380–399 | current | runbook §3.2, scripts/scopes.toml (card 001) |
 | 128 | 2026-09-30 | Memory holds preferences and pointers only; facts that change live in `STATUS.md` and the docs, and the coordinator reviews memory at each pause (a stale memory misled a reviewer on 2026-09-30) | current | runbook §3.1 |
 | 129 | 2026-09-30 | One home per question for docs (the README's doc map); finished specs and plans are marked historical in `docs/superpowers/README.md`; secrets are inventoried by name in `docs/ops/secrets.md`, deploys logged in `docs/ops/deploys.md` | current | README.md, docs/superpowers/README.md, docs/ops/ |
+| 130 | 2026-09-30 | Guardrails inside every session (card 001, checkpoint C): project hooks in `.claude/settings.json` (a Bash guard against commits, deploys, app stops, secret changes and printing secrets; a scope guard per branch prefix that also forbids overwriting the decision log; SessionStart context that survives compaction; a Stop check that `scripts/check.sh` ran green), permissions (deny reading secrets; allow the check commands), five reviewer agents (pr, security, migration, docs, pipeline) and process skills (run-card, checkpoint, write-report, log-append, write-card, review-pr). No auto-format hook. `next-task` retires | current | docs/cards/001-x0-tooling.md |
 
 ## Open
 
