@@ -8,7 +8,7 @@ Last updated: 2026-09-30 (the pause, tag `pause-2026-09-30`). Production: the `c
 
 | Card | What | Can start | Runs alongside |
 |---|---|---|---|
-| [001](docs/cards/001-x0-tooling.md) | X0: check.sh, scope check, docs tests, CI, worktree and deploy scripts, and `.claude/` guardrails (hooks, permissions, agents, skills) | now (after `gh` is installed) | nothing (everyone else needs its scripts) |
+| [001](docs/cards/001-x0-tooling.md) | X0: check.sh, scope check, docs tests, CI, worktree and deploy scripts, and `.claude/` guardrails (hooks, permissions, agents, skills) | **sent 2026-09-30** (worktree `../clipForge-x0`) | nothing (everyone else needs its scripts) |
 | [002](docs/cards/002-s1-finish.md) | S1 finish, stop before the rollout | after 001 is merged | 003, 005 |
 | [003](docs/cards/003-s3c-revision.md) | S3c design revision (D3, D4, D10) | after 001 is merged | 002, 004, 005 |
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | 002, 003, 005 (merge after 002) |
@@ -62,7 +62,7 @@ S1's plan names its own addendum steps A1–A6 by task. The coordinator's items 
 
 ## Owner: open decisions and steps (recommendations in bold)
 1. ✅ Done at the pause: `web/openapi.json` regenerated, 68 web tests green.
-2. ✅ The pause commit `405c8ec`, the tag and the push are done. Still open: check that CI is green at https://github.com/MatPizzolo/clipforge/actions (`check` green, `deploy` skipped, `web` green), and take `DATABASE_URL` out of `clipforge-secrets` (§8 step 5; **the dashboard way**).
+2. ✅ The pause commit `405c8ec`, the tag and the push are done. CI is green since PR #1 (2026-09-30: the web lockfile regenerated with CI's npm 11.19, and root `.gitignore` `jobs/` → `/jobs/`, which had kept three dashboard jobs files out of git). Still open: take `DATABASE_URL` out of `clipforge-secrets` (§8 step 5; **the dashboard way**).
 3. Read-only git for the coordinator: **allow it**, so audits compare the tree against commits.
 4. The S0 checks: the phone test (`/status`, `/next`, ✅ on and off, ⏭, 🗑 + reason, `/pause`, `/go`), one scheduled slot end to end, and the 07:00 UTC keep-alive log line with its first snapshot (`uv run modal app logs clipforge`).
 5. O3, the handles for founder.tapes and hombre.en.construccion, and O5, Billy Garton Jr.'s permission facts. **Collect both before S1's rollout (Task 22).**
