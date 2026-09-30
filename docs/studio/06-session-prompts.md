@@ -1,5 +1,7 @@
 # 06: Session prompts
 
+**Since 2026-09-30, sessions start from a card file** (`docs/cards/`, started with `Run card docs/cards/NNN-….md`); the coordinator builds each card from the matching prompt and action card below, adding context, scope and the decision-log range. The prompts and action cards here are the templates.
+
 Paste a prompt as the **first message** of a new Claude Code session in the repo root.
 
 | Prompt | When |

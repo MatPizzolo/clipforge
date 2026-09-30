@@ -130,12 +130,19 @@ A bare link uses the defaults (automatic count, score ≥ 0.80). A video file up
 
 ## Project docs
 
-| File | Purpose |
+One question, one home:
+
+| Question | Where |
 |---|---|
-| [CLAUDE.md](CLAUDE.md) | Instructions for Claude Code working in this repo |
-| [ROADMAP.md](ROADMAP.md) | Phased plan and task checklist |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stages, data contracts, infrastructure |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Architecture decision records |
-| [docs/EVALS.md](docs/EVALS.md) | How clip quality is measured |
-| [docs/SOURCING.md](docs/SOURCING.md) | Content permission policy |
-| [prompts/](prompts/) | Versioned LLM prompts |
+| Where do things stand right now? | [STATUS.md](STATUS.md) |
+| How does the system work today? | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Why was it built this way? | [docs/DECISIONS.md](docs/DECISIONS.md) (ADRs) and [docs/studio/10-decision-log.md](docs/studio/10-decision-log.md) (every owner decision) |
+| What's next? | [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md) (Phase 6 source of truth); [ROADMAP.md](ROADMAP.md) (all phases, mirrors 04) |
+| What does the owner do, and how? | [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md) |
+| What is each session doing, and what did it do? | [docs/cards/](docs/cards/README.md) and [docs/reports/](docs/reports/README.md) |
+| Which accounts exist? | [docs/studio/09-account-registry.md](docs/studio/09-account-registry.md) |
+| Which secret lives where? | [docs/ops/secrets.md](docs/ops/secrets.md) (names only) · deploys: [docs/ops/deploys.md](docs/ops/deploys.md) |
+| How should Claude Code work here? | [CLAUDE.md](CLAUDE.md) |
+| Designs and task plans | [docs/superpowers/](docs/superpowers/README.md) (active vs historical) |
+| Studio plan (vision, architecture target, tools, portfolio, dashboard) | [docs/studio/](docs/studio/README.md) |
+| Clip quality, content permissions, prompts | [docs/EVALS.md](docs/EVALS.md), [docs/SOURCING.md](docs/SOURCING.md), [prompts/](prompts/) |
