@@ -156,6 +156,7 @@ Last updated: 2026-09-30.
 | 120 | 2026-09-30 | S3a review minors deferred with the owner: changing `OWNER_EMAIL` doesn't end existing sessions (only rotating `AUTH_SECRET` does); upstream `fetch` follows redirects (`redirect: "error"` not set); a GitHub `/user/emails` outage shows "account isn't allowed". (The fourth, login returning to Home, was fixed by #99) | deferred | S3a ledger, final review |
 | 121 | 2026-09-30 | X2 license check (all three candidates pass with a workaround): exclude the FusioniX LoRA (non-commercial), stub InfiniteTalk's `kokoro` import, patch out LongCat's unlicensed `Kim_Vocal_2.onnx`, install EchoMimicV3 without its InsightFace-derived RetinaFace; GFPGAN stays out; SyncNet only as an internal metric | current | 03 allowlist, spikes/x2-talking-head.md |
 | 122 | 2026-09-30 | X2 started on 2026-09-30 in the X1 session (owner: "continue with x2") and stopped at ~25% by the pause; ~227 GB of its weights stay on the `clipforge-models` Volume under `x2/` until X2 resumes or the owner removes them | current | spikes/x2-talking-head.md, 04 X2 |
+| 123 | 2026-09-30 | The git repo exists: private GitHub remote `MatPizzolo/clipforge`, a baseline commit, then the pause commit `405c8ec` tagged `pause-2026-09-30` (345 tracked files). The CI deploy job stays gated behind `DEPLOY_ENABLED` | current | runbook §8, §3 |
 
 ## Open
 

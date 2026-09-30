@@ -134,8 +134,8 @@ S1's plan names its own addendum steps A1–A6 by task. The coordinator's items 
 
 ### 3.4 Open owner decisions and steps (recommendations in bold)
 
-1. **Now, before the pause commit:** regenerate the stale `web/openapi.json` (§8 step 5 has the commands).
-2. The pause commit, the tag and the push (§8 step 5). Then take `DATABASE_URL` out of `clipforge-secrets` (§8 step 5; **the dashboard way**).
+1. ✅ Done at the pause: `web/openapi.json` regenerated, 68 web tests green.
+2. ✅ The pause commit `405c8ec`, the tag and the push are done. Still open: check that CI is green at https://github.com/MatPizzolo/clipforge/actions (`check` green, `deploy` skipped, `web` green), and take `DATABASE_URL` out of `clipforge-secrets` (§8 step 5; **the dashboard way**).
 3. Read-only git for the coordinator: **allow it**, so audits compare the tree against commits.
 4. The S0 checks: the phone test (`/status`, `/next`, ✅ on and off, ⏭, 🗑 + reason, `/pause`, `/go`), one scheduled slot end to end, and the 07:00 UTC keep-alive log line with its first snapshot (`uv run modal app logs clipforge`).
 5. O3, the handles for founder.tapes and hombre.en.construccion, and O5, Billy Garton Jr.'s permission facts. **Collect both before S1's rollout (Task 22).**
@@ -439,7 +439,7 @@ uv run python scripts/export_openapi.py --check
 - For later spikes: if a model is gated, create a free Hugging Face token (read-only) and add `HF_TOKEN` to `.env` (and to the spike's Modal secret, if the session asks).
 - **X5 Judge** ⬜: join the TypeSafe Jev waitlist now. The key (`TYPESAFE_API_KEY`) goes in `.env` when it arrives.
 
-## 8. The git repo and GitHub ⏳ (baseline on 2026-09-30)
+## 8. The git repo and GitHub ✅ (private remote `MatPizzolo/clipforge`; baseline and the pause commit `405c8ec`, tag `pause-2026-09-30`, pushed 2026-09-30)
 
 Order: the baseline now → pause every session → the pause commit and tag → a new coordinator session. The coordinator never runs git, `gh`, deploys or Modal stop commands: you do.
 
@@ -490,6 +490,7 @@ git push -u origin main
 ```
 git ls-files | wc -l          # compare with the file count on the GitHub page
 gh run list --limit 5         # CI: "check" green, "deploy" skipped; "web" runs too
+# without the gh CLI: open https://github.com/MatPizzolo/clipforge/actions
 ```
 Send the coordinator the output of `git status`, `git log --oneline -1`, `git ls-files | wc -l` and `gh run list --limit 5`.
 
