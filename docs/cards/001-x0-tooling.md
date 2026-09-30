@@ -1,6 +1,6 @@
 # Card 001: X0 — working environment and controls
 
-Status: proposed (send first, before cards 002–006)
+Status: sent 2026-09-30
 Stream: X0 (tooling) · Branch: `x0/tooling` · Worktree: `../clipForge-x0`
 Decision-log range: #380–#399
 Model: most capable (it defines the rules every later session runs under)
