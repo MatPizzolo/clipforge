@@ -1,173 +1,90 @@
 # ClipForge
 
-ClipForge turns long videos, such as podcast episodes, into vertical short clips for TikTok, Instagram Reels and YouTube Shorts, then helps you post them.
+ClipForge is a studio for running and growing many short-video channels on TikTok, Instagram Reels, YouTube Shorts and Facebook Reels, in English and Spanish.
 
-You give it a video. It transcribes it, picks the strongest moments, frames each one to 9:16 around whoever is talking, adds captions and a hook title, and hands back ready-to-post clips. A Telegram bot then sends you one clip at a time, at set times of day, with the captions to paste for each platform.
+Each channel is an **account** of one **type**: podcast clips, AI-narrated stories, music-band discovery, an AI-avatar presenter, or an AI model persona. Every account runs the same loop, **produce → review → publish → measure → scale**, on shared machinery. What differs by type is how a video gets made, how the account earns, and which rules it must follow.
 
-Everything runs serverless on [Modal](https://modal.com). Nothing needs to run on your own computer except when you add videos.
+Everything runs serverless on [Modal](https://modal.com), with a Next.js dashboard as the control room and Telegram as the phone surface. The target is 20+ accounts run by one owner.
 
-> **Only process videos you own or have permission to use:** your own content, creator agreements, paid clipping programs, Creative Commons or public domain. See [docs/SOURCING.md](docs/SOURCING.md).
+> **Content policy:** every account uses only content it owns or has permission to use, discloses AI and sponsorship, and never tries to evade copyright detection. See [docs/SOURCING.md](docs/SOURCING.md) and the per-type rules below.
 
-## What works today
-
-- **Clipping:** a video file or a direct link becomes 1080x1920 clips with captions, a hook title, loudness at -14 LUFS, and face framing that follows the speaker.
-- **Batch clipping by channel:** drop episodes into `videos/<channel>/`, run one command, and every new video is clipped.
-- **The posting assistant:** a Telegram bot sends the next clip at each posting slot and tracks what you posted where.
-- **A dashboard shell** (`web/`): built, not online yet.
-
-Where it's going: a studio that runs many accounts and content types (AI stories, music, avatars) from one codebase ([docs/studio/](docs/studio/README.md), ROADMAP Phase 6). Current progress is in [STATUS.md](STATUS.md).
-
-## How it works
+## The loop every account runs
 
 ```
-video ─► ingest ─► transcribe ─► find highlights ─► frame to 9:16 ─► captions + render ─► clips
-                   (Whisper, GPU)     (Claude)        (faces, speaker)     (ffmpeg)
+            ┌──────────────────────────────────────────────────────────────────────────┐
+            │                                                                          │
+            ▼                                                                          │
+ PRODUCE ─────────────► REVIEW ─────────────► PUBLISH ─────────────► MEASURE ────────► SCALE
+ the account type's     policy gate on        every platform the     views, followers,   more of what wins,
+ producer makes a       every item, then      account has enabled,   clicks, sales,      new series, dubs
+ video (a ContentItem)  the account's tier:   at its posting slots   cost per item and   EN ↔ ES, new
+                        review · sample · auto                       per account         accounts
 ```
 
-Each step is a separate Modal function, and each step's result is cached, so a re-cut reuses the transcript and the highlight scores. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+| Step | What happens | Where it stands |
+|---|---|---|
+| **Produce** | A producer turns a source or a brief into a `ContentItem`: the video, per-platform copy, credits, licenses, AI and sponsorship flags, cost. Every producer describes its video as a `Timeline`, and one renderer turns any Timeline into the final mp4 (captions, -14 LUFS, under 50 MB). | The clip producer is live. The Timeline renderer is being built (S4). The other producers are planned. |
+| **Review** | A pure policy gate checks every item (disclosure, #ad, credits, licenses, banned claims). Then the account's review tier decides: approve every item, spot-check about 10%, or post automatically. A new account, format or producer version always starts in full review. | Planned (S2). Today every clip is checked by hand on the phone. |
+| **Publish** | Each item goes to every platform the account has enabled, at the account's posting slots, through a posting API (Upload-Post), with the AI labels each platform requires. | Today: the Telegram posting assistant sends each clip to the owner's phone at its slot, and the owner posts it by hand. API publishing is S2. |
+| **Measure** | Daily analytics per post and account, tracked links for clicks and sales, cost per item and per account, and progress toward each platform's payout program. | Cost is logged per job today. The rest is planned (S7). |
+| **Scale** | Winners (the top 10% per account after 7 days) get more of the same format, Spanish or English dubs for the paired account, and feed a learned ranker. New accounts start from existing blueprints. | Planned (S7, S10). New accounts can be created from blueprints now (S1). |
 
-## Clipping videos
+## Account types
 
-### From your computer
-
-1. Put each channel's episodes in their own folder: `videos/<channel>/` (`.mp4`, `.mov`, `.mkv`, `.webm`, `.m4v` or `.avi`).
-2. Describe the channel once (credit name, link, permission) in `videos/channels.toml`. Setup details: [videos/README.md](videos/README.md).
-3. Run:
-
-```bash
-uv run clipforge clip            # submit every new video, then exit; the jobs run on Modal
-uv run clipforge clip --fetch    # ...and wait, then download the clips
-```
-
-With `--fetch`, each video's clips land in `videos/out/<channel>/<episode>/`:
+An account is never designed from scratch. It is a **blueprint** (niche, content pillars, rotating series formats, voice and visual style, money sources, compliance profile) plus a language, a persona, handles, a posting schedule, a budget and a review tier:
 
 ```
-videos/out/billy-garton/ep01/
-  clip_01_score0.89/   video.mp4  captions.srt  post.md
-  clip_02_score0.88/   ...
-  metadata.json        # scores, timings, cost
+type (clips · story · band · avatar · model)  →  blueprint  →  account  →  series  →  item (one video)
 ```
 
-Clips from a channel also join the posting queue (below). A video placed directly in `videos/`, outside a channel folder, is clipped but not queued.
+| Type | What a video is | How it's produced | How it earns | Rules it must follow | Status |
+|---|---|---|---|---|---|
+| **Podcast clips** | 30–60 s cut from a long video the account has permission to use | transcribe → pick the strongest moments → frame to 9:16 on the speaker → captions and hook title → render | Paid clipping deals, affiliate links, brand deals | Creator credited in every caption; source permission on record | **Live** (realtalk.clipsdaily) |
+| **AI stories** | A 61–90 s narrated original script over stills and b-roll, with a music bed | brief → script → voice → images and b-roll → music → render | TikTok and Facebook creator payouts, later YouTube long-form | Fact sources stored; AI label on; structure varied per video | Planned (S6) |
+| **Band discovery** | A narrated story about an unknown band, over permitted photos or generated art; music added in the app | research → licensed assets → script → voice → art → render | Disclosed paid features, gear affiliate links | A license for every asset; no photoreal images of real people | Planned (S9) |
+| **AI-avatar affiliate** | A disclosed synthetic presenter (hook and call to action) plus b-roll, selling a product or community | brief → script → claim check → voice → talking head → b-roll → render | Commission per sale, through tracked links | AI label; #ad; no first-person testimonials; no health or earnings claims | Planned (S8) |
+| **AI model persona** | Carousels and short reels of a disclosed synthetic persona | persona (designed voice, generated face) → images and reels | Brand deals, affiliate storefronts | "AI creator" in the bio; provenance metadata kept; synthetic-only training data | Planned (S13) |
 
-> After the S1 rollout, channels move from `channels.toml` into the database: `uv run clipforge source add`, or `uv run clipforge source import-toml` once to copy the file.
+Today's accounts and the planned launch waves: [docs/studio/09-account-registry.md](docs/studio/09-account-registry.md). Why each concept exists, and how the portfolio scales: [docs/studio/07-channel-portfolio.md](docs/studio/07-channel-portfolio.md).
 
-### From a link
+## What's built
 
-```bash
-uv run clipforge run --input https://example.com/episode.mp4    # submit and wait
-```
+| Built and in use | Built, not live yet | In progress | Planned |
+|---|---|---|---|
+| The clip producer · batch clipping by channel · the Telegram posting assistant (one clip per slot, ✅ per platform) · cost logging per job | Postgres for accounts, sources, the posting queue and job records (S1; rollout pending) · accounts from blueprints · ops alerts · the dashboard shell (S3a; Vercel deploy pending) | The Timeline renderer (S4) | Review tiers and API publishing (S2) · the dashboard (S3) and per-account workspaces with experiments (S3c) · media servers (S5) · the story, avatar, band, dub and model producers (S6, S8–S10, S13) · analytics, money and budgets (S7) |
 
-Links must point straight at a media file. YouTube links don't work, because YouTube blocks Modal's servers (ADR-10).
+Week-to-week progress: [STATUS.md](STATUS.md). The build order: [ROADMAP.md](ROADMAP.md) and [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md).
 
-### Choosing how many clips
+## How it's built
 
-By default the count is **automatic**: every moment scored **0.80 or higher**, up to 30.
+- **Producers vs distribution.** Every producer ends in a `ContentItem`. Review, publishing and measurement only consume ContentItems, so a new account type is a new producer and nothing else (ADR-25).
+- **One renderer.** Every producer describes its video as a `Timeline`, and one renderer turns any Timeline into an mp4, so captions, loudness and size limits stay the same everywhere (ADR-31).
+- **Serverless steps.** Each production step is its own Modal function. Steps are cached by their inputs, so a retry or a re-cut never redoes finished work, and GPUs (transcription, voice, images, talking heads) are billed by the second (ADR-9, ADR-12).
+- **Durable state in Postgres** (Neon) for accounts, items, posts, metrics and costs. The Modal Dict holds only short-lived step state (ADR-26).
+- **Open media models on Modal**, each one checked against a license allowlist (ADR-30), instead of paid voice and avatar services.
+- **One home per task:** the dashboard runs everything that needs context, and Telegram handles time-bound decisions, alerts and the brake (ADR-44).
 
-```bash
-uv run clipforge clip --min-score 0.85     # stricter: fewer, stronger clips
-uv run clipforge clip --n 10               # exactly the 10 best, whatever their score
-uv run clipforge clip --len 20-45          # clip length in seconds (default 30-60)
-uv run clipforge clip --lang es            # force the language (default: detected)
-uv run clipforge clip "videos/billy-garton/ep01.mp4" --again --min-score 0.7   # re-cut one video
-```
+Today's system in detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The target design: [docs/studio/02-target-architecture.md](docs/studio/02-target-architecture.md).
 
-`run` takes the same options. Re-cutting is cheap: the transcript and scores are reused, and clips that were already rendered aren't rendered again. The defaults live in `.env` (`DEFAULT_CLIP_COUNT`, `DEFAULT_MIN_SCORE`, `DEFAULT_CLIP_LEN`).
+## Using it
 
-### Checking on jobs
+What runs today (clipping videos, the Telegram posting assistant, first-time setup, development): [docs/usage.md](docs/usage.md). Every owner step and command, in order: [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md).
 
-```bash
-uv run clipforge status <job_id>     # progress, cost, and the download link when done
-uv run clipforge resume <job_id>     # continue a failed job from where it stopped
-```
-
-## Posting with the Telegram bot
-
-At each posting slot (by default 08:00, 10:30, 13:00, 16:00, 19:00 and 21:30, New York time), the bot sends you the next clip from the queue, with the captions to copy for TikTok, Instagram and YouTube. Under each clip:
-
-- **✅ per platform:** mark it posted there (tap again to undo);
-- **⏭ Skip:** the clip comes back after 24 hours;
-- **🗑 Reject:** drop it, with an optional reason.
-
-If two clips go unanswered, the bot stops sending and reminds you once.
-
-| Command | What it does |
-|---|---|
-| `/status` | the posting overview: progress per channel, queue length, next slot |
-| `/next` | send the next clip now |
-| `/pause`, `/go` | stop and restart the slots |
-| `/clip <link>` | clip a video from the chat (options: `n=`, `score=`, `len=`, `lang=`, `perm=`, `credit=`); a file up to 20 MB works too |
-| `/status <job_id>`, `/resume <job_id>` | check or continue a job |
-
-The bot only answers users listed in `TELEGRAM_ALLOWED_USER_IDS`.
-
-The same overview is available from your computer:
-
-```bash
-uv run clipforge status              # the posting overview
-uv run clipforge status --rebuild    # re-queue every finished channel job
-uv run clipforge status --restore    # put back queue entries lost after an outage
-```
-
-A daily job at 07:00 UTC keeps the queue from expiring and saves a snapshot of it. What to do after an outage, and every other owner task: [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md).
-
-## First-time setup
-
-You need a [Modal](https://modal.com) account, a Telegram bot token (from @BotFather) and an Anthropic API key. For development you also need Python 3.12, [uv](https://docs.astral.sh/uv/) and ffmpeg.
-
-```bash
-git clone <repo> && cd clipforge
-uv sync
-uv run modal setup                   # log in to Modal
-cp .env.example .env                 # fill in the values (the comments explain each one)
-```
-
-Create the Modal secret that every function reads. Generate the random values with `python -c "import secrets; print(secrets.token_urlsafe(32))"`:
-
-```bash
-uv run modal secret create clipforge-secrets \
-  ANTHROPIC_API_KEY=... TELEGRAM_BOT_TOKEN=... TELEGRAM_WEBHOOK_SECRET=... \
-  TELEGRAM_ALLOWED_USER_IDS=... API_TOKEN=... DOWNLOAD_SIGNING_KEY=...
-```
-
-Check the setup, run one test job, then deploy:
-
-```bash
-uv run modal run src/clipforge/app.py::doctor     # ffmpeg and the GPU image
-uv run modal run src/clipforge/app.py::smoke      # one real job on a 10-second clip (~$0.01)
-scripts/deploy.sh --dry-run
-scripts/deploy.sh --reason "first deploy"
-```
-
-The deploy prints the API's URL. Put it in `API_URL`, both in `.env` and in the Modal secret, then register the bot:
-
-```bash
-uv run clipforge set-webhook
-```
-
-To change the secret later, edit it in the Modal dashboard (Secrets → `clipforge-secrets` → **Edit**) and redeploy. Never run `modal secret create --force`: it replaces the whole secret. Which secret lives where: [docs/ops/secrets.md](docs/ops/secrets.md).
-
-## Development
-
-```bash
-scripts/check.sh             # the one gate: lint, types, fast tests, the API contract, the dashboard, docs, scope
-uv run pytest -q             # every test, including the slow and GPU ones
-```
-
-Work is organized as cards: each one is a brief for one Claude Code session, on its own branch and worktree, ending in a pull request. How that works: [CLAUDE.md](CLAUDE.md) and [docs/cards/](docs/cards/README.md). Deploys only go through `scripts/deploy.sh`, which refuses inside a posting slot's blackout.
+Development work runs as cards: each card is the brief for one Claude Code session, on its own branch, ending in a pull request that must pass `scripts/check.sh`. How that works: [CLAUDE.md](CLAUDE.md) and [docs/cards/](docs/cards/README.md).
 
 ## Where to find things
 
 | Question | Where |
 |---|---|
 | Where do things stand right now? | [STATUS.md](STATUS.md) |
+| How do I use what's built? | [docs/usage.md](docs/usage.md) |
 | How does the system work today? | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Where is it going, and why? | [docs/studio/](docs/studio/README.md): vision and money (01), target design (02), tools and models (03), portfolio (07), dashboard (08) |
 | Why was it built this way? | [docs/DECISIONS.md](docs/DECISIONS.md) (ADRs) and [docs/studio/10-decision-log.md](docs/studio/10-decision-log.md) (every owner decision) |
 | What's next? | [ROADMAP.md](ROADMAP.md), and [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md) for the studio phase |
+| Which accounts exist? | [docs/studio/09-account-registry.md](docs/studio/09-account-registry.md) |
 | What does the owner do, and how? | [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md) |
 | What is each session doing? | [docs/cards/](docs/cards/README.md) and [docs/reports/](docs/reports/README.md) |
-| Which accounts exist? | [docs/studio/09-account-registry.md](docs/studio/09-account-registry.md) |
 | Which secret lives where, and what was deployed? | [docs/ops/secrets.md](docs/ops/secrets.md) and [docs/ops/deploys.md](docs/ops/deploys.md) |
 | Designs and implementation plans | [docs/superpowers/](docs/superpowers/README.md) |
-| The studio plan | [docs/studio/](docs/studio/README.md) |
 | Clip quality, content permissions, prompts | [docs/EVALS.md](docs/EVALS.md), [docs/SOURCING.md](docs/SOURCING.md), [prompts/](prompts/) |

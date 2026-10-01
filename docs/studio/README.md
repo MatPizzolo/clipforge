@@ -1,8 +1,8 @@
 # ClipForge Studio: planning pack
 
-ClipForge today turns long videos into 9:16 clips for one brand. **ClipForge Studio** extends it into a multi-account content studio. It produces, reviews, publishes and measures short vertical videos for 20+ accounts across TikTok, Instagram Reels, YouTube Shorts and Facebook Reels, in English (US) and Spanish. Everything runs on Modal, with a Next.js dashboard on Vercel and Telegram as the phone surface.
+ClipForge is a studio for running and growing many short-video channels: 20+ accounts across TikTok, Instagram Reels, YouTube Shorts and Facebook Reels, in English (US) and Spanish. Each channel is an account of one type (podcast clips, AI stories, band discovery, AI-avatar affiliate, AI model persona), built from a blueprint, and every account runs the same loop: produce → review → publish → measure → scale. Everything runs on Modal, with a Next.js dashboard on Vercel and Telegram as the phone surface. Today the podcast-clips type and its posting assistant are live; this folder plans the rest (the short version is in the [README](../../README.md)).
 
-This folder is the input for new Claude Code sessions. It was written on 2026-09-29 from a brainstorm with the owner plus web research. The kickoff review (2026-09-29) re-checked the facts, corrected the pack, and accepted ADR-25, 26, 28, 29, 30, 31, 34, 35, 38 and 39 into `docs/DECISIONS.md`. ADR-41 (S1) and ADR-42 to ADR-46 were accepted on 2026-09-30. ADR-27, 33, 36, 37 and 40 stay proposed (built later), and ADR-32 is deferred. The next free number is ADR-47. Anything not in `docs/DECISIONS.md` is still a proposal.
+This folder is the input for new Claude Code sessions. It was written on 2026-09-29 from a brainstorm with the owner plus web research. The kickoff review (2026-09-29) re-checked the facts, corrected the pack, and accepted ADR-25, 26, 28, 29, 30, 31, 34, 35, 38 and 39 into `docs/DECISIONS.md`. ADR-41 (S1) and ADR-42 to ADR-46 were accepted on 2026-09-30. ADR-27, 33, 36, 37 and 40 stay proposed (built later), and ADR-32 is deferred. ADR-47 was accepted on 2026-10-01. The next free number is ADR-48. Anything not in `docs/DECISIONS.md` is still a proposal.
 
 | File | What it holds |
 |---|---|
@@ -10,7 +10,7 @@ This folder is the input for new Claude Code sessions. It was written on 2026-09
 | [02-target-architecture.md](02-target-architecture.md) | Target system design: components, contracts, data, flows |
 | [03-tools-and-models.md](03-tools-and-models.md) | Chosen tools and open models, with licenses, GPUs, costs and sources |
 | [04-roadmap.md](04-roadmap.md) | Sub-projects in build order, with exit criteria |
-| [05-proposed-adrs.md](05-proposed-adrs.md) | ADR drafts still open (27, 32 deferred, 33, 36, 37, 40), pointers to the accepted ones, and the next free number (ADR-47) |
+| [05-proposed-adrs.md](05-proposed-adrs.md) | ADR drafts still open (27, 32 deferred, 33, 36, 37, 40), pointers to the accepted ones, and the next free number (ADR-48) |
 | [06-session-prompts.md](06-session-prompts.md) | Prompts A–I plus one action card per roadmap item (S0–S14, X1–X6) and the close-out checklist; the coordinator builds cards in `docs/cards/` from them |
 | [07-channel-portfolio.md](07-channel-portfolio.md) | 15 channel concepts in 5 categories, EN/ES pairs, blueprint scaling model, launch waves |
 | [08-dashboard-and-operations.md](08-dashboard-and-operations.md) | Decision ledger, lanes and audit; dashboard pages; Notion mirror; the Desk; funnel and own products |

@@ -8,7 +8,9 @@ Guidance for Claude Code in this repository. Read this first, then the relevant 
 
 ## Project summary
 
-ClipForge turns long videos into 9:16 short clips and helps post them. Today: one clip producer, a Telegram posting assistant, and a dashboard shell (`web/`). It is growing into a multi-account studio (docs/studio/, Phase 6) where every producer ends in a `ContentItem` (ADR-25) and one Timeline renderer serves them all (ADR-31). Interfaces (Telegram bot, CLI, dashboard) are thin clients over one job API (ADR-2). Everything runs serverless on Modal (ADR-9): the API, the Telegram webhook, each pipeline step and the crons. Durable state is moving from the Modal Dict to Neon Postgres (ADR-26, S1). Nothing runs locally except development.
+ClipForge is a studio for running and growing many short-video channels (TikTok, Reels, Shorts, Facebook Reels; English and Spanish). Each channel is an account of one type (`clips`, `story`, `band`, `avatar`, `model`; docs/studio/09), built from a blueprint, and every account runs the same loop: produce → review → publish → measure → scale. Each type plugs in its own producer; everything after production is shared. Every producer ends in a `ContentItem` (ADR-25), and one Timeline renderer serves them all (ADR-31).
+
+Built today: the `clips` producer, the Telegram posting assistant, Postgres for accounts, sources and the queue (S1, rollout pending), and a dashboard shell (`web/`). The rest is planned in docs/studio/04. Interfaces (Telegram bot, CLI, dashboard) are thin clients over one job API (ADR-2). Everything runs serverless on Modal (ADR-9): the API, the Telegram webhook, each pipeline step and the crons. Durable state lives in Neon Postgres (ADR-26), and the Modal Dict holds only short-lived step state. Nothing runs locally except development.
 
 ## Stack
 
