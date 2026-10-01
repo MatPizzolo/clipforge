@@ -34,12 +34,13 @@ Card 002 finished S1's code and stopped before the rollout. Its final review and
    The job needs `contents: write` only for the tag push; keep every other permission read-only.
 3. **The Stop hook and the coordinator:** on `main` and on `coord/` branches, the Stop hook still asks for a green `scripts/check.sh` after changes, but no longer asks for a report in `docs/reports/`. Test both branches and a card branch.
 4. **Runbook and ops docs (commands only):**
-   - runbook §8 "still left": turning on `DEPLOY_ENABLED` needs the repository variables `POSTING_SLOTS` and `POSTING_TIMEZONE` (identical to `clipforge-secrets`), the secret `DATABASE_URL_UNPOOLED`, and `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET`; CI deploys are recorded by tag;
-   - rollout step 4c.2: set `DEPLOY_DB_CHECK=on` in `.env`.
-   Card 007 also edits the runbook. If its PR is open, add only these lines and leave the rest.
+   - runbook §8 "still left": card 007 wrote that the condition for `DEPLOY_ENABLED` "is met". Correct it: it also needs the repository variables `POSTING_SLOTS` and `POSTING_TIMEZONE` (identical to `clipforge-secrets`), the secret `DATABASE_URL_UNPOOLED`, `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET`, and this card's tag step; CI deploys are recorded by tag;
+   - rollout step 2 in §4 (the deploy that first has `DATABASE_URL` in the secret): set `DEPLOY_DB_CHECK=on` in `.env`.
+
+5. **Keep a failing step's output:** when a `check.sh` step fails, also save its full output to `.superpowers/check-last-fail.log` (ignored by git) and print that path. On 2026-10-01 the fast tests failed once on `main` and passed on two reruns, and the failing test couldn't be identified because only the last 60 lines reach the terminal. Look for tests that read the real clock (the quiet hours, 23:00–08:00 New York, caught two in card 002) and fix any you find, with the clock pinned.
 
 ## Checkpoints
-- A: actions 1–4. Suggested commit: `008: x0: deploy.py migration head, CI deploy tags, Stop hook on main/coord`
+- A: actions 1–5. Suggested commit: `008: x0: deploy.py migration head, CI deploy tags, Stop hook on main/coord`
 
 ## Done when
 - `scripts/check.sh` is green, with the new tests.
