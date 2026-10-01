@@ -1,6 +1,6 @@
 # Card 003: S3c — revise the workspaces design (design only)
 
-Status: proposed (after card 001 is merged; can run alongside 002 and 005)
+Status: done 2026-09-30 (report: docs/reports/003-s3c-2026-09-30.md; PR #6)
 Stream: S3c · Branch: `s3c/design` · Worktree: `../clipForge-s3c`
 Decision-log range: #250–#299
 Model: most capable
