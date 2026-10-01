@@ -9,7 +9,8 @@ Telegram ──webhook──►┐
 CLI / curl ──HTTPS──►├─ web (FastAPI, CPU)  POST /jobs · GET /jobs/{id} · POST /jobs/{id}/resume
                      │                        GET /jobs/{id}/download?exp=…&sig=… · POST /telegram/webhook
                      │                        GET /posting · POST /posting/rebuild · POST /posting/restore
-                     └── creates Job in Dict, spawns ▼
+                     │                        /accounts · /sources · /posting/import|verify · /jobs/backfill
+                     └── creates Job in Dict (and its `jobs` row in Postgres), spawns ▼
 
  ingest_step ─spawn─► transcribe_step ─spawn─► highlights_step ─spawn×N─► clip_step(clip_01…N)
    (CPU)                (GPU L4)                  (CPU + Haiku)             (CPU: reframe→captions→render)
@@ -18,7 +19,7 @@ CLI / curl ──HTTPS──►├─ web (FastAPI, CPU)  POST /jobs · GET /job
                                                                              package_step (CPU) ─► done
  sweeper (cron, every 10 min): stalled jobs → failed "stalled at <stage>"
  posting_tick (cron, every 5 min; plan C): the next clip to the owner's phone at each slot
- posting_keepalive (cron, daily 07:00 UTC; ADR-24): read every post:* / job:* key, snapshot the queue
+ posting_daily (cron, daily 07:00 UTC; ADR-46): keep-alive + snapshots, verify, backfill, schedule sync, rebuild
 ```
 
 - Interfaces (Telegram bot, CLI, later the web app) never touch the pipeline directly. They create jobs and read status through the job API (ADR-2).
@@ -41,8 +42,10 @@ Status values: `queued | running | done | failed`.
 Full design: [docs/superpowers/specs/2026-09-23-serverless-pipeline-design.md](superpowers/specs/2026-09-23-serverless-pipeline-design.md).
 
 - **State (ADR-14):** every Dict key has exactly one writer. `job:<id>` is the core record and `job:<id>:clip:<clip_id>` holds per-clip state. Claims (`package`, `failed`, Telegram `update_id`) use set-if-absent. Steps pass only IDs. `metadata.json` on the Volume is the durable record.
+- **Durable state in Postgres (ADR-26, ADR-41):** Neon, through `db/` (SQLAlchemy Core, psycopg 3, Alembic in `alembic/`). It holds accounts, sources, the posting queue and a `jobs` table (job summaries and per-stage `costs`), written best-effort by job create, `package_step`, the failure path and resume, and backfilled from `metadata.json`. `GET /jobs/{id}` and the overview read the `jobs` table first, then the Dict, then `metadata.json` (#207). Claims and in-flight step keys stay on the Dict. One engine per container (`app._database()`), connected lazily; every transaction has a 5 s statement timeout. Without `DATABASE_URL` everything runs Dict-only, as before S1. Migrations use `DATABASE_URL_UNPOOLED` only and run in the CI deploy job before `modal deploy`; `app.py::db_doctor` checks the revision, the pooled host and the schedule copies, read-only.
 - **Errors (ADR-15):** transient errors are retried twice. `PermanentError` fails at once. Clips can partially succeed. LLM validation is judged per window. Sources over 3 h or 4 GB, or without audio, are rejected before GPU time.
-- **Notifications:** a `Notifier` (`clip_ready`, `done`, `failed`) is attached by the step wrapper when the job came from Telegram. Notifier failures never fail a step.
+- **Notifications:** a `Notifier` (`clip_ready`, `done`, `failed`) is attached by the step wrapper when the job came from Telegram. Notifier failures never fail a step. With `DASHBOARD_URL` set, bot messages carry URL buttons to the dashboard (ADR-44).
+- **Ops alerts (ADR-45, `ops.py`):** failures that would otherwise be silent go to the owner chat (`POSTING_CHAT_ID`, else the first allowed user): failed jobs without a Telegram target, queueing errors, tick and daily-cron errors, posting off, missing schedule copies, mirror failures and verify differences. One per (kind, subject) per hour, at most 20 an hour, held during quiet hours (23:00–08:00 in `OWNER_TIMEZONE`) and folded into one message at the next tick. An alert never fails a step.
 
 ## Stages and contracts
 
@@ -103,18 +106,26 @@ Direct HTTP(S) media links and Telegram uploads up to 20 MB. YouTube is not supp
 
 ## Local inbox (ADR-22)
 
-`videos/<channel>/*.mp4` plus `videos/channels.toml` (credit, url and permission per channel). `uv run clipforge clip` uploads and submits every new video with its channel, then exits. `--fetch` waits for the jobs in parallel and downloads each into `videos/out/<channel>/<episode>/`. `videos/.clipforge.json` keeps each video's job and whether it was fetched.
+`videos/<channel>/*.mp4` plus `videos/channels.toml` (credit, url and permission per channel; superseded by S1's database sources at the rollout, see below). `uv run clipforge clip` uploads and submits every new video with its channel, then exits. `--fetch` waits for the jobs in parallel and downloads each into `videos/out/<channel>/<episode>/`. `videos/.clipforge.json` keeps each video's job and whether it was fetched.
+
+## Accounts, blueprints and sources (S1)
+
+- **Blueprints** (`blueprints/<name>.toml`, ADR-35, mounted into the images) describe a channel concept; an **account** is a blueprint plus a language, handles, platforms and a posting schedule (`clipforge account create|edit|list`). ADR-42 moves blueprints into versioned database rows later (S3c).
+- **Sources** are database records (option B): a permission record (type, platforms, monetization and translation yes/no/unknown, expiry, evidence), a `source_events` history, and hold rules (expired or narrowed permissions hold clips at enqueue and at the tick). `videos/<source-id>/` is the only local mapping. `clipforge source import-toml` imports `videos/channels.toml` once at the rollout; until then `clipforge clip` falls back to the file only when the API answers 503 "DATABASE_URL is not configured" (#98).
 
 ## Posting queue (ADR-23)
 
 When a channel job finishes, `package_step` queues its clips (`post:<job>:<clip>` in the job Dict, skipping moments already queued). A clip's status (queued, sent, partly posted, posted, skipped, rejected, unavailable) is derived from one-writer keys: `sent:<n>`, `posted:<platform>`, `verdict`, `unavailable`. `GET /posting` (and `clipforge status`, `/status`) shows per-channel progress. `POST /posting/rebuild` re-queues finished channel jobs; it skips a job whose files are gone instead of stopping. Clips are queued before the job is saved as done, so a crash in between can't lose them. A re-cut can bring back a moment whose clip was rejected or whose video went missing. Code: `src/clipforge/posting/` (Modal-free).
 
-- **Settings:** `POSTING_CHAT_ID` (off when unset), `POSTING_TIMEZONE`, `POSTING_SLOTS`, `POSTING_HASHTAGS`. `8:00` and `#tag` are normalized. Any other mistake turns posting off with the reason in `/status` (`Settings.posting_problem`), never the app, because every step loads the same settings.
-- **Expiry (ADR-24):** Modal Dict entries expire after 7 days without reads or writes, and the queue lasts weeks. The daily cron `posting_keepalive` (07:00 UTC) reads every `post:*`, `job:*` and `posting:paused` key, then writes a JSON snapshot of the `post:*` keys (and the paused flag, for the record) to `/jobs/posting/snapshots/<date>.json`, keeping the last 14. `POST /posting/restore[?date=YYYY-MM-DD]` (bearer token), or `clipforge status --restore [DATE]`, puts back `post:*` keys missing from the Dict using that day's snapshot, or the newest readable one without a date. It only fills in missing keys from that snapshot, never overwrites, and never restores `posting:paused`, so it can bring back a ✅ that was undone after that snapshot: check `/status` afterwards. Runbook: after an outage of about 6 days or more, `/pause`, run `clipforge status --restore <last good date>`, check `/status`, then `/go`. Code: `posting/keepalive.py`.
+- **Stores (ADR-41):** a `PostingRepo` with Dict, Sql and Dual implementations. `STATE_READS` (`dict`, the default and the rollback, or `postgres`) picks the primary; with a database wired, every write is repeated on the other store, best-effort, and `posting verify` compares them daily. Items are `ContentItem`s; their platforms are frozen at enqueue (the account's enabled platforms ∩ the source permission). Every tap and command writes through `posting/actions.py` with an actor (`telegram:<id>`, `web:<login>`, `cli:<user>`), kept as `post_events.data.actor`; a database error answers "Store unavailable, nothing changed".
+- **Settings:** in `dict` mode, `POSTING_CHAT_ID` (off when unset), `POSTING_TIMEZONE`, `POSTING_SLOTS`, `POSTING_HASHTAGS` describe account #1 (`POSTING_ACCOUNT_ID`); in `postgres` mode each account holds its own schedule. `8:00` and `#tag` are normalized. Any other mistake turns posting off with the reason in `/status` (`Settings.posting_problem`), never the app, because every step loads the same settings.
+- **Expiry (ADR-24):** Modal Dict entries expire after 7 days without reads or writes, and the queue lasts weeks. The daily cron `posting_daily` (07:00 UTC; it was `posting_keepalive`, ADR-46) reads every `post:*`, `job:*` and `posting:paused` key, then writes a JSON snapshot of the `post:*` keys (and the paused flag, for the record) to `/jobs/posting/snapshots/<date>.json`, keeping the last 14. `POST /posting/restore[?date=YYYY-MM-DD]` (bearer token), or `clipforge status --restore [DATE]`, puts back `post:*` keys missing from the Dict using that day's snapshot, or the newest readable one without a date. It only fills in missing keys from that snapshot, never overwrites, and never restores `posting:paused`, so it can bring back a ✅ that was undone after that snapshot: check `/status` afterwards. Runbook: after an outage of about 6 days or more, `/pause`, run `clipforge status --restore <last good date>`, check `/status`, then `/go`. Code: `posting/keepalive.py`. The Dict touch retires at the end of S1's migration (ADR-41, Task 23); the rest of `posting_daily` stays: with a database it also runs `posting verify`, backfills missing `jobs` rows, rewrites the schedule copies, runs `rebuild`, and snapshots the posting and source tables to `/jobs/posting/snapshots/db-<date>.json` (keep 14). Code: `posting/daily.py`. If it finds its newest snapshot more than 2 days old (an outage, so Dict keys may have expired), it sets `posting:outage`: rebuild is skipped and the tick sends nothing until `/go` or a restore clears it, and `/status` says so first (#217).
 
 ## Posting assistant (ADR-23)
 
 `posting_tick` runs every 5 minutes. When a slot from `POSTING_SLOTS` (in `POSTING_TIMEZONE`) is at most 30 minutes old, it claims the slot (a set-if-absent claim, so overlapping ticks send once) and sends the best eligible clip to `POSTING_CHAT_ID`: the video, then an HTML text replying to it with one copy block per platform (TikTok, Instagram, YouTube) and the buttons. ✅ per platform toggles `posted:<platform>`, ⏭ Skip sends the next clip (the skipped one returns after 24 h), and 🗑 Reject asks for an optional reason. After 2 unanswered clips the slots pause and one reminder is sent. `/status`, `/next` (ignores the pause), `/pause` and `/go` work from the phone. If either part of a send fails, the delivered part is deleted, nothing is recorded, and the slot is released for the next tick. Code: `bot/posting.py`; the webhook registers `callback_query` updates (re-run `clipforge set-webhook` after deploying).
+
+Per account (S1, ADR-41): the tick loops over accounts in id order, each with its own chat, time zone and slots. It computes the slot from the Dict copy `posting:schedule:<account>` (written only by the accounts service) and reads Postgres only when a slot is due. Before claiming a slot it checks whether a send is already recorded for it, so a lost or renamed claim can't send a slot twice (#202). `/next`, `/pause` and `/go` take an optional account. The Facebook button appears where an item is due on Facebook, campaign tags, links and `#ad` are added at send time, and expired or narrowed permissions hold clips. One account's failure never stops the others.
 
 ## Studio direction (accepted 2026-09-29, not built yet)
 

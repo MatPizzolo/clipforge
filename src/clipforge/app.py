@@ -4,6 +4,7 @@ one call into the Modal-free code.
 
     uv run modal run src/clipforge/app.py::doctor    # local + GPU environment checks
     uv run modal run src/clipforge/app.py::smoke     # one real job on the 10 s fixture (~$0.01)
+    uv run modal run src/clipforge/app.py::db_doctor # read-only database check (rollout)
     uv run modal deploy src/clipforge/app.py         # deploy the API, webhook and pipeline
 """
 
@@ -21,6 +22,7 @@ from fastapi import FastAPI
 from clipforge import runtime
 from clipforge.api.main import ApiContext, create_app
 from clipforge.config import get_settings
+from clipforge.db.engine import Database, database_from_settings, redact
 from clipforge.pipeline.steps import MAX_ATTEMPTS, STEP_TIMEOUT_S, Deps, Step, dispatch, sweep
 
 APP_NAME = "clipforge"
@@ -41,11 +43,13 @@ REPO_ROOT = _repo_root(Path(__file__).resolve())  # only meaningful locally (ima
 PROMPTS_MOUNT = "/app/prompts"
 FONTS_MOUNT = "/app/assets/fonts"
 MODELS_MOUNT = "/app/assets/models"  # YuNet face model (ADR-19)
+BLUEPRINTS_MOUNT = "/app/blueprints"  # account blueprints (ADR-35)
 CONTAINER_ENV = {
     "JOBS_ROOT": JOBS_ROOT,
     "PROMPTS_DIR": PROMPTS_MOUNT,
     "FONTS_DIR": FONTS_MOUNT,
     "MODELS_DIR": MODELS_MOUNT,
+    "BLUEPRINTS_DIR": BLUEPRINTS_MOUNT,
     "GIT_SHA": os.environ.get("GIT_SHA", ""),  # set by the CI deploy; empty means unknown
 }
 
@@ -66,6 +70,7 @@ def _with_app_files(image: modal.Image) -> modal.Image:
         .add_local_dir(REPO_ROOT / "prompts", PROMPTS_MOUNT)
         .add_local_dir(REPO_ROOT / "assets" / "fonts", FONTS_MOUNT)
         .add_local_dir(REPO_ROOT / "assets" / "models", MODELS_MOUNT)
+        .add_local_dir(REPO_ROOT / "blueprints", BLUEPRINTS_MOUNT)
         .add_local_python_source("clipforge")
     )
 
@@ -116,6 +121,13 @@ def _spawner() -> runtime.FunctionSpawner:
 
 
 @functools.cache
+def _database() -> Database | None:
+    """One engine per container; it connects lazily, so code that never queries never connects.
+    None until DATABASE_URL is in the secret (rollout step 4c.2, decision log #107)."""
+    return database_from_settings(get_settings())
+
+
+@functools.cache
 def _step_deps() -> Deps:
     """One per container: the real stages (LLM client, prompt, transcriber) are built once."""
     from clipforge.stages.runner import PipelineStages
@@ -128,6 +140,7 @@ def _step_deps() -> Deps:
         spawner=_spawner(),
         stages=PipelineStages.from_settings(settings),
         sender=runtime.telegram_sender(settings),
+        db=_database(),
     )
 
 
@@ -142,6 +155,7 @@ def _service_deps() -> Deps:
         spawner=_spawner(),
         stages=runtime.UnavailableStages(),
         sender=runtime.telegram_sender(settings),
+        db=_database(),
     )
 
 
@@ -240,8 +254,13 @@ def posting_tick() -> None:
     if sender is None:
         return
     deps = _service_deps()
-    deps.volume.reload()  # see clips rendered since this container started
-    print(f"posting_tick: {tick(BotContext(settings, sender, deps), utcnow())}")
+    try:
+        deps.volume.reload()  # see clips rendered since this container started
+        print(f"posting_tick: {tick(BotContext(settings, sender, deps), utcnow())}")
+    except Exception as exc:
+        if deps.ops is not None:
+            deps.ops.alert(f"posting_tick crashed: {redact(exc)}", "tick", "crash")
+        raise
 
 
 @app.function(
@@ -252,18 +271,24 @@ def posting_tick() -> None:
     volumes={JOBS_ROOT: jobs_volume},
     secrets=[secrets],
 )
-def posting_keepalive() -> None:
-    """Read every posting/job key so Modal's Dict doesn't expire them, then snapshot the queue
-    to the Volume (ADR-24)."""
+def posting_daily() -> None:
+    """The daily reconcile (ADR-46, was posting_keepalive): keep the Dict's posting keys alive
+    and snapshot them (ADR-24), verify against Postgres, backfill job rows, rewrite the schedule
+    copies, rebuild the queue and snapshot the posting tables."""
     from clipforge.jobs import utcnow
-    from clipforge.posting import keepalive
+    from clipforge.posting.daily import run_daily
 
     deps = _service_deps()
-    deps.volume.reload()
-    touched = keepalive.touch(deps.store.kv)
-    path, saved = keepalive.snapshot(deps.store.kv, deps.root, utcnow())
-    deps.volume.commit()
-    print(f"posting_keepalive: touched {touched} keys, snapshot {saved} keys -> {path}")
+    try:
+        deps.volume.reload()
+        lines = run_daily(deps, _database(), get_settings().posting_account_id, utcnow())
+        deps.volume.commit()
+    except Exception as exc:
+        if deps.ops is not None:
+            deps.ops.alert(f"posting_daily crashed: {redact(exc)}", "daily", "crash")
+        raise
+    for line in lines:
+        print(f"posting_daily: {line}")
 
 
 @app.function(
@@ -277,7 +302,39 @@ def posting_keepalive() -> None:
 def web() -> FastAPI:
     settings = get_settings()
     sender = runtime.telegram_sender(settings)
-    return create_app(ApiContext(settings=settings, deps=_service_deps, sender=lambda: sender))
+    return create_app(
+        ApiContext(settings=settings, deps=_service_deps, sender=lambda: sender, db=_database)
+    )
+
+
+@app.function(image=base_image, cpu=0.25, timeout=60, secrets=[secrets])
+def db_doctor() -> dict[str, object]:
+    """Read-only database check: connect ms, alembic_version vs the code's head, pooled host,
+    and accounts whose `posting:schedule:*` copy is missing or stale (run before rollout step
+    4c.7). Never writes and never prints the URL (rollout, runbook §4c)."""
+    from clipforge.accounts.service import schedule_drift
+    from clipforge.db import doctor
+    from clipforge.db.accounts import AccountsRepo
+
+    settings = get_settings()
+    url = None if settings.database_url is None else settings.database_url.get_secret_value()
+    database = database_from_settings(settings)
+    report: dict[str, object] = {}
+    try:
+        report.update(doctor.check(database, url, require_pooled=True))
+        if database is not None and report["ok"]:
+            try:
+                drift = schedule_drift(AccountsRepo(database), runtime.DictKV(job_state))
+                report["schedule_drift"] = drift
+                report["ok"] = not drift
+            except Exception as exc:
+                report["ok"], report["error"] = False, f"schedule check: {redact(exc)}"
+    finally:
+        if database is not None:
+            database.dispose()
+    for key, value in report.items():
+        print(f"db_doctor: {key}: {value}")
+    return report
 
 
 @app.function(image=whisper_image, gpu=GPU, timeout=600)

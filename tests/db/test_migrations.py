@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import inspect
@@ -30,3 +31,33 @@ def test_tables_match_the_migrations(pg_url: str) -> None:
 def test_0001_is_frozen() -> None:
     text_ = (Path(__file__).parents[2] / "alembic/versions/0001_initial.py").read_text()
     assert not re.search(r"\bmetadata\b", text_) and "clipforge.db.tables" not in text_
+
+
+def test_env_requires_the_unpooled_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    from alembic.config import Config
+
+    from alembic import command
+    from clipforge.db.migrations import ALEMBIC_INI
+
+    monkeypatch.delenv("DATABASE_URL_UNPOOLED", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@ep-x-pooler.example/db")
+    with pytest.raises(SystemExit, match="DATABASE_URL_UNPOOLED"):
+        command.upgrade(Config(str(ALEMBIC_INI)), "head")
+
+
+def test_a_failed_migration_exits_without_the_host_or_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # security review minor 2: CI logs only mask the whole secret, not the host inside it
+    from alembic.config import Config
+
+    from alembic import command
+    from clipforge.db.migrations import ALEMBIC_INI
+
+    monkeypatch.setenv("DATABASE_URL_UNPOOLED", "postgresql://neondb_owner:s3cret@127.0.0.1:1/db")
+    with pytest.raises(SystemExit) as caught:
+        command.upgrade(Config(str(ALEMBIC_INI)), "head")
+    text = str(caught.value)
+    assert text.startswith("migration failed: ")
+    for secret in ("127.0.0.1", "neondb_owner", "s3cret"):
+        assert secret not in text, secret

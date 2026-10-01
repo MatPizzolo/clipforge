@@ -56,3 +56,11 @@ def test_redact_hides_the_quoted_user_name() -> None:
     ):
         text_ = redact(Exception(message))
         assert "neondb_owner" not in text_ and "1.2.3.4" not in text_
+
+
+def test_every_transaction_has_a_statement_timeout(db: Database) -> None:
+    # card 002 A4: a slow Neon never holds a tap or a tick for long
+    with db.begin() as conn:
+        assert conn.execute(text("SHOW statement_timeout")).scalar_one() == "5s"
+    with db.engine.connect() as conn:  # SET LOCAL ends with the transaction
+        assert conn.execute(text("SHOW statement_timeout")).scalar_one() == "0"

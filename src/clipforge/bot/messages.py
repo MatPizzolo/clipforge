@@ -112,7 +112,17 @@ def _overview_block(view: PostingOverview | AccountPosting, timezone: str, *, se
 
 def posting_overview_text(view: PostingOverview, timezone: str | None = None) -> str:
     """`/status` and `clipforge status`: per channel, then the queue (spec §9). With several
-    accounts, one `▸ <account>` block each; `timezone` is the fallback for one account."""
+    accounts, one `▸ <account>` block each; `timezone` is the fallback for one account. An
+    outage flag comes first."""
+    text = _overview_text(view, timezone)
+    if view.outage_since is None:
+        return text
+    return (f"⚠️ Outage: posting_daily didn't run since {view.outage_since}, so the slots and "
+            "rebuild are stopped. Restore (clipforge status --restore "
+            f"{view.outage_since}), check this, then /go.\n{text}")  # fmt: skip
+
+
+def _overview_text(view: PostingOverview, timezone: str | None) -> str:
     if len(view.accounts) >= 2:
         lines: list[str] = []
         for account in view.accounts:
@@ -133,6 +143,8 @@ PAUSED = "Paused. No clips until you send /go."
 RESUMED = "Back on. Clips resume at the next slot."
 GONE = "That clip isn't in the queue any more."
 SAVE_FAILED = "Couldn't save that. Tap again."
+OUTAGE_CLEARED = "Outage flag cleared: posting_daily's rebuild and the slots run again."
+STORE_UNAVAILABLE = "Store unavailable, nothing changed. Try again in a minute."
 
 
 def unknown_account(given: str, known: list[str]) -> str:

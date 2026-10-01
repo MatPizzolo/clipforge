@@ -120,7 +120,9 @@ def create_app(ctx: ApiContext) -> FastAPI:
     @app.post("/accounts", status_code=201, dependencies=authorized)
     def post_account(req: AccountCreate) -> Account:
         try:
-            return create_account(AccountsRepo(database()), settings, req, utcnow())
+            return create_account(
+                AccountsRepo(database()), settings, req, utcnow(), kv=ctx.deps().store.kv
+            )
         except AccountError as exc:
             raise HTTPException(400, str(exc)) from None
 
@@ -140,7 +142,9 @@ def create_app(ctx: ApiContext) -> FastAPI:
     def patch_account(account_id: str, edit: AccountEdit) -> Account:
         wanted = slug(account_id)
         try:
-            return edit_account(AccountsRepo(database()), settings, wanted, edit, utcnow())
+            return edit_account(
+                AccountsRepo(database()), settings, wanted, edit, utcnow(), kv=ctx.deps().store.kv
+            )
         except AccountError as exc:
             raise HTTPException(400, str(exc)) from None
 
@@ -203,7 +207,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         deps = ctx.deps()
         reload(deps)
         try:
-            found = get_job_view(deps.store, deps.root, job_id)
+            found = get_job_view(deps.store, deps.root, job_id, deps.jobs_db)
         except KeyError:
             raise HTTPException(404, "unknown job") from None
         return with_download_url(found, settings)

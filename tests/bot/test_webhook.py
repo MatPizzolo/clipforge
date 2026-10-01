@@ -16,6 +16,7 @@ from clipforge.pipeline.deps import SpawnCall
 from clipforge.posting.backend import dict_posting
 from clipforge.posting.queue import status
 from clipforge.posting.repo import DictPostingRepo
+from clipforge.posting.slots import next_slot
 from tests.bot.fakes import ALLOWED_USER, CHAT, FakeSender, callback, make_settings, update, video
 from tests.dbhelpers import make_account
 from tests.pipeline.harness import Harness
@@ -233,7 +234,10 @@ def test_status_pause_go_commands(posting: Bot) -> None:
     assert sender.messages[-1][1].startswith("Billy Garton Jr. — 1 episodes")
     handle_update(update(2, text="/pause", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.PAUSED
-    assert tick(ctx, utcnow() + timedelta(minutes=1)) == f"{ACCOUNT}: paused"
+    # at a slot: the tick computes the slot before it reads the pause (card 002 A3)
+    slot = next_slot(env_account(ctx.settings).posting, utcnow())
+    assert slot is not None
+    assert tick(ctx, slot + timedelta(minutes=1)) == f"{ACCOUNT}: paused"
     handle_update(update(3, text="/go", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.RESUMED
     assert not DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)

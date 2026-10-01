@@ -431,6 +431,13 @@ class SourceEvent(Contract):
     after: dict[str, object]
 
 
+# What the dashboard shows for posting (card 002 A5): off = no posting chat; problem = posting
+# is misconfigured; paused = /pause; waiting = the pause rule (PAUSE_AFTER sent clips with no
+# tap) holds the slots; on = clips go out at the next slot.
+# outage = posting_daily found it hadn't run for days; nothing is sent until /go or a restore
+PostingState = Literal["off", "problem", "paused", "waiting", "on", "outage"]
+
+
 class AccountPosting(Contract):
     account_id: str
     enabled: bool  # the account has a posting chat
@@ -442,6 +449,11 @@ class AccountPosting(Contract):
     next_slot: datetime | None = None
     held: int = 0  # waiting, but held by their source (spec §6.3 hold rules)
     timezone: str = "UTC"
+    # additive (card 002 A5, #49)
+    state: PostingState = "off"
+    posted_total: int = 0  # clips posted on every platform they were queued for
+    unanswered: int = 0  # sent clips with no tap yet (the pause rule counts these)
+    last_sent_at: datetime | None = None
 
 
 class ImportReport(Contract):
@@ -490,6 +502,12 @@ class PostingOverview(Contract):
     next_slot: datetime | None
     problem: str | None = None  # why posting is off despite POSTING_CHAT_ID (a config mistake)
     accounts: list[AccountPosting] = Field(default_factory=list)
+    # additive (card 002 A5, #49): account #1's state ("problem" wins), and posted clips summed
+    # over every account
+    state: PostingState = "off"
+    posted_total: int = 0
+    # the outage flag's date (the last good snapshot); None = no outage (card 002 final review)
+    outage_since: str | None = None
 
 
 class JobSummary(Contract):

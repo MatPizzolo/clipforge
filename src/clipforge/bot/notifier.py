@@ -6,8 +6,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from clipforge.bot.deeplinks import job_row
 from clipforge.bot.messages import clip_caption, done_text, failed_text
-from clipforge.bot.telegram import TelegramSender
+from clipforge.bot.telegram import Keyboard, TelegramSender
 from clipforge.config import Settings
 from clipforge.jobs import DictJobStore, merged_cost
 from clipforge.links import LinksNotConfigured, download_url
@@ -42,9 +43,18 @@ class TelegramNotifier:
             self.target.chat_id,
             done_text(done, len(clips), cost, link),
             self.target.reply_to_message_id,
+            buttons=self._job_link(job),
         )
 
     def failed(self, job: Job) -> None:
         self.sender.send_message(
-            self.target.chat_id, failed_text(job), self.target.reply_to_message_id
+            self.target.chat_id,
+            failed_text(job),
+            self.target.reply_to_message_id,
+            buttons=self._job_link(job),
         )
+
+    def _job_link(self, job: Job) -> Keyboard | None:
+        """The job page on the dashboard (ADR-44), when DASHBOARD_URL is set."""
+        row = job_row(self.settings.dashboard_url, job.job_id)
+        return [row] if row else None

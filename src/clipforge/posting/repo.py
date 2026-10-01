@@ -71,12 +71,17 @@ class PostingRepo(Protocol):
     def records_for_source(self, source_hash: str) -> list[PostRecord]: ...
     def add_send(self, ref: str, send: PostSend, chat_id: int | None = None) -> bool: ...
     def mark_unavailable(self, ref: str, at: datetime) -> None: ...
-    def toggle_posted(self, ref: str, platform: Platform, at: datetime) -> bool: ...
-    def set_posted(self, ref: str, platform: Platform, on: bool, at: datetime) -> None: ...
-    def set_verdict(self, ref: str, verdict: PostVerdict) -> None: ...
-    def set_reason(self, ref: str, reason: RejectReason) -> bool: ...
+    # `actor`: who made the change (`telegram:<id>`, `web:<login>`, `session:<name>`), recorded in
+    # Postgres as post_events.data.actor; None for system writes (card 002 A4, S3c D3).
+    def toggle_posted(self, ref: str, platform: Platform, at: datetime,
+                      actor: str | None = None) -> bool: ...  # fmt: skip
+    def set_posted(self, ref: str, platform: Platform, on: bool, at: datetime,
+                   actor: str | None = None) -> None: ...  # fmt: skip
+    def set_verdict(self, ref: str, verdict: PostVerdict, actor: str | None = None) -> None: ...
+    def set_reason(self, ref: str, reason: RejectReason, actor: str | None = None) -> bool: ...
     def paused(self, account_id: str) -> bool: ...
-    def set_paused(self, account_id: str, on: bool, at: datetime) -> None: ...
+    def set_paused(self, account_id: str, on: bool, at: datetime,
+                   actor: str | None = None) -> None: ...  # fmt: skip
 
 
 class PostingClaims:
@@ -142,22 +147,28 @@ class DictPostingRepo:
     def mark_unavailable(self, ref: str, at: datetime) -> None:
         self.kv.put(f"{_item_key(ref)}:unavailable", "1", skip_if_exists=True)
 
-    def toggle_posted(self, ref: str, platform: Platform, at: datetime) -> bool:
+    # The Dict format has no actor: it's accepted and dropped (Postgres keeps it).
+
+    def toggle_posted(
+        self, ref: str, platform: Platform, at: datetime, actor: str | None = None
+    ) -> bool:
         on = self.kv.get(f"{_item_key(ref)}:posted:{platform}") is None
         self.set_posted(ref, platform, on, at)
         return on
 
-    def set_posted(self, ref: str, platform: Platform, on: bool, at: datetime) -> None:
+    def set_posted(
+        self, ref: str, platform: Platform, on: bool, at: datetime, actor: str | None = None
+    ) -> None:
         key = f"{_item_key(ref)}:posted:{platform}"
         if on:
             self.kv.put(key, PostMark(at=at).model_dump_json())
         else:
             self.kv.delete(key)
 
-    def set_verdict(self, ref: str, verdict: PostVerdict) -> None:
+    def set_verdict(self, ref: str, verdict: PostVerdict, actor: str | None = None) -> None:
         self.kv.put(f"{_item_key(ref)}:verdict", verdict.model_dump_json())
 
-    def set_reason(self, ref: str, reason: RejectReason) -> bool:
+    def set_reason(self, ref: str, reason: RejectReason, actor: str | None = None) -> bool:
         key = f"{_item_key(ref)}:verdict"
         raw = self.kv.get(key)
         if raw is None:
@@ -171,7 +182,7 @@ class DictPostingRepo:
     def paused(self, account_id: str) -> bool:
         return account_id == self.account_id and self.kv.get(PAUSED_KEY) is not None
 
-    def set_paused(self, account_id: str, on: bool, at: datetime) -> None:
+    def set_paused(self, account_id: str, on: bool, at: datetime, actor: str | None = None) -> None:
         if account_id != self.account_id:
             return
         if on:
@@ -230,6 +241,8 @@ class DualPostingRepo:
     def __init__(self, primary: PostingRepo, mirror: PostingRepo) -> None:
         self.primary, self.mirror = primary, mirror
         self.mirror_failures = 0
+        # Set by runtime.build_deps to an ops alert (ADR-45); never raises.
+        self.on_failure: Callable[[str, str], object] | None = None
 
     def _mirror(self, action: str, call: Callable[[], object]) -> None:
         try:
@@ -237,6 +250,8 @@ class DualPostingRepo:
         except Exception as exc:
             self.mirror_failures += 1
             log.warning("posting mirror: %s failed: %s", action, redact(exc))
+            if self.on_failure is not None:
+                self.on_failure(action, redact(exc))
 
     def add(self, item: ContentItem, platforms: list[Platform]) -> bool:
         added = self.primary.add(item, platforms)
@@ -263,29 +278,33 @@ class DualPostingRepo:
         self.primary.mark_unavailable(ref, at)
         self._mirror("mark_unavailable", lambda: self.mirror.mark_unavailable(ref, at))
 
-    def toggle_posted(self, ref: str, platform: Platform, at: datetime) -> bool:
-        on = self.primary.toggle_posted(ref, platform, at)
+    def toggle_posted(
+        self, ref: str, platform: Platform, at: datetime, actor: str | None = None
+    ) -> bool:
+        on = self.primary.toggle_posted(ref, platform, at, actor)
         # set, not toggle: the mirror ends in the primary's state even if it had drifted
-        self._mirror("set_posted", lambda: self.mirror.set_posted(ref, platform, on, at))
+        self._mirror("set_posted", lambda: self.mirror.set_posted(ref, platform, on, at, actor))
         return on
 
-    def set_posted(self, ref: str, platform: Platform, on: bool, at: datetime) -> None:
-        self.primary.set_posted(ref, platform, on, at)
-        self._mirror("set_posted", lambda: self.mirror.set_posted(ref, platform, on, at))
+    def set_posted(
+        self, ref: str, platform: Platform, on: bool, at: datetime, actor: str | None = None
+    ) -> None:
+        self.primary.set_posted(ref, platform, on, at, actor)
+        self._mirror("set_posted", lambda: self.mirror.set_posted(ref, platform, on, at, actor))
 
-    def set_verdict(self, ref: str, verdict: PostVerdict) -> None:
-        self.primary.set_verdict(ref, verdict)
-        self._mirror("set_verdict", lambda: self.mirror.set_verdict(ref, verdict))
+    def set_verdict(self, ref: str, verdict: PostVerdict, actor: str | None = None) -> None:
+        self.primary.set_verdict(ref, verdict, actor)
+        self._mirror("set_verdict", lambda: self.mirror.set_verdict(ref, verdict, actor))
 
-    def set_reason(self, ref: str, reason: RejectReason) -> bool:
-        done = self.primary.set_reason(ref, reason)
+    def set_reason(self, ref: str, reason: RejectReason, actor: str | None = None) -> bool:
+        done = self.primary.set_reason(ref, reason, actor)
         if done:
-            self._mirror("set_reason", lambda: self.mirror.set_reason(ref, reason))
+            self._mirror("set_reason", lambda: self.mirror.set_reason(ref, reason, actor))
         return done
 
     def paused(self, account_id: str) -> bool:
         return self.primary.paused(account_id)
 
-    def set_paused(self, account_id: str, on: bool, at: datetime) -> None:
-        self.primary.set_paused(account_id, on, at)
-        self._mirror("set_paused", lambda: self.mirror.set_paused(account_id, on, at))
+    def set_paused(self, account_id: str, on: bool, at: datetime, actor: str | None = None) -> None:
+        self.primary.set_paused(account_id, on, at, actor)
+        self._mirror("set_paused", lambda: self.mirror.set_paused(account_id, on, at, actor))

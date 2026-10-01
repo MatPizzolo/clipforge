@@ -9,6 +9,7 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal, Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -101,6 +102,12 @@ class Settings(BaseSettings):
     # Why posting is off despite POSTING_CHAT_ID (set by the check below; not an env value)
     posting_problem: str | None = None
 
+    # The dashboard (ADR-38, ADR-44): bot messages get URL buttons to its pages (08 §2b).
+    # Unset or invalid = no buttons; never an error, since every step loads these settings.
+    dashboard_url: str | None = None
+    # The owner's time zone for ops-alert quiet hours (ADR-45); unset = POSTING_TIMEZONE
+    owner_timezone: str | None = None
+
     # Durable state (ADR-26, S1): Neon's pooled URL; reads come from `state_reads` (ADR-41)
     database_url: SecretStr | None = None
     state_reads: Literal["dict", "postgres"] = "dict"
@@ -172,6 +179,31 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [part.strip() for part in value.split(",") if part.strip()]
         return value
+
+    @field_validator("dashboard_url", mode="before")
+    @classmethod
+    def _dashboard_url(cls, value: object) -> object:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        url = value.strip().rstrip("/")
+        local = url.startswith(("http://localhost", "http://127.0.0.1"))
+        if not (url.startswith("https://") or local) or any(c.isspace() for c in url):
+            # links (and the login behind them) never go over plain http, except locally
+            log.warning("DASHBOARD_URL ignored: it must be an https URL (http only for localhost)")
+            return None
+        return url
+
+    @field_validator("owner_timezone", mode="before")
+    @classmethod
+    def _owner_timezone(cls, value: object) -> object:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        try:
+            ZoneInfo(value.strip())
+        except (ZoneInfoNotFoundError, ValueError):
+            log.warning("OWNER_TIMEZONE ignored: not a time zone")
+            return None
+        return value.strip()
 
     @field_validator("posting_chat_id", mode="before")
     @classmethod

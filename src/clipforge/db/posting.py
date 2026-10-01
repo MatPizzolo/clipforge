@@ -85,7 +85,12 @@ def _record(
 
 
 def _event(conn: Connection, ref: str, kind: str, at: datetime,
-           platform: Platform | None = None, **data: object) -> None:  # fmt: skip
+           platform: Platform | None = None, actor: str | None = None,
+           **data: object) -> None:  # fmt: skip
+    """One post_events row. `actor` goes into `data.actor` (omitted for system writes): S3c's
+    migration 0002 copies exactly that key into a `post_events.actor` column (S3c D3)."""
+    if actor is not None:
+        data["actor"] = actor
     conn.execute(post_events.insert().values(item_id=ref, kind=kind, at=at,
                                              platform=platform.value if platform else None,
                                              data=data))  # fmt: skip
@@ -164,7 +169,9 @@ class SqlPostingRepo:
 
     # ---- webhook
 
-    def toggle_posted(self, ref: str, platform: Platform, at: datetime) -> bool:
+    def toggle_posted(
+        self, ref: str, platform: Platform, at: datetime, actor: str | None = None
+    ) -> bool:
         # One upsert: a first tap (also on a platform the item wasn't queued on) inserts it as
         # posted; a later tap flips posted_at. Race-safe on (item_id, platform).
         statement = (
@@ -178,10 +185,12 @@ class SqlPostingRepo:
         )
         with self.db.begin() as conn:
             on = conn.execute(statement).scalar_one() is not None
-            _event(conn, ref, "posted" if on else "unposted", at, platform)
+            _event(conn, ref, "posted" if on else "unposted", at, platform, actor)
         return on
 
-    def set_posted(self, ref: str, platform: Platform, on: bool, at: datetime) -> None:
+    def set_posted(
+        self, ref: str, platform: Platform, on: bool, at: datetime, actor: str | None = None
+    ) -> None:
         statement = insert(posts).values(item_id=ref, platform=platform.value,
                                          posted_at=at if on else None)  # fmt: skip
         statement = statement.on_conflict_do_update(
@@ -189,16 +198,16 @@ class SqlPostingRepo:
             set_={"posted_at": at if on else None})  # fmt: skip
         with self.db.begin() as conn:
             conn.execute(statement)
-            _event(conn, ref, "posted" if on else "unposted", at, platform)
+            _event(conn, ref, "posted" if on else "unposted", at, platform, actor)
 
-    def set_verdict(self, ref: str, verdict: PostVerdict) -> None:
+    def set_verdict(self, ref: str, verdict: PostVerdict, actor: str | None = None) -> None:
         with self.db.begin() as conn:
             conn.execute(content_items.update().where(content_items.c.id == ref).values(
                 verdict_kind=verdict.kind, verdict_at=verdict.at,
                 verdict_reason=verdict.reason.value if verdict.reason else None))  # fmt: skip
-            _event(conn, ref, verdict.kind, verdict.at)
+            _event(conn, ref, verdict.kind, verdict.at, actor=actor)
 
-    def set_reason(self, ref: str, reason: RejectReason) -> bool:
+    def set_reason(self, ref: str, reason: RejectReason, actor: str | None = None) -> bool:
         with self.db.begin() as conn:
             row = conn.execute(content_items.update()
                                .where(content_items.c.id == ref,
@@ -206,13 +215,14 @@ class SqlPostingRepo:
                                .values(verdict_reason=reason.value)
                                .returning(content_items.c.verdict_at)).first()  # fmt: skip
             if row is not None:
-                _event(conn, ref, "reason", row.verdict_at, reason=reason.value)
+                _event(conn, ref, "reason", row.verdict_at, actor=actor, reason=reason.value)
         return row is not None
 
     def paused(self, account_id: str) -> bool:
         return AccountsRepo(self.db).paused(account_id)
 
-    def set_paused(self, account_id: str, on: bool, at: datetime) -> None:
+    def set_paused(self, account_id: str, on: bool, at: datetime, actor: str | None = None) -> None:
+        # posting_state has no actor column (0001 is frozen): actions.pause logs the actor
         AccountsRepo(self.db).set_paused(account_id, on, at)
 
     # ---- one-off import (Task 20)

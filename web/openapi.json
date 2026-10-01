@@ -269,6 +269,18 @@
             "title": "Held",
             "type": "integer"
           },
+          "last_sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sent At"
+          },
           "next_slot": {
             "anyOf": [
               {
@@ -290,10 +302,33 @@
             "title": "Per Day",
             "type": "integer"
           },
+          "posted_total": {
+            "default": 0,
+            "title": "Posted Total",
+            "type": "integer"
+          },
+          "state": {
+            "default": "off",
+            "enum": [
+              "off",
+              "problem",
+              "paused",
+              "waiting",
+              "on",
+              "outage"
+            ],
+            "title": "State",
+            "type": "string"
+          },
           "timezone": {
             "default": "UTC",
             "title": "Timezone",
             "type": "string"
+          },
+          "unanswered": {
+            "default": 0,
+            "title": "Unanswered",
+            "type": "integer"
           },
           "waiting": {
             "default": 0,
@@ -1119,12 +1154,28 @@
             ],
             "title": "Next Slot"
           },
+          "outage_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outage Since"
+          },
           "paused": {
             "title": "Paused",
             "type": "boolean"
           },
           "per_day": {
             "title": "Per Day",
+            "type": "integer"
+          },
+          "posted_total": {
+            "default": 0,
+            "title": "Posted Total",
             "type": "integer"
           },
           "problem": {
@@ -1137,6 +1188,19 @@
               }
             ],
             "title": "Problem"
+          },
+          "state": {
+            "default": "off",
+            "enum": [
+              "off",
+              "problem",
+              "paused",
+              "waiting",
+              "on",
+              "outage"
+            ],
+            "title": "State",
+            "type": "string"
           },
           "waiting": {
             "title": "Waiting",

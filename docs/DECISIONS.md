@@ -271,6 +271,19 @@ Decision:
 - `ContentItem` gains media kinds `carousel` and `image`.
 Consequences: Platform-compliant accounts that can take brand deals openly. Some "indistinguishable from real" growth tactics are deliberately off the table.
 
+## ADR-41: Moving to Postgres by writing to both stores, and posting per account
+Date: 2026-09-29 · Status: Accepted (S1; written into this file by card 002, 2026-09-30; completes ADR-26's switch; the Dict writes retire at S1 Task 23)
+Context: ADR-26 moves durable state to Neon and asks for a setting that points reads back at the Dict for rollback. The studio also needs several accounts posting on their own schedules (S1 kickoff, 2026-09-29).
+Decision:
+- A `PostingRepo` protocol with Dict, Sql and Dual implementations. `STATE_READS` (`dict` | `postgres`) picks the primary. Every successful write is repeated on the other store, best-effort, so a rollback flips reads onto a store that is still current. The Dict side serves account #1 only. A mirror failure is an ops alert (ADR-45).
+- `posting_daily` (ADR-46, was `posting_keepalive`) compares the two stores daily (`posting verify`). The Dict writes, `STATE_READS`, the `POSTING_*` settings and the Dict keep-alive are removed after at least 7 days of clean verifies.
+- Each account holds its posting schedule (chat, time zone, slots, hashtags). The `POSTING_*` settings are read only in `dict` mode and to seed account #1. Pausing is runtime state in `posting_state`, written only by `/pause` and `/go` (through `posting/actions.py`, ADR-44).
+- The tick computes the slot from a Dict copy of each schedule (`posting:schedule:<account>`, written only by the accounts service) and reads Postgres only when a slot is due, so Neon can scale to zero between slots.
+- "Posted everywhere" means every platform an item was queued on (its `posts` rows), so enabling a platform on an account never changes old clips.
+- In Postgres, one writer per column group replaces one writer per key (ADR-14). Claims stay on the Dict.
+- The `jobs` table is written best-effort by job create, `package_step` and the failure path, and backfilled from `metadata.json`. The job view and the overview read it first.
+Consequences: Two writes per posting action until Task 23, with drift visible in the daily verify. The Telegram buttons keep their format, so messages sent before the switch keep working. Spec: docs/superpowers/specs/2026-09-29-studio-s1-design.md.
+
 ## ADR-42: Versioned categories, blueprints and accounts in the database
 Date: 2026-09-30 · Status: Accepted (2026-09-30, the owner's review after card 003; built in S3c; supersedes ADR-35's "blueprints are files" part)
 Context: Each account type is very different, and the owner wants to improve every category and every account from the dashboard: edit the setup, keep notes, run experiments and see results. ADR-35 keeps blueprints as files (`blueprints/<name>.toml`), and S1 copies blueprint values into each account row and updates accounts in place, so there is no history, no way to tie a video to the setup that made it, and no dashboard editing. Spec: docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md.

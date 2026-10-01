@@ -171,3 +171,18 @@ def test_database_and_state_settings(tmp_path: Path) -> None:
     assert (settings.blueprints_dir / "realtalk-clips.toml").name == "realtalk-clips.toml"
     defaults = Settings(_env_file=None, jobs_root=tmp_path)  # type: ignore[call-arg]
     assert defaults.state_reads == "dict" and defaults.database_url is None
+
+
+def test_dashboard_url_is_optional_and_never_breaks_settings(tmp_path: Path) -> None:
+    def url(value: str | None) -> str | None:
+        return Settings(_env_file=None, jobs_root=tmp_path,  # type: ignore[call-arg]
+                        dashboard_url=value).dashboard_url  # fmt: skip
+
+    assert url(None) is None and url("") is None
+    assert url("https://dash.example/") == "https://dash.example"
+    assert url("javascript:alert(1)") is None and url("https://a b") is None
+    # security review minor 5: links and the login behind them never go over plain http,
+    # except to a local dashboard
+    assert url("http://dash.example") is None
+    assert url("http://localhost:3000") == "http://localhost:3000"
+    assert url("http://127.0.0.1:3000/") == "http://127.0.0.1:3000"

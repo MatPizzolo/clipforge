@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from clipforge.accounts.service import env_account
+from clipforge.accounts.service import env_account, publish_schedule
 from clipforge.bot import messages
 from clipforge.bot.context import BotContext
 from clipforge.bot.posting import (
@@ -25,10 +25,12 @@ from clipforge.bot.posting import (
     tick,
     video_caption,
 )
+from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database
 from clipforge.db.sources import SourcesRepo
 from clipforge.models import (
     LEGACY_PLATFORMS,
+    Account,
     CampaignRules,
     Platform,
     PostSend,
@@ -37,7 +39,7 @@ from clipforge.models import (
     Source,
     SourcePermission,
 )
-from clipforge.posting.backend import dict_posting
+from clipforge.posting.backend import build_posting, dict_posting
 from clipforge.posting.repo import DictPostingRepo
 from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
 from tests.bot.helpers import dict_ctx, two_account_ctx
@@ -324,6 +326,8 @@ def _both_live(ctx: BotContext) -> datetime:
         for a in posting.accounts()
     ]
     posting.accounts = lambda: accounts
+    for account in accounts:
+        publish_schedule(ctx.deps.store.kv, account)
     return datetime(2026, 9, 29, 8, 1, tzinfo=ZoneInfo("America/New_York"))
 
 
@@ -432,3 +436,102 @@ def test_save_failure_is_answered_not_raised(
         handle_callback(ctx, "cb", f"p:tt:{REF}", ALLOWED_USER, 100, T0)
     assert ctx.sender.answers[-1] == ("cb", messages.SAVE_FAILED)  # type: ignore[attr-defined]
     assert "down" in caplog.text
+
+
+def test_slot_guard_from_sends_when_the_claim_is_gone(ctx: BotContext) -> None:
+    # decision log #77/#108: a deploy that changes the claim key (or an expired claim) must not
+    # send the same slot twice; the recorded send's slot is the guard
+    assert tick(ctx, at(8)).startswith(f"{ACCOUNT}: sent ")
+    posting = ctx.deps.posting
+    assert posting is not None
+    posting.claims.release_slot(ACCOUNT, at(8, 0))
+    assert tick(ctx, at(8, 6)) == f"{ACCOUNT}: taken"
+    assert len(_sender(ctx).videos) == 1
+    assert tick(ctx, at(12)).startswith(f"{ACCOUNT}: sent ")  # the next slot still sends
+
+
+class _NoDatabase:
+    def __getattr__(self, name: str) -> object:
+        raise AssertionError(f"the database was read: {name}")
+
+
+def _no_accounts() -> list[Account]:
+    raise AssertionError("the database was read: accounts")
+
+
+def test_tick_without_a_due_slot_never_reads_the_database(tmp_path: Path, db: Database) -> None:
+    # card 002 A3: schedules come from the Dict copies, so Neon can scale to zero between slots
+    ctx = two_account_ctx(tmp_path, db)
+    posting = ctx.deps.posting
+    assert posting is not None
+    posting.repo = _NoDatabase()  # type: ignore[assignment]
+    posting.accounts = _no_accounts
+    noon = datetime(2026, 9, 29, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+    assert tick(ctx, noon) == "founder-tapes-en: no slot; realtalk-clips-en: no slot"
+
+
+def test_postgres_mode_hashtags_come_from_the_account(tmp_path: Path, db: Database) -> None:
+    ctx = two_account_ctx(tmp_path, db)
+    realtalk = AccountsRepo(db).get("realtalk-clips-en")
+    assert realtalk is not None
+    AccountsRepo(db).update(realtalk.model_copy(update={"posting": realtalk.posting.model_copy(
+        update={"hashtags": ["fromaccount"]})}), T0)  # fmt: skip
+    env = make_settings(tmp_path, state_reads="postgres", posting_chat_id=ALLOWED_USER,
+                        posting_slots=["08:00"], posting_hashtags="fromenv")  # fmt: skip
+    ctx.deps.posting = build_posting(env, ctx.deps.store.kv, db)
+    result = tick(ctx, datetime(2026, 9, 29, 8, 1, tzinfo=ZoneInfo("America/New_York")))
+    assert "realtalk-clips-en: sent" in result
+    [(_, text, _)] = _sender(ctx).messages
+    assert "#fromaccount" in text and "#fromenv" not in text
+
+
+def _with_ops(ctx: BotContext) -> FakeSender:
+    from clipforge.ops import OpsAlerts
+
+    alerts = FakeSender()
+    ctx.deps.ops = OpsAlerts(ctx.deps.store.kv, alerts, ALLOWED_USER, "America/New_York")
+    return alerts
+
+
+def test_tick_alerts_on_an_account_error_and_on_missing_schedule_copies(
+    tmp_path: Path, db: Database
+) -> None:
+    # card 002 A6 (ADR-45), and the coordinator's A3 note: a missing copy can't silently stop
+    ctx = two_account_ctx(tmp_path, db)
+    alerts = _with_ops(ctx)
+    posting = ctx.deps.posting
+    assert posting is not None
+    posting.repo.paused = lambda account_id: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        RuntimeError("SSL connection has been closed unexpectedly"))  # fmt: skip
+    at_8 = datetime(2026, 9, 29, 8, 1, tzinfo=ZoneInfo("America/New_York"))
+    assert "realtalk-clips-en: error" in tick(ctx, at_8)
+    assert any("Posting tick for realtalk-clips-en failed" in t for _, t, _ in alerts.messages)
+    for key in [k for k in ctx.deps.store.kv.keys() if k.startswith("posting:schedule:")]:  # noqa: SIM118
+        ctx.deps.store.kv.delete(key)
+    assert tick(ctx, at_8) == "off"
+    assert any("no schedule copies" in t for _, t, _ in alerts.messages)
+
+
+def test_tick_alerts_when_postgres_mode_has_no_database(tmp_path: Path) -> None:
+    deps = Harness.build(tmp_path).deps
+    settings = make_settings(tmp_path, state_reads="postgres")
+    deps.posting = build_posting(settings, deps.store.kv, None)
+    ctx = BotContext(settings, FakeSender(), deps)
+    alerts = _with_ops(ctx)
+    assert tick(ctx, at(12)).startswith("off: DATABASE_URL")
+    assert alerts.messages[-1][1] == "⚠️ Posting is off: DATABASE_URL is not configured"
+
+
+def test_the_tick_sends_nothing_during_an_outage_and_go_clears_it(ctx: BotContext) -> None:
+    # coordinator's G review: the outage flag stops the slots until the owner restores or /go
+    from clipforge.bot.webhook import handle_update
+    from clipforge.posting.keepalive import OUTAGE_KEY, outage_since
+    from tests.bot.fakes import update
+
+    ctx.deps.store.kv.put(OUTAGE_KEY, "2026-09-25")
+    assert tick(ctx, at(8)) == "outage since 2026-09-25: restore, check /status, then /go"
+    assert _sender(ctx).videos == []
+    handle_update(update(1, text="/go", user_id=ALLOWED_USER), ctx)
+    assert outage_since(ctx.deps.store.kv) is None
+    assert "outage" in _sender(ctx).messages[-1][1].lower()
+    assert tick(ctx, at(8)).startswith(f"{ACCOUNT}: sent ")

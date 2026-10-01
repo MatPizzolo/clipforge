@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
+from clipforge.db.engine import is_db_error
 from clipforge.jobs import DictJobStore, JobContext, load_ref, merged_cost, utcnow
 from clipforge.models import (
     ClipSpec,
@@ -48,6 +49,7 @@ from clipforge.sanitize import clean, redact
 
 if TYPE_CHECKING:
     from clipforge.db.jobs import JobsRepo
+    from clipforge.ops import OpsAlerts
     from clipforge.posting.backend import Posting
 
 log = logging.getLogger(__name__)
@@ -101,6 +103,7 @@ class Deps:
     jobs_db: JobsRepo | None = None
     version: str = "clips:unknown"  # producer version on new items (ADR-43), not the git SHA
     build: str | None = None  # the deploy's git SHA, kept on job rows
+    ops: OpsAlerts | None = None  # silent failures to the owner's chat (ADR-45)
 
     def notifier(self, job: Job) -> Notifier:
         """Never raises: a broken notifier must not fail or retry a step (ADR-14)."""
@@ -232,6 +235,16 @@ def fail_job(deps: Deps, job_id: str, stage: StageName, error_type: str, message
         record_job_with_costs(deps, job)
     if first:
         deps.notifier(job).failed(job)
+        if job.input.notify is None and deps.ops is not None:
+            # channel and CLI jobs have no Telegram notifier: without this the failure is silent
+            recorded = job.error
+            where = recorded.stage if recorded else stage
+            what = recorded.message if recorded else sanitize(message)
+            # the `failed` claim makes this once per failure; the subject carries the failure's
+            # time so a resumed job that fails again within the hour still alerts
+            subject = f"{job_id}@{job.updated_at:%H%M%S%f}"
+            deps.ops.alert(f"Job {job_id} failed at {where}: {what}\n/resume {job_id}",
+                           "job_failed", subject, path=f"/jobs/{job_id}")  # fmt: skip
     return first
 
 
@@ -281,7 +294,10 @@ def _guarded(
             raise
         log.exception("%s step failed for %s after %d attempts", step, job_id, attempt)
         name = type(exc).__name__
-        _handle_failure(deps, step, job_id, name, f"{name}: {exc}", clip_id)
+        # clean() keeps hosts and user names, which a driver error carries: redact those
+        # (the job error is shown by the API, the bot and the ops alert)
+        message = redact(exc) if is_db_error(exc) else f"{name}: {exc}"
+        _handle_failure(deps, step, job_id, name, message, clip_id)
 
 
 def _handle_failure(
@@ -448,8 +464,12 @@ def _enqueue_posts(deps: Deps, job: Job, rendered: list[RenderedClip]) -> None:
         clips = [ClipFacts.from_rendered(r) for r in rendered]
         added = enqueue_job(deps.posting, job, clips, utcnow(), deps.version)
         log.info("queued %d clip(s) of %s for posting", added, job.job_id)
-    except Exception:
+    except Exception as exc:
         log.exception("queueing %s for posting failed", job.job_id)
+        if deps.ops is not None:
+            deps.ops.alert(f"Queueing {job.job_id} for posting failed: {redact(exc)}. "
+                           "Fix it, then POST /posting/rebuild.", "enqueue", job.job_id,
+                           path=f"/jobs/{job.job_id}")  # fmt: skip
 
 
 def dispatch(deps: Deps, step: str, job_id: str, clip_id: str | None = None) -> None:

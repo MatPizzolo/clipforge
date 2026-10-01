@@ -28,9 +28,11 @@ from clipforge.models import (
     SourceMedia,
     Transcript,
 )
+from clipforge.ops import ops_alerts
 from clipforge.pipeline.deps import KV, Notifier, NullNotifier, Spawner, StageRunner, Volume
 from clipforge.pipeline.steps import Deps, Step
 from clipforge.posting.backend import build_posting
+from clipforge.posting.repo import DualPostingRepo
 from clipforge.stages.runner import producer_version
 
 
@@ -147,6 +149,12 @@ def build_deps(
 ) -> Deps:
     store = DictJobStore(kv)
     root = settings.jobs_root
+    ops = ops_alerts(kv, sender, settings)
+    posting = build_posting(settings, kv, db)
+    if ops is not None and isinstance(posting.repo, DualPostingRepo):
+        posting.repo.on_failure = lambda action, error: ops.alert(
+            f"Posting mirror write ({action}) failed: {error}. `clipforge posting verify` "
+            "shows the drift.", "mirror", action)  # fmt: skip
     return Deps(
         store=store,
         volume=volume,
@@ -154,8 +162,9 @@ def build_deps(
         stages=stages,
         root=root,
         notifier_for=notifier_factory(settings, store, root, sender),
-        posting=build_posting(settings, kv, db),
+        posting=posting,
         jobs_db=JobsRepo(db) if db is not None else None,
         version=producer_version(settings),
         build=settings.git_sha or None,
+        ops=ops,
     )
