@@ -1,6 +1,7 @@
 ---
-description: Run the highlight eval and compare against the last result
-argument-hint: [prompt_version] [model]
+name: run-eval
+description: Run the highlight eval and compare against the last result. Use when a card or the owner asks to evaluate a prompt or model change for highlights.
+argument-hint: "[prompt_version] [model]"
 ---
 
 1. Run `uv run clipforge eval --set evals/v1 $ARGUMENTS`.

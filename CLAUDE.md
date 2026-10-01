@@ -23,6 +23,9 @@ ClipForge is a pipeline that turns long videos into 9:16 short clips and writes 
 ## Commands
 
 ```bash
+scripts/check.sh                         # the single gate: python, contract, web, docs, scope (--python/--web/--docs/--scope, --e2e)
+scripts/worktree.sh <branch>             # owner: a card's worktree in ../clipForge-<stream> (--remove <branch> after the merge)
+scripts/deploy.sh --dry-run              # owner: the only deploy path (main, clean, CI green, outside the blackout)
 uv sync                                  # install
 uv run pytest -q                         # all tests
 uv run pytest -q -m "not gpu and not slow"   # fast tests (run these before every commit)
@@ -31,7 +34,7 @@ uv run mypy src
 uv run modal run src/clipforge/app.py::doctor   # local ffmpeg + Modal GPU environment check
 uv run modal serve src/clipforge/app.py          # dev: hot-reload web endpoints on Modal
 uv run modal run src/clipforge/app.py::smoke    # one real job on Modal (~$0.01)
-uv run modal deploy src/clipforge/app.py         # deploy the app
+scripts/deploy.sh --reason "<why>"               # deploy the app (owner only; never a bare `modal deploy`)
 uv run clipforge run --input <url>               # submit a job to the deployed API
 uv run clipforge clip [videos/<channel>/<file>] [--fetch]   # videos/ inbox → jobs (ADR-22); --fetch downloads the clips
 uv run clipforge status [<id>] [--rebuild|--restore [DATE]] / resume <id>     # read or continue a job; no id: the posting overview
@@ -87,6 +90,17 @@ evals/              # eval sets and results
 - Unit-test stages with tiny fixtures in `tests/fixtures/` (a 10-second clip, a short transcript JSON).
 - Mark GPU tests `@pytest.mark.gpu` and network/LLM tests `@pytest.mark.slow`; mock the Anthropic client in fast tests.
 - For ffmpeg changes, assert on output properties (duration, resolution 1080x1920, stream count) with ffprobe, not on bytes.
+
+## Sessions
+
+- Work only from a card: `Run card docs/cards/NNN-….md`. The card's branch, scope, log range and cost cap bind the session; `scripts/scopes.toml` lists every prefix's paths.
+- Run `scripts/check.sh` before every checkpoint, until it's green. Paste its summary into the report.
+- Write the report in `docs/reports/NNN-<stream>-<YYYY-MM-DD>.md` (`docs/templates/handoff-report.md`), then stop with a suggested commit message.
+- Never commit, push, tag, deploy or stop the Modal app: the owner does, from the commands you give.
+- Stay in scope. `docs/studio/10-decision-log.md` is append-only, in your range. Anything else is a question for the owner.
+- Skills: `run-card` starts a card; `checkpoint` closes each checkpoint (it uses `write-report` and `log-append`). The coordinator uses `write-card` and `review-pr`.
+- Agents: `pr-reviewer` before every merge; add `security-reviewer`, `migration-reviewer` or `pipeline-reviewer` for their areas; `docs-auditor` at each pause.
+- Guardrails (`.claude/settings.json`) enforce this: hooks block git writes, deploys, app stops, secret changes and printing secrets; they deny out-of-scope edits and overwriting the decision log; they restore the card context at start, resume and after compaction; and they ask for `scripts/check.sh` before a session stops with unchecked changes. Per-user overrides go in the gitignored `.claude/settings.local.json`.
 
 ## Working style
 

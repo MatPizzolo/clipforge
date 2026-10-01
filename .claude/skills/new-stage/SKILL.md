@@ -1,5 +1,6 @@
 ---
-description: Scaffold a new pipeline stage following the stage conventions
+name: new-stage
+description: Scaffold a new pipeline stage following the stage conventions (CLAUDE.md rules 1–7). Use when a card asks for a new stage in src/clipforge/stages/.
 argument-hint: <stage_name> <one-line purpose>
 ---
 

@@ -12,11 +12,12 @@ Where each key lives. Values are typed by the owner only; sessions never read or
 | `TELEGRAM_WEBHOOK_SECRET` | ✅ | ✅ | | | | |
 | `TELEGRAM_ALLOWED_USER_IDS` | ✅ | ✅ | | | | |
 | `DOWNLOAD_SIGNING_KEY` | ✅ | ✅ | | | | |
-| `POSTING_CHAT_ID`, `POSTING_TIMEZONE`, `POSTING_SLOTS`, `POSTING_HASHTAGS` | ✅ | ❌ not in `.env` | | | | only in the Modal secret: so the secret can't be rebuilt from `.env` (use the dashboard edit) |
+| `POSTING_TIMEZONE`, `POSTING_SLOTS` | ✅ | ✅ **required**, identical to the secret | | | | `scripts/deploy.sh` computes the blackout from `.env` and refuses when either is missing (it never uses config.py's defaults). Change both places together |
+| `POSTING_CHAT_ID`, `POSTING_HASHTAGS` | ✅ | ❌ not in `.env` | | | | only in the Modal secret: so the secret can't be rebuilt from `.env` (use the dashboard edit) |
 | `DATABASE_URL` | ❌ until rollout step 4c.2 (#107) | ✅ | | | | pooled Neon URL |
 | `DATABASE_URL_UNPOOLED` | | ✅ | | | later, for `ci.yml`'s migration step | direct Neon URL, for migrations |
 | `NEON_BRANCH` | | ✅ | | | | written by `neon link` |
-| `STATE_READS` | add at rollout 4c.1 (`dict`), flip at 4c.7 | optional | | | | default `dict` |
+| `STATE_READS` | add now (`dict`), flip at 4c.7 | ✅ **required**, identical to the secret | | | | `scripts/deploy.sh` refuses when it's missing from `.env`, and when it isn't `dict` without `--rollout-step 4c.7`. Change both places together |
 | `YOUTUBE_PROXY_URL` | | ✅ | | | | unused (ADR-17 deferred); its password was pasted in chat once: rotate or delete it |
 | `AUTH_SECRET` | | | ✅ | preview, production (different values) | | Auth.js |
 | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | | | ✅ (the local OAuth app) | production (the production OAuth app) | | |

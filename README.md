@@ -143,6 +143,7 @@ One question, one home:
 | Which accounts exist? | [docs/studio/09-account-registry.md](docs/studio/09-account-registry.md) |
 | Which secret lives where? | [docs/ops/secrets.md](docs/ops/secrets.md) (names only) · deploys: [docs/ops/deploys.md](docs/ops/deploys.md) |
 | How should Claude Code work here? | [CLAUDE.md](CLAUDE.md) |
+| What must pass, what may a branch touch, how do I deploy? | [scripts/check.sh](scripts/check.sh), [scripts/scopes.toml](scripts/scopes.toml), [scripts/worktree.sh](scripts/worktree.sh), [scripts/deploy.sh](scripts/deploy.sh) |
 | Designs and task plans | [docs/superpowers/](docs/superpowers/README.md) (active vs historical) |
 | Studio plan (vision, architecture target, tools, portfolio, dashboard) | [docs/studio/](docs/studio/README.md) |
 | Clip quality, content permissions, prompts | [docs/EVALS.md](docs/EVALS.md), [docs/SOURCING.md](docs/SOURCING.md), [prompts/](prompts/) |

@@ -19,10 +19,19 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run mypy src
-      - run: uv run pytest -q -m "not gpu and not slow"
+      # The single gate (decision log #380): ruff, format, mypy, fast tests, OpenAPI contract, docs
+      - run: scripts/check.sh --python --docs
+
+  scope:
+    # Files outside the branch's scope, and decision-log rows outside its range (scripts/scopes.toml)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scope check
+        run: python3 scripts/check_scope.py --base "origin/${{ github.base_ref }}"
 
   deploy:
     # ADR-16: merged to main means live. Never runs on pull requests.
