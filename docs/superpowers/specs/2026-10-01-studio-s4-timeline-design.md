@@ -103,7 +103,7 @@ Validators:
 
 `render.run(ctx, timeline, settings, clip_id=None) -> Stored[RenderedVideo]`
 
-**Cache (ADR-8).** The key is `cache_key("render", "4", [], {"timeline": <canonical JSON of the Timeline without `assets`>})`. `assets` stays on the Timeline for the policy gate (ADR-29) but is left out of the key: licensing doesn't change the output, and a permission edit (S1 rollout, `clipforge source edit`) must not re-render every clip (owner, 2026-10-01). The Timeline has no ids, so a cached render is shared across jobs and ranks, as today. `media_hash` makes source content part of the key: clips set it to `source_hash`, and generated assets live in key-addressed cache directories. `timeline.json` is written next to `clip.mp4` for debugging.
+**Cache (ADR-8).** The key is `cache_key("render", "4", [], {"timeline": <canonical JSON of the Timeline without `assets`>})`. `assets` stays on the Timeline for the policy gate (ADR-29) but is left out of the key: licensing doesn't change the output, and a permission edit (S1 rollout, `clipforge source edit`) must not re-render every clip (owner, 2026-10-01). The Timeline has no ids, so a cached render is shared across jobs and ranks, as today. The key also leaves out a media `path` wherever `media_hash` is set, and the overlay's `srt_path`: neither changes the output, and a clip's path holds the ingest key, which follows the URL, not the bytes (review at CP2, the plan's Task 5). `media_hash` makes source content part of the key: clips set it to `source_hash`, and generated assets live in key-addressed cache directories. `timeline.json` is written next to `clip.mp4` for debugging.
 
 **Inputs.**
 - Each distinct video or audio file is one input: `-ss <min in_s> -t <span> -i <path>`, seeked accurately as today.
@@ -143,7 +143,7 @@ Validators:
 
 ## 5. Clips onto the Timeline (`stages/timeline.py`, pure)
 
-`for_clip(spec, track, captions) -> Timeline`:
+`for_clip(spec, track, captions, permission, credit=None) -> Timeline` (the permission and credit fill `assets`):
 - `CropTrack` `center` gives one `VideoSegment(kind="source", fit="crop", box)` over `[0, duration]` with `in_s = spec.start`.
 - `blur_fallback` gives one `fit="blur"` segment.
 - `tracked` gives one segment per `CropSegment`, with `in_s = spec.start + seg.start`.

@@ -17,13 +17,13 @@ from clipforge.jobs import JobContext, Stored, cached_stage
 from clipforge.models import (
     CaptionFiles,
     ClipSpec,
-    CropBox,
     CropTrack,
     RenderedClip,
     StageCost,
     StageName,
 )
 from clipforge.pipeline.errors import PermanentError
+from clipforge.stages.render_graph import _blur, _crop
 
 log = logging.getLogger(__name__)
 
@@ -51,22 +51,6 @@ def bitrate_for(spec: ClipSpec) -> int:
     what "480p/720p" means: a vertical 720x1280 phone video is 720p (review, ADR-20)."""
     short_side = min(spec.source.width, spec.source.height)
     return video_bitrate(spec.duration_s, short_side)
-
-
-def _crop(box: CropBox, w: int, h: int) -> str:
-    return f"crop={box.w}:{box.h}:{box.x}:{box.y},scale={w}:{h}:flags=lanczos,setsar=1"
-
-
-def _blur(src: str, dst: str, w: int, h: int, tag: str) -> str:
-    """Fit `src` inside a blurred, zoomed copy of itself (blurred small: much cheaper)."""
-    bw, bh = w // 4, h // 4
-    return (
-        f"[{src}]split=2[{tag}bg][{tag}fg];"
-        f"[{tag}bg]scale={bw}:{bh}:force_original_aspect_ratio=increase,crop={bw}:{bh},"
-        f"boxblur=10:1,scale={w}:{h}[{tag}bgb];"
-        f"[{tag}fg]scale={w}:{h}:force_original_aspect_ratio=decrease[{tag}fgs];"
-        f"[{tag}bgb][{tag}fgs]overlay=(W-w)/2:(H-h)/2,setsar=1[{dst}]"
-    )
 
 
 def filter_graph(track: CropTrack, ass: Path, fonts_dir: Path) -> str:
