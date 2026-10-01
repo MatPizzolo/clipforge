@@ -8,16 +8,18 @@ Guidance for Claude Code in this repository. Read this first, then the relevant 
 
 ## Project summary
 
-ClipForge is a pipeline that turns long videos into 9:16 short clips and writes them to an output folder. Interfaces (Telegram bot, web app) are thin clients over one job API. Everything runs serverless on Modal (ADR-9): the API, the Telegram webhook and each pipeline step. Nothing runs locally except development.
+ClipForge turns long videos into 9:16 short clips and helps post them. Today: one clip producer, a Telegram posting assistant, and a dashboard shell (`web/`). It is growing into a multi-account studio (docs/studio/, Phase 6) where every producer ends in a `ContentItem` (ADR-25) and one Timeline renderer serves them all (ADR-31). Interfaces (Telegram bot, CLI, dashboard) are thin clients over one job API (ADR-2). Everything runs serverless on Modal (ADR-9): the API, the Telegram webhook, each pipeline step and the crons. Durable state is moving from the Modal Dict to Neon Postgres (ADR-26, S1). Nothing runs locally except development.
 
 ## Stack
 
 - Python 3.12, managed with `uv` (never use pip directly)
-- Modal for GPU functions, web endpoints, Volumes and Dicts
-- faster-whisper / WhisperX for transcription
-- Anthropic API (`claude-haiku-4-5` default) for highlight selection and post copy
-- ffmpeg + libass for rendering; PySceneDetect + MediaPipe for reframing
+- Modal for GPU functions, web endpoints, crons, Volumes and Dicts
+- faster-whisper `large-v3-turbo` on an L4 for transcription (ADR-11)
+- Anthropic API (`claude-haiku-4-5` default) for highlight selection and caption key words
+- ffmpeg + libass for rendering; ffmpeg scene scores + OpenCV's YuNet face detector for reframing (ADR-19, ADR-21)
 - FastAPI for the job API (Modal `@asgi_app`), python-telegram-bot for the bot in webhook mode (no polling `Application`)
+- Neon Postgres through SQLAlchemy 2 + psycopg 3, migrations with Alembic (ADR-26)
+- Next.js on Vercel for the dashboard (`web/`, ADR-38)
 - pydantic v2 for every data contract
 
 ## Commands
@@ -28,7 +30,7 @@ scripts/worktree.sh <branch>             # owner: a card's worktree in ../clipFo
 scripts/deploy.sh --dry-run              # owner: the only deploy path (main, clean, CI green, outside the blackout)
 uv sync                                  # install
 uv run pytest -q                         # all tests
-uv run pytest -q -m "not gpu and not slow"   # fast tests (run these before every commit)
+uv run pytest -q -m "not gpu and not slow"   # fast tests (scripts/check.sh runs them)
 uv run ruff check . && uv run ruff format .
 uv run mypy src
 uv run modal run src/clipforge/app.py::doctor   # local ffmpeg + Modal GPU environment check
@@ -125,6 +127,6 @@ docs/               # architecture, ADRs, studio plan, cards, reports, templates
 ## Working style
 
 - Before a non-trivial change, state a short plan and which files you'll touch.
-- Keep PRs to one roadmap item. Tick the checkbox in ROADMAP.md when done (for Phase 6, in docs/studio/04-roadmap.md too).
+- Keep each PR to one card. Tick the checkbox in ROADMAP.md when an item lands (for Phase 6, in docs/studio/04-roadmap.md too).
 - If you make an architectural choice, add an ADR to docs/DECISIONS.md.
 - Prefer boring, explicit code over clever abstractions. Type hints everywhere.

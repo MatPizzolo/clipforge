@@ -92,7 +92,7 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 
 ### 3.1 Read first (new coordinator), in order
 
-1. `STATUS.md`: where every workstream stands, the addendum tracker, the owner's open steps, and the next cards.
+1. `STATUS.md`: what's running now (production, open PRs), what waits on the owner, the next cards, every workstream, and the open follow-ups.
 2. `docs/cards/README.md` and the cards it lists; `docs/templates/` (card, report, stop card, checkpoint).
 3. `CLAUDE.md` (project rules 1–9), `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (accepted ADRs are binding; ADR-41 to ADR-46 accepted on 2026-09-30).
 4. `docs/studio/10-decision-log.md` (every owner decision and the Open table), `docs/studio/04-roadmap.md` (the Phase 6 source of truth), `docs/studio/08-dashboard-and-operations.md` §2 and §2b, `docs/studio/09-account-registry.md`, `docs/ops/secrets.md`.
