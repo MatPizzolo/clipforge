@@ -13,6 +13,7 @@ from clipforge.db.engine import Database
 from clipforge.db.jobs import JobsRepo
 from clipforge.ops import OpsAlerts
 from clipforge.posting.daily import run_daily, snapshot_tables
+from clipforge.posting.keepalive import clear_outage, outage_since
 from tests.bot.fakes import ALLOWED_USER, FakeSender
 from tests.bot.helpers import two_account_ctx
 from tests.pipeline.harness import Harness
@@ -98,8 +99,9 @@ def test_the_daily_run_gets_a_longer_statement_timeout_and_one_snapshot_view(
 
 
 def test_rebuild_waits_for_a_restore_after_a_long_outage(tmp_path: Path) -> None:
-    # PR review 3: after days without posting_daily, expired posted/verdict keys would make a
-    # rebuild re-queue clips already posted or rejected; restore first (runbook), then rebuild
+    # PR review 3, made sticky by the coordinator's G review: after days without
+    # posting_daily, expired posted/verdict keys would make a rebuild re-queue clips already
+    # posted or rejected. The flag holds rebuild (and the tick) until /go or a restore.
     harness = Harness.build(tmp_path)
     run_channel_job(harness)
     alerts = FakeSender()
@@ -108,8 +110,12 @@ def test_rebuild_waits_for_a_restore_after_a_long_outage(tmp_path: Path) -> None
     folder.mkdir(parents=True)
     (folder / "2026-09-25.json").write_text("{}")  # the last run was 5 days ago
     lines = run_daily(harness.deps, None, "realtalk-clips-en", NOON)
-    assert "rebuild: skipped (no posting snapshot since 2026-09-25)" in lines
+    assert "rebuild: skipped (outage: no posting snapshot since 2026-09-25)" in lines
+    assert outage_since(harness.store.kv) == "2026-09-25"
     assert any("restore" in t for _, t, _ in alerts.messages)
-    # today's run wrote a fresh snapshot, so tomorrow's rebuild runs again
+    # today's snapshot closes the gap, but the flag still holds tomorrow's rebuild
     lines = run_daily(harness.deps, None, "realtalk-clips-en", NOON + timedelta(days=1))
+    assert "rebuild: skipped (outage: no posting snapshot since 2026-09-25)" in lines
+    clear_outage(harness.store.kv)  # what /go and POST /posting/restore do
+    lines = run_daily(harness.deps, None, "realtalk-clips-en", NOON + timedelta(days=2))
     assert "rebuild: 0 clips queued" in lines

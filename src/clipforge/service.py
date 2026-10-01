@@ -230,7 +230,9 @@ def rebuild_posting(deps: Deps, now: datetime) -> int:
 def restore_posting(deps: Deps, day: date | None = None) -> int:
     """Put back posting keys that expired from the Dict, from the Volume snapshot of `day`
     (default: the newest)."""
-    return keepalive.restore(deps.store.kv, deps.root, day)
+    restored = keepalive.restore(deps.store.kv, deps.root, day)
+    keepalive.clear_outage(deps.store.kv)  # the owner restored: posting can resume
+    return restored
 
 
 _EPISODE_RANK = {JobStatus.DONE: 2, JobStatus.RUNNING: 1, JobStatus.QUEUED: 1, JobStatus.FAILED: 0}
@@ -324,15 +326,18 @@ def posting_overview(deps: Deps, settings: Settings, now: datetime) -> PostingOv
         settings.posting_problem if settings.state_reads == "dict" else None
     )
     posted_total = sum(v.posted_total for v in views)
+    outage = keepalive.outage_since(deps.store.kv)
     if top is None:
         return PostingOverview(
             enabled=False, paused=False, channels=[], waiting=0, days_left=0, per_day=0,
             next_slot=None, problem=problem, accounts=views,
             state="problem" if problem else "off", posted_total=posted_total,
+            outage_since=outage,
         )  # fmt: skip
     return PostingOverview(
         enabled=top.enabled, paused=top.paused, channels=top.channels, waiting=top.waiting,
         days_left=top.days_left, per_day=top.per_day, next_slot=top.next_slot,
-        problem=problem, accounts=views, state="problem" if problem else top.state,
-        posted_total=posted_total,
+        problem=problem, accounts=views,
+        state="problem" if problem else "outage" if outage else top.state,
+        posted_total=posted_total, outage_since=outage,
     )  # fmt: skip

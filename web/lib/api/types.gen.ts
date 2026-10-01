@@ -167,7 +167,7 @@ export type AccountPosting = {
     /**
      * State
      */
-    state?: 'off' | 'problem' | 'paused' | 'waiting' | 'on';
+    state?: 'off' | 'problem' | 'paused' | 'waiting' | 'on' | 'outage';
     /**
      * Timezone
      */
@@ -617,6 +617,10 @@ export type PostingOverview = {
      */
     next_slot: string | null;
     /**
+     * Outage Since
+     */
+    outage_since?: string | null;
+    /**
      * Paused
      */
     paused: boolean;
@@ -635,7 +639,7 @@ export type PostingOverview = {
     /**
      * State
      */
-    state?: 'off' | 'problem' | 'paused' | 'waiting' | 'on';
+    state?: 'off' | 'problem' | 'paused' | 'waiting' | 'on' | 'outage';
     /**
      * Waiting
      */

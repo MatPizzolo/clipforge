@@ -193,7 +193,8 @@ export const zAccountPosting = z.object({
         'problem',
         'paused',
         'waiting',
-        'on'
+        'on',
+        'outage'
     ]).optional().default('off'),
     timezone: z.string().optional().default('UTC'),
     unanswered: z.int().optional().default(0),
@@ -228,6 +229,7 @@ export const zPostingOverview = z.object({
     days_left: z.int(),
     enabled: z.boolean(),
     next_slot: z.iso.datetime({ offset: true, local: true }).nullable(),
+    outage_since: z.string().nullish(),
     paused: z.boolean(),
     per_day: z.int(),
     posted_total: z.int().optional().default(0),
@@ -237,7 +239,8 @@ export const zPostingOverview = z.object({
         'problem',
         'paused',
         'waiting',
-        'on'
+        'on',
+        'outage'
     ]).optional().default('off'),
     waiting: z.int()
 });

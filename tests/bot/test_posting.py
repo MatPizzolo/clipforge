@@ -520,3 +520,18 @@ def test_tick_alerts_when_postgres_mode_has_no_database(tmp_path: Path) -> None:
     alerts = _with_ops(ctx)
     assert tick(ctx, at(12)).startswith("off: DATABASE_URL")
     assert alerts.messages[-1][1] == "⚠️ Posting is off: DATABASE_URL is not configured"
+
+
+def test_the_tick_sends_nothing_during_an_outage_and_go_clears_it(ctx: BotContext) -> None:
+    # coordinator's G review: the outage flag stops the slots until the owner restores or /go
+    from clipforge.bot.webhook import handle_update
+    from clipforge.posting.keepalive import OUTAGE_KEY, outage_since
+    from tests.bot.fakes import update
+
+    ctx.deps.store.kv.put(OUTAGE_KEY, "2026-09-25")
+    assert tick(ctx, at(8)) == "outage since 2026-09-25: restore, check /status, then /go"
+    assert _sender(ctx).videos == []
+    handle_update(update(1, text="/go", user_id=ALLOWED_USER), ctx)
+    assert outage_since(ctx.deps.store.kv) is None
+    assert "outage" in _sender(ctx).messages[-1][1].lower()
+    assert tick(ctx, at(8)).startswith(f"{ACCOUNT}: sent ")

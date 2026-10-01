@@ -275,3 +275,20 @@ def test_a_row_without_cost_rows_takes_the_breakdown_from_metadata(
     view = get_job_view(harness.store, harness.root, job_id, harness.deps.jobs_db)
     assert view.cost.stages == stages
     assert all(c.stage is not StageName.PACKAGE for c in view.cost.stages)
+
+
+def test_restore_clears_the_outage_and_status_shows_it(harness: Harness) -> None:
+    from clipforge.bot.messages import posting_overview_text
+    from clipforge.posting.keepalive import OUTAGE_KEY, outage_since
+    from clipforge.service import restore_posting
+
+    channel_job(harness)
+    harness.store.kv.put(OUTAGE_KEY, "2026-09-25")
+    settings = make_settings(harness.root, posting_chat_id=ALLOWED_USER)
+    at = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
+    view = posting_overview(harness.deps, settings, at)
+    assert (view.state, view.outage_since) == ("outage", "2026-09-25")
+    assert "posting_daily didn't run since 2026-09-25" in posting_overview_text(view)
+    restore_posting(harness.deps)
+    assert outage_since(harness.store.kv) is None
+    assert posting_overview(harness.deps, settings, at).state == "on"

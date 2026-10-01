@@ -108,14 +108,16 @@ def run_daily(deps: Deps, db: Database | None, account_id: str, now: datetime) -
         part("verify", lambda: _verify(deps, db, account_id, now))
         part("jobs backfill", lambda: _backfill(deps, db))
         part("schedules", lambda: f"{sync_schedules(AccountsRepo(db), kv)} accounts")
-    outage = last is not None and (now.astimezone(UTC).date() - last).days > MAX_GAP_DAYS
-    if outage:
-        lines.append(f"rebuild: skipped (no posting snapshot since {last})")
+    if last is not None and (now.astimezone(UTC).date() - last).days > MAX_GAP_DAYS:
+        keepalive.set_outage(kv, last.isoformat())  # sticky until /go or a restore
+    since = keepalive.outage_since(kv)
+    if since is not None:
+        lines.append(f"rebuild: skipped (outage: no posting snapshot since {since})")
         if deps.ops is not None:
-            deps.ops.alert(f"posting_daily hadn't run since {last}: Dict keys may have expired, so "
-                           "today's rebuild was skipped. /pause, restore from that snapshot "
-                           "(clipforge status --restore), check /status, POST /posting/rebuild, "
-                           "then /go (runbook).", "daily", "outage", now=now)  # fmt: skip
+            deps.ops.alert(f"posting_daily hadn't run since {since}: Dict keys may have expired, "
+                           "so rebuild and the posting slots are stopped. Restore from that "
+                           f"snapshot (clipforge status --restore {since}), check /status, then "
+                           "/go.", "daily", "outage", now=now)  # fmt: skip
     else:
         part("rebuild", lambda: f"{rebuild_posting(deps, now)} clips queued")
     if db is not None:

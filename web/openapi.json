@@ -314,7 +314,8 @@
               "problem",
               "paused",
               "waiting",
-              "on"
+              "on",
+              "outage"
             ],
             "title": "State",
             "type": "string"
@@ -1153,6 +1154,17 @@
             ],
             "title": "Next Slot"
           },
+          "outage_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outage Since"
+          },
           "paused": {
             "title": "Paused",
             "type": "boolean"
@@ -1184,7 +1196,8 @@
               "problem",
               "paused",
               "waiting",
-              "on"
+              "on",
+              "outage"
             ],
             "title": "State",
             "type": "string"

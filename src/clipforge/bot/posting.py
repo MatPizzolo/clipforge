@@ -35,6 +35,7 @@ from clipforge.models import (
 )
 from clipforge.posting import captions
 from clipforge.posting.backend import Posting, posting_of
+from clipforge.posting.keepalive import outage_since
 from clipforge.posting.queue import PAUSE_AFTER, eligible, pick_next, status, unanswered
 from clipforge.posting.slots import current_slot
 from clipforge.sources import hold_reason
@@ -345,6 +346,9 @@ def tick(ctx: BotContext, now: datetime) -> str:
         if ops is not None:
             ops.alert(f"Posting is off: {posting.problem}", "posting", "problem", now=now)
         return f"off: {posting.problem}"
+    since = outage_since(ctx.deps.store.kv)
+    if since is not None:  # posting_daily found an outage: nothing goes out until /go or restore
+        return f"outage since {since}: restore, check /status, then /go"
     schedules = posting.all_schedules()
     if not schedules and posting.schedules is not None and ops is not None:
         # postgres mode with no schedule copy at all: nothing would ever send (A3, #203)

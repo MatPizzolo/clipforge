@@ -24,6 +24,7 @@ from clipforge.bot.posting import send_next as _send_next
 from clipforge.db.engine import is_db_error, redact
 from clipforge.models import Platform, PostVerdict, RejectReason
 from clipforge.posting.backend import Posting, posting_of
+from clipforge.posting.keepalive import clear_outage
 
 log = logging.getLogger(__name__)
 
@@ -125,17 +126,19 @@ def pause(ctx: BotContext, account_id: str | None, on: bool, actor: str, now: da
         # /pause sent while fixing the settings still holds once posting turns on (#96).
         if account_id is not None:
             return messages.unknown_account(account_id, [])
+        outage_note = _clear_outage(ctx, actor) if not on else ""
         try:
             posting.repo.set_paused(posting.default_account_id, on, now, actor)
         except Exception as exc:
             log.warning("posting: setting the pause flag failed: %s", redact(exc))
-            return messages.POSTING_OFF
+            return messages.POSTING_OFF + outage_note
         log.info("posting: %s %s by %s", posting.default_account_id,
                  "paused" if on else "resumed", actor)  # fmt: skip
-        return messages.PAUSED if on else messages.RESUMED
+        return (messages.PAUSED if on else messages.RESUMED) + outage_note
     targets = [a for a in accounts if account_id is None or a.id == account_id]
     if account_id is not None and not targets:
         return messages.unknown_account(account_id, [a.id for a in accounts])
+    outage_note = _clear_outage(ctx, actor) if not on else ""
     done = messages.PAUSED if on else messages.RESUMED
     replies = []
     for account in targets:
@@ -149,10 +152,18 @@ def pause(ctx: BotContext, account_id: str | None, on: bool, actor: str, now: da
             replies.append((account.id, str(exc)))
     if len(replies) == 1:
         reply = replies[0][1]
-        return reply if account_id is None else f"{account_id}: {reply}"
+        return (reply if account_id is None else f"{account_id}: {reply}") + outage_note
     if all(reply == done for _, reply in replies):
-        return done
-    return "\n".join(f"{name}: {reply}" for name, reply in replies)
+        return done + outage_note
+    return "\n".join(f"{name}: {reply}" for name, reply in replies) + outage_note
+
+
+def _clear_outage(ctx: BotContext, actor: str) -> str:
+    """`/go` is the owner's all-clear after an outage (decision log #217)."""
+    if not clear_outage(ctx.deps.store.kv):
+        return ""
+    log.info("posting: outage flag cleared by %s", actor)
+    return "\n" + messages.OUTAGE_CLEARED
 
 
 def send_next(ctx: BotContext, now: datetime, account_id: str | None = None) -> str:

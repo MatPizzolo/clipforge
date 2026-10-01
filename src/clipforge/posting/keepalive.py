@@ -17,12 +17,35 @@ from clipforge.posting.repo import PAUSED_KEY, PREFIX
 
 log = logging.getLogger(__name__)
 
+# Set by posting_daily when it finds it hadn't run for days (card 002 final review): expired
+# posted/verdict keys could make a rebuild or a send repeat clips. While set, rebuild is
+# skipped and the tick sends nothing; /go and POST /posting/restore clear it. Value: the date
+# of the last good snapshot. Writers: set_outage (daily), clear_outage (/go, restore).
+OUTAGE_KEY = "posting:outage"
+
 KEEP_PREFIXES = (PREFIX, "job:")
-KEEP_KEYS = (PAUSED_KEY,)
+KEEP_KEYS = (PAUSED_KEY, OUTAGE_KEY)
 
 
 def _snapshot_dir(root: Path) -> Path:
     return root / "posting" / "snapshots"
+
+
+def outage_since(kv: KV) -> str | None:
+    return kv.get(OUTAGE_KEY)
+
+
+def set_outage(kv: KV, since: str) -> bool:
+    """True when this call set it (the first day of the outage)."""
+    return kv.put(OUTAGE_KEY, since, skip_if_exists=True)
+
+
+def clear_outage(kv: KV) -> bool:
+    """True when a flag was cleared."""
+    if kv.get(OUTAGE_KEY) is None:
+        return False
+    kv.delete(OUTAGE_KEY)
+    return True
 
 
 def touch(kv: KV) -> int:

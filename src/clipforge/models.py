@@ -434,7 +434,8 @@ class SourceEvent(Contract):
 # What the dashboard shows for posting (card 002 A5): off = no posting chat; problem = posting
 # is misconfigured; paused = /pause; waiting = the pause rule (PAUSE_AFTER sent clips with no
 # tap) holds the slots; on = clips go out at the next slot.
-PostingState = Literal["off", "problem", "paused", "waiting", "on"]
+# outage = posting_daily found it hadn't run for days; nothing is sent until /go or a restore
+PostingState = Literal["off", "problem", "paused", "waiting", "on", "outage"]
 
 
 class AccountPosting(Contract):
@@ -505,6 +506,8 @@ class PostingOverview(Contract):
     # over every account
     state: PostingState = "off"
     posted_total: int = 0
+    # the outage flag's date (the last good snapshot); None = no outage (card 002 final review)
+    outage_since: str | None = None
 
 
 class JobSummary(Contract):
