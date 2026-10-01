@@ -111,3 +111,23 @@ allow = [
     # a card's scope lands in the same coord/ PR as the card (this file only, not scripts/**)
     "scripts/scopes.toml",
 ]
+
+# Card 007 (docs audit and refresh): Markdown only, across streams. Not the installed Neon skills
+# (pinned by skills-lock.json), not the released prompts (CLAUDE.md rule 4), not other cards' reports.
+[prefix."cleanup/"]
+stream = "cleanup"
+log = [400, 419]
+allow = [
+    "docs/**/*.md",
+    "*.md",
+    "web/*.md",
+    "tests/fixtures/README.md",
+    "videos/README.md",
+    ".claude/agents/*.md",
+    ".claude/skills/*/SKILL.md",
+]
+deny = [
+    ".claude/skills/neon*/**",
+    "prompts/**",
+    "docs/reports/**",  # its own report stays allowed (checked before deny)
+]

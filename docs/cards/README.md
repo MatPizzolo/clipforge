@@ -20,3 +20,4 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [004](004-s3a-deploy.md) | S3a local login and Vercel deploy | proposed | 001 merged, the owner's Vercel steps, merge after 002 |
 | [005](005-x2-resume.md) | X2 talking-head spike, resume | proposed | 001 merged, O7 ruled |
 | [006](006-s4-timeline.md) | S4 Timeline renderer | proposed | 002 merged |
+| [007](007-cleanup-docs.md) | Docs: audit and refresh every Markdown file to match main; propose removing unused files | proposed | 002 merged |
