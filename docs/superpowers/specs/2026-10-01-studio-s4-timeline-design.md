@@ -1,7 +1,7 @@
 # S4: Timeline renderer, design
 
-Date: 2026-10-01 · Card: [006](../../cards/006-s4-timeline.md) · Branch: `s4/timeline` · Status: **for the owner's review**
-Implements ADR-31 (accepted). Proposes ADR-47 (§6). Action card: docs/studio/06 §D "S4".
+Date: 2026-10-01 · Card: [006](../../cards/006-s4-timeline.md) · Branch: `s4/timeline` · Status: **approved 2026-10-01** (owner: `assets` out of the render key; ADR-47 two-pass everywhere)
+Implements ADR-31 (accepted). Proposes ADR-47 (§6; the owner chose two-pass everywhere, for the coordinator to write into DECISIONS.md). Action card: docs/studio/06 §D "S4".
 
 ## 1. Goal and success criteria
 
@@ -103,7 +103,7 @@ Validators:
 
 `render.run(ctx, timeline, settings, clip_id=None) -> Stored[RenderedVideo]`
 
-**Cache (ADR-8).** The key is `cache_key("render", "4", [], {"timeline": <canonical JSON>})`. The Timeline has no ids, so a cached render is shared across jobs and ranks, as today. `media_hash` makes source content part of the key: clips set it to `source_hash`, and generated assets live in key-addressed cache directories. `timeline.json` is written next to `clip.mp4` for debugging.
+**Cache (ADR-8).** The key is `cache_key("render", "4", [], {"timeline": <canonical JSON of the Timeline without `assets`>})`. `assets` stays on the Timeline for the policy gate (ADR-29) but is left out of the key: licensing doesn't change the output, and a permission edit (S1 rollout, `clipforge source edit`) must not re-render every clip (owner, 2026-10-01). The Timeline has no ids, so a cached render is shared across jobs and ranks, as today. `media_hash` makes source content part of the key: clips set it to `source_hash`, and generated assets live in key-addressed cache directories. `timeline.json` is written next to `clip.mp4` for debugging.
 
 **Inputs.**
 - Each distinct video or audio file is one input: `-ss <min in_s> -t <span> -i <path>`, seeked accurately as today.
@@ -178,9 +178,9 @@ The real clips are the source ranges of the first five clips of the latest Billy
 - **True peak after the AAC encode is -0.9 to -1.3 dBTP in both modes.** That is over the -1.5 target, because the AAC encode overshoots, and the issue is the same today. I'm not changing it in S4. If a platform ever flags clipping, TP=-2.0 is the knob.
 - Pass 1 costs about 2 s of CPU per 30 s clip, under $0.0001.
 
-**Decision (proposed).** Every Timeline render measures first and normalizes in a second pass with `linear=true`. Silence or an unparseable measurement falls back to today's single pass. This replaces ADR-20's "single-pass `loudnorm`"; ADR-20's targets (-14 LUFS, TP -1.5, LRA 11) are unchanged.
+**Decision (proposed ADR; the owner chose this option on 2026-10-01).** Every Timeline render, clips included, measures first and normalizes in a second pass with `linear=true`. Silence or an unparseable measurement falls back to today's single pass. This replaces ADR-20's "single-pass `loudnorm`"; ADR-20's targets (-14 LUFS, TP -1.5, LRA 11) are unchanged.
 
-**Alternative for the owner.** The numbers say single pass is good enough for clips (within 0.5 LU). Keeping single pass for clips would save 2 s of CPU per clip and nothing else. I recommend two-pass everywhere anyway: one code path, and the same behavior for clips and mixes. If you'd rather keep single pass for clips, the Timeline gets `loudness_passes: Literal[1, 2]`; the clip builder sets 1 and the renderer branches.
+**Alternative (not chosen; the owner picked two-pass everywhere on 2026-10-01).** The numbers say single pass is good enough for clips (within 0.5 LU). Keeping single pass for clips would save 2 s of CPU per clip and nothing else. I recommend two-pass everywhere anyway: one code path, and the same behavior for clips and mixes. If you'd rather keep single pass for clips, the Timeline gets `loudness_passes: Literal[1, 2]`; the clip builder sets 1 and the renderer branches.
 
 **Consequences.** Mixed Timelines get exact, linear normalization that leaves the ducking intact. Clips change by 0.1–0.3 LU (not audible). The audio is decoded once more per render. `RenderedVideo.loudness` records what happened.
 
@@ -218,7 +218,7 @@ The real clips are the source ranges of the first five clips of the latest Billy
 6. Ducking: the music's RMS during narration is at least 6 dB lower than in the pauses, measured on the mix.
 7. Loudness fallbacks: a silent Timeline renders with an AAC stream and mode `silent`; unparseable pass-1 output falls back to single pass (ffmpeg mocked).
 8. Bitrate: today's tests, plus the cap from the largest short side over several media.
-9. Cache: the same Timeline gives no ffmpeg calls on the second run; a different `media_hash` gives a different key.
+9. Cache: the same Timeline gives no ffmpeg calls on the second run; a different `media_hash` gives a different key; two Timelines that differ only in `assets` share one key.
 
 ## 11. Rollout
 
