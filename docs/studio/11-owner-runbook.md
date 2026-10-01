@@ -176,6 +176,8 @@ Approve each checkpoint the S1 session reports. A checkpoint is a commit on the 
    ```
    Put `DATABASE_URL` (the pooled string) back in `clipforge-secrets` first (dashboard edit, #107): without it the app stays Dict-only.
 
+   Also first, set `DEPLOY_DB_CHECK=on` in `.env` (card 008, log #391). From this deploy on, `scripts/deploy.sh` refuses when the database is behind the code's newest migration; it reads `alembic_version` read-only through `DATABASE_URL_UNPOOLED`. Before deploying, `scripts/deploy.sh --dry-run` should show `ok   database at the migration head: database and code at 0001`.
+
    **From this deploy until step 5's import, expect ops alerts.** The Dict still writes everything, and each write is copied to Postgres, which has no account or source rows yet, so the copies fail. You get "Posting mirror write (…) failed" alerts (at most one per write kind an hour) and a `posting verify` alert from the daily run. They stop after step 5. Run steps 3–6 in one sitting to keep the window short.
 3. Create the three accounts:
    ```
@@ -366,7 +368,20 @@ No redeploy is needed: the deployed app doesn't use the database yet.
 **Protect `main`** (after card 001 is merged, so the checks exist): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check` and `scope` to pass (not `web`: it runs only when `web/`, `src/` or the contract changes, and a required check that never runs blocks the merge), block force pushes. On a free personal account, protection on a private repo may need GitHub Pro; without it, keep the PR flow by convention and CI still runs on every PR.
 
 **Still left, and when:**
-- The Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variable `DEPLOY_ENABLED=true`. The condition is met: `ci.yml` now runs `alembic upgrade head` before deploying and skips web- and docs-only pushes (S1 Task 21b, log #212). The step itself is still yours. Until you do it, you deploy with `scripts/deploy.sh` from `main` (§1); it refuses inside the blackout.
+- The Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variable `DEPLOY_ENABLED=true`. `ci.yml` runs `alembic upgrade head` before deploying and skips web- and docs-only pushes (S1 Task 21b, log #212), but that isn't everything `DEPLOY_ENABLED` needs. Before you set it, all of these must be in place:
+  - the Actions secrets `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` (the deploy) and `DATABASE_URL_UNPOOLED` (the migration);
+  - the repository variables `POSTING_SLOTS` and `POSTING_TIMEZONE`, identical to `clipforge-secrets`: the job's blackout step fails without them, and it has no defaults;
+  - card 008's `tag` job on `main`: after each CI deploy it pushes the `deploy-YYYYMMDD-HHMM` tag and writes the deploy line into the run summary (log #392).
+
+  ```
+  gh secret set MODAL_TOKEN_ID
+  gh secret set MODAL_TOKEN_SECRET
+  gh secret set DATABASE_URL_UNPOOLED
+  gh variable set POSTING_SLOTS --body "<the value in clipforge-secrets>"
+  gh variable set POSTING_TIMEZONE --body "<the value in clipforge-secrets>"
+  gh variable set DEPLOY_ENABLED --body true      # last
+  ```
+  CI deploys are recorded by their tag (`git fetch --tags && git tag -l 'deploy-*'`), not in `docs/ops/deploys.md`. The step itself is still yours. Until you do it, you deploy with `scripts/deploy.sh` from `main` (§1); it refuses inside the blackout.
 - In Vercel, connect the repo with Root Directory `web` when you do the Vercel steps (§5b).
 - From the pause on, every parallel session gets its own git worktree (§3).
 
