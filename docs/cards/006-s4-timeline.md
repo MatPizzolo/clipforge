@@ -26,4 +26,4 @@ Follow 06's S4 card through prompt B's steps: design, then the spec for the owne
 `scripts/worktree.sh s4/timeline` after card 002 is merged, then paste `Run card docs/cards/006-s4-timeline.md`.
 
 ## Hand-off
-Reports go in `docs/reports/006-s4-<date>.md`. Don't commit.
+Reports go in `docs/reports/006-s4-<date>.md`. Don't commit. The owner's first push from the worktree is `git push -u origin <branch>`, then `gh pr create --fill`; PRs are squash-merged with the card number in the title.

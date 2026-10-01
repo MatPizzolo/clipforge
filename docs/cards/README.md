@@ -14,7 +14,7 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 
 | Card | Stream | Status | Depends on |
 |---|---|---|---|
-| [001](001-x0-tooling.md) | X0 working environment and controls (incl. `.claude/` hooks, permissions, agents, skills) | sent 2026-09-30 | `gh` installed |
+| [001](001-x0-tooling.md) | X0 working environment and controls (incl. `.claude/` hooks, permissions, agents, skills) | done 2026-09-30 (PR #3) | `gh` installed |
 | [002](002-s1-finish.md) | S1 finish (stop before the rollout) | proposed | 001 merged |
 | [003](003-s3c-revision.md) | S3c design revision | proposed | 001 merged |
 | [004](004-s3a-deploy.md) | S3a local login and Vercel deploy | proposed | 001 merged, the owner's Vercel steps, merge after 002 |

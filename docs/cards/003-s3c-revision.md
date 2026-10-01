@@ -44,4 +44,4 @@ The D-items come from the coordinator's addendum. Their status is in `STATUS.md`
 - After: review the spec, then accept ADR-42 into `docs/DECISIONS.md` in a `coord/` PR, or ask the coordinator to write that PR's card.
 
 ## Hand-off
-The report goes in `docs/reports/003-s3c-<date>.md`. Don't commit.
+The report goes in `docs/reports/003-s3c-<date>.md`. Don't commit. The owner's first push from the worktree is `git push -u origin <branch>`, then `gh pr create --fill`; PRs are squash-merged with the card number in the title.

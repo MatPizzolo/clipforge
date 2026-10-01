@@ -24,8 +24,6 @@ allow = [
     "CLAUDE.md",
     "STATUS.md",
     "README.md",
-    # card 001 only (the owner's addition at checkpoint B): trim the accepted-ADR copies
-    "docs/studio/05-proposed-adrs.md",
 ]
 deny = [".claude/skills/neon*/**"]
 
