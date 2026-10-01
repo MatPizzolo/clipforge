@@ -398,6 +398,11 @@ def test_stop_does_not_touch_the_real_index(repo: Path) -> None:
 )
 def test_hooks_are_fast(repo: Path, name: str, event: dict[str, object]) -> None:
     run_hook(name, event, repo)  # warm the filesystem cache
-    started = time.perf_counter()
-    run_hook(name, event, repo)
-    assert time.perf_counter() - started < 1.0  # target ~200 ms; generous for slow CI disks
+    # Best of three (card 008): one sample can exceed 1 s while other sessions' check.sh runs
+    # load the machine; a hook that is really slow is slow every time.
+    timings = []
+    for _ in range(3):
+        started = time.perf_counter()
+        run_hook(name, event, repo)
+        timings.append(time.perf_counter() - started)
+    assert min(timings) < 1.0, timings  # target ~200 ms; generous for slow CI disks

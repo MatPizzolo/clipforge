@@ -27,6 +27,14 @@ jobs:
       - run: uv sync --locked
       # The single gate (decision log #380): ruff, format, mypy, fast tests, OpenAPI contract, docs
       - run: scripts/check.sh --python --docs
+      - name: Keep the failing step's full output (card 008)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check-last-fail
+          path: .superpowers/check-last-fail.log
+          include-hidden-files: true  # .superpowers/ is a dot directory
+          if-no-files-found: ignore
 
   scope:
     # Files outside the branch's scope, and decision-log rows outside its range (scripts/scopes.toml)
