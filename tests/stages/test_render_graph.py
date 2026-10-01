@@ -4,6 +4,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from clipforge import ffmpeg
 from clipforge.models import (
     AudioTrack,
@@ -242,3 +244,20 @@ def test_ken_burns_segment_has_all_its_frames(tmp_path: Path) -> None:
     log = _run_graph(tmp_path, tl, "v", ["-f", "null", "-"])  # the last frame= line counts
     frames = int(re.findall(r"frame=\s*(\d+)", log)[-1])
     assert frames == 60
+
+
+@requires_ffmpeg
+@pytest.mark.parametrize("fit", ["cover", "blur"])
+def test_looped_still_has_all_its_frames(tmp_path: Path, fit: str) -> None:
+    # Same bug as Ken Burns (found at Task 6): an fps filter after a looped still dropped
+    # its last frame (149 of 150), so each still pulled later segments 33 ms early.
+    a = tmp_path / "a"
+    a.mkdir()
+    ffmpeg.run(["-f", "lavfi", "-i", "testsrc2=size=320x568", "-frames:v", "1", str(a / "s.png")])
+    tl = Timeline(
+        fps=30,
+        duration_s=2.0,
+        visual=[StillSegment(path="a/s.png", width=320, height=568, start=0.0, end=2.0, fit=fit)],
+    )
+    log = _run_graph(tmp_path, tl, "v", ["-f", "null", "-"])  # the last frame= line counts
+    assert int(re.findall(r"frame=\s*(\d+)", log)[-1]) == 60

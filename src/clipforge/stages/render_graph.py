@@ -137,10 +137,12 @@ def _ken_burns(kb: KenBurns, frames: int, w: int, h: int, fps: int) -> str:
 
 def _still(seg: StillSegment, k: int, i: int, tl: Timeline) -> str:
     w, h = tl.width, tl.height
-    tail = f"fps={tl.fps},format=yuv420p"
-    if seg.ken_burns is not None:  # zoompan sets the rate; an fps filter after it drops a frame
+    # The input (-framerate) or zoompan already sets the rate; an fps filter here would drop
+    # each still's last frame (found at review CP2 and Task 6).
+    tail = "format=yuv420p"
+    if seg.ken_burns is not None:
         frames = max(1, round((seg.end - seg.start) * tl.fps))
-        return f"[{k}:v]{_ken_burns(seg.ken_burns, frames, w, h, tl.fps)},format=yuv420p[p{i}]"
+        return f"[{k}:v]{_ken_burns(seg.ken_burns, frames, w, h, tl.fps)},{tail}[p{i}]"
     if seg.fit == "blur":
         return _blur(f"{k}:v", f"q{i}", w, h, f"b{i}") + f";[q{i}]{tail}[p{i}]"
     return f"[{k}:v]{_cover(w, h)},{tail}[p{i}]"
