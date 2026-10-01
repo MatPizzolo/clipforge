@@ -1,6 +1,6 @@
 # Card 002: S1 — finish the foundations (stop before the rollout)
 
-Status: sent 2026-09-30 (PR #5)
+Status: done 2026-10-01 (report: docs/reports/002-s1-2026-09-30.md; PR #5)
 Stream: S1 · Branch: `s1/finish` · Worktree: `../clipForge-s1`
 Decision-log range: #200–#249
 Model: mid-tier for implementing the plan; most capable for the final whole-branch review

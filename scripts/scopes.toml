@@ -13,6 +13,7 @@ stream = "x0"
 log = [380, 399]
 allow = [
     ".claude/**",
+    "skills-lock.json",  # pins the installed .claude skills
     "scripts/**",
     "tests/test_docs.py",
     "tests/scripts/**",

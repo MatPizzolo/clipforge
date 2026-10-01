@@ -205,8 +205,8 @@ Last updated: 2026-09-30.
 
 | # | Question | Needed by | Recommendation |
 |---|---|---|---|
-| O3 | Final handles for founder.tapes and hombre.en.construccion | S1 rollout step 4 (`account create`) | Check availability on TikTok, Instagram, YouTube and Facebook; record them in 09 |
+| O3 | Final handles for founder.tapes and hombre.en.construccion | S1 rollout step 3 (`account create`) | Check availability on TikTok, Instagram, YouTube and Facebook; record them in 09 |
 | O4 | Upload-Post plan | S2 | Basic ($24, 5 profiles) until a 6th account, then Professional ($50, 25) |
-| O5 | Billy Garton Jr.'s permission record: when it was granted, by whom, where the agreement is stored, whether monetization and translations are allowed, any expiry | S1 rollout step 5 (`source edit billy-garton`) | Collect the facts before the rollout; posting holds clips if the permission is expired or doesn't cover a platform |
+| O5 | Billy Garton Jr.'s permission record: when it was granted, by whom, where the agreement is stored, whether monetization and translations are allowed, any expiry | S1 rollout step 4 (`source edit billy-garton`) | Collect the facts before the rollout; posting holds clips if the permission is expired or doesn't cover a platform |
 | O6 | Series formats for the three clip blueprints (S1 wrote drafts marked `# draft: owner edits`) | before S2's auto-posting | Rewrite after a week of posting shows which pillars work |
 | O7 | Models whose weights are permissive but were pretrained on non-commercial data, e.g. `chinese-wav2vec2-base` (MIT weights, WenetSpeech pretraining) in InfiniteTalk and EchoMimic Flash | before X2 resumes | Treat as "needs owner review": prefer LongCat 1.5 (Whisper, unaffected) unless a wav2vec-based model is clearly better in the X2 blind rating, and then decide with that evidence |
