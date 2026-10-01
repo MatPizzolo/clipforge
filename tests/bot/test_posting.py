@@ -483,3 +483,40 @@ def test_postgres_mode_hashtags_come_from_the_account(tmp_path: Path, db: Databa
     assert "realtalk-clips-en: sent" in result
     [(_, text, _)] = _sender(ctx).messages
     assert "#fromaccount" in text and "#fromenv" not in text
+
+
+def _with_ops(ctx: BotContext) -> FakeSender:
+    from clipforge.ops import OpsAlerts
+
+    alerts = FakeSender()
+    ctx.deps.ops = OpsAlerts(ctx.deps.store.kv, alerts, ALLOWED_USER, "America/New_York")
+    return alerts
+
+
+def test_tick_alerts_on_an_account_error_and_on_missing_schedule_copies(
+    tmp_path: Path, db: Database
+) -> None:
+    # card 002 A6 (ADR-45), and the coordinator's A3 note: a missing copy can't silently stop
+    ctx = two_account_ctx(tmp_path, db)
+    alerts = _with_ops(ctx)
+    posting = ctx.deps.posting
+    assert posting is not None
+    posting.repo.paused = lambda account_id: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        RuntimeError("SSL connection has been closed unexpectedly"))  # fmt: skip
+    at_8 = datetime(2026, 9, 29, 8, 1, tzinfo=ZoneInfo("America/New_York"))
+    assert "realtalk-clips-en: error" in tick(ctx, at_8)
+    assert any("Posting tick for realtalk-clips-en failed" in t for _, t, _ in alerts.messages)
+    for key in [k for k in ctx.deps.store.kv.keys() if k.startswith("posting:schedule:")]:  # noqa: SIM118
+        ctx.deps.store.kv.delete(key)
+    assert tick(ctx, at_8) == "off"
+    assert any("no schedule copies" in t for _, t, _ in alerts.messages)
+
+
+def test_tick_alerts_when_postgres_mode_has_no_database(tmp_path: Path) -> None:
+    deps = Harness.build(tmp_path).deps
+    settings = make_settings(tmp_path, state_reads="postgres")
+    deps.posting = build_posting(settings, deps.store.kv, None)
+    ctx = BotContext(settings, FakeSender(), deps)
+    alerts = _with_ops(ctx)
+    assert tick(ctx, at(12)).startswith("off: DATABASE_URL")
+    assert alerts.messages[-1][1] == "⚠️ Posting is off: DATABASE_URL is not configured"

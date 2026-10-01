@@ -22,6 +22,7 @@ from fastapi import FastAPI
 from clipforge import runtime
 from clipforge.api.main import ApiContext, create_app
 from clipforge.config import get_settings
+from clipforge.db.engine import Database, database_from_settings, redact
 from clipforge.pipeline.steps import MAX_ATTEMPTS, STEP_TIMEOUT_S, Deps, Step, dispatch, sweep
 
 APP_NAME = "clipforge"
@@ -117,6 +118,13 @@ def _spawner() -> runtime.FunctionSpawner:
             Step.PACKAGE: package_step,
         }
     )
+
+
+@functools.cache
+def _database() -> Database | None:
+    """One engine per container; it connects lazily, so code that never queries never connects.
+    None until DATABASE_URL is in the secret (rollout step 4c.2, decision log #107)."""
+    return database_from_settings(get_settings())
 
 
 @functools.cache
@@ -244,8 +252,13 @@ def posting_tick() -> None:
     if sender is None:
         return
     deps = _service_deps()
-    deps.volume.reload()  # see clips rendered since this container started
-    print(f"posting_tick: {tick(BotContext(settings, sender, deps), utcnow())}")
+    try:
+        deps.volume.reload()  # see clips rendered since this container started
+        print(f"posting_tick: {tick(BotContext(settings, sender, deps), utcnow())}")
+    except Exception as exc:
+        if deps.ops is not None:
+            deps.ops.alert(f"posting_tick crashed: {redact(exc)}", "tick", "crash")
+        raise
 
 
 @app.function(
@@ -256,18 +269,24 @@ def posting_tick() -> None:
     volumes={JOBS_ROOT: jobs_volume},
     secrets=[secrets],
 )
-def posting_keepalive() -> None:
-    """Read every posting/job key so Modal's Dict doesn't expire them, then snapshot the queue
-    to the Volume (ADR-24)."""
+def posting_daily() -> None:
+    """The daily reconcile (ADR-46, was posting_keepalive): keep the Dict's posting keys alive
+    and snapshot them (ADR-24), verify against Postgres, backfill job rows, rewrite the schedule
+    copies, rebuild the queue and snapshot the posting tables."""
     from clipforge.jobs import utcnow
-    from clipforge.posting import keepalive
+    from clipforge.posting.daily import run_daily
 
     deps = _service_deps()
-    deps.volume.reload()
-    touched = keepalive.touch(deps.store.kv)
-    path, saved = keepalive.snapshot(deps.store.kv, deps.root, utcnow())
-    deps.volume.commit()
-    print(f"posting_keepalive: touched {touched} keys, snapshot {saved} keys -> {path}")
+    try:
+        deps.volume.reload()
+        lines = run_daily(deps, _database(), get_settings().posting_account_id, utcnow())
+        deps.volume.commit()
+    except Exception as exc:
+        if deps.ops is not None:
+            deps.ops.alert(f"posting_daily crashed: {redact(exc)}", "daily", "crash")
+        raise
+    for line in lines:
+        print(f"posting_daily: {line}")
 
 
 @app.function(

@@ -35,7 +35,7 @@ def test_step_functions_and_endpoints_exist() -> None:
         "package_step",
         "sweeper",
         "posting_tick",
-        "posting_keepalive",
+        "posting_daily",
         "db_doctor",
         "web",
         "smoke",

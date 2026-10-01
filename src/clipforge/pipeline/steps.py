@@ -48,6 +48,7 @@ from clipforge.sanitize import clean, redact
 
 if TYPE_CHECKING:
     from clipforge.db.jobs import JobsRepo
+    from clipforge.ops import OpsAlerts
     from clipforge.posting.backend import Posting
 
 log = logging.getLogger(__name__)
@@ -101,6 +102,7 @@ class Deps:
     jobs_db: JobsRepo | None = None
     version: str = "clips:unknown"  # producer version on new items (ADR-43), not the git SHA
     build: str | None = None  # the deploy's git SHA, kept on job rows
+    ops: OpsAlerts | None = None  # silent failures to the owner's chat (ADR-45)
 
     def notifier(self, job: Job) -> Notifier:
         """Never raises: a broken notifier must not fail or retry a step (ADR-14)."""
@@ -232,6 +234,13 @@ def fail_job(deps: Deps, job_id: str, stage: StageName, error_type: str, message
         record_job_with_costs(deps, job)
     if first:
         deps.notifier(job).failed(job)
+        if job.input.notify is None and deps.ops is not None:
+            # channel and CLI jobs have no Telegram notifier: without this the failure is silent
+            recorded = job.error
+            where = recorded.stage if recorded else stage
+            what = recorded.message if recorded else message
+            deps.ops.alert(f"Job {job_id} failed at {where}: {what}\n/resume {job_id}",
+                           "job_failed", job_id, path=f"/jobs/{job_id}")  # fmt: skip
     return first
 
 
@@ -448,8 +457,12 @@ def _enqueue_posts(deps: Deps, job: Job, rendered: list[RenderedClip]) -> None:
         clips = [ClipFacts.from_rendered(r) for r in rendered]
         added = enqueue_job(deps.posting, job, clips, utcnow(), deps.version)
         log.info("queued %d clip(s) of %s for posting", added, job.job_id)
-    except Exception:
+    except Exception as exc:
         log.exception("queueing %s for posting failed", job.job_id)
+        if deps.ops is not None:
+            deps.ops.alert(f"Queueing {job.job_id} for posting failed: {redact(exc)}. "
+                           "Fix it, then POST /posting/rebuild.", "enqueue", job.job_id,
+                           path=f"/jobs/{job.job_id}")  # fmt: skip
 
 
 def dispatch(deps: Deps, step: str, job_id: str, clip_id: str | None = None) -> None:

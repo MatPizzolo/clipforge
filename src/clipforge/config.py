@@ -9,6 +9,7 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal, Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -104,6 +105,8 @@ class Settings(BaseSettings):
     # The dashboard (ADR-38, ADR-44): bot messages get URL buttons to its pages (08 §2b).
     # Unset or invalid = no buttons; never an error, since every step loads these settings.
     dashboard_url: str | None = None
+    # The owner's time zone for ops-alert quiet hours (ADR-45); unset = POSTING_TIMEZONE
+    owner_timezone: str | None = None
 
     # Durable state (ADR-26, S1): Neon's pooled URL; reads come from `state_reads` (ADR-41)
     database_url: SecretStr | None = None
@@ -187,6 +190,18 @@ class Settings(BaseSettings):
             log.warning("DASHBOARD_URL ignored: it must be an http(s) URL")
             return None
         return url
+
+    @field_validator("owner_timezone", mode="before")
+    @classmethod
+    def _owner_timezone(cls, value: object) -> object:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        try:
+            ZoneInfo(value.strip())
+        except (ZoneInfoNotFoundError, ValueError):
+            log.warning("OWNER_TIMEZONE ignored: not a time zone")
+            return None
+        return value.strip()
 
     @field_validator("posting_chat_id", mode="before")
     @classmethod

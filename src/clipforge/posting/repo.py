@@ -241,6 +241,8 @@ class DualPostingRepo:
     def __init__(self, primary: PostingRepo, mirror: PostingRepo) -> None:
         self.primary, self.mirror = primary, mirror
         self.mirror_failures = 0
+        # Set by runtime.build_deps to an ops alert (ADR-45); never raises.
+        self.on_failure: Callable[[str, str], object] | None = None
 
     def _mirror(self, action: str, call: Callable[[], object]) -> None:
         try:
@@ -248,6 +250,8 @@ class DualPostingRepo:
         except Exception as exc:
             self.mirror_failures += 1
             log.warning("posting mirror: %s failed: %s", action, redact(exc))
+            if self.on_failure is not None:
+                self.on_failure(action, redact(exc))
 
     def add(self, item: ContentItem, platforms: list[Platform]) -> bool:
         added = self.primary.add(item, platforms)

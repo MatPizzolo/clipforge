@@ -47,11 +47,16 @@ class Posting:
     # The tick's schedules, read before any database call (card 002 A3). None: from accounts().
     schedules: Callable[[], dict[str, PostingSchedule]] | None = None
 
+    def all_schedules(self) -> dict[str, PostingSchedule]:
+        """Every account's schedule, without touching Postgres in postgres mode (the Dict
+        copies the accounts service writes)."""
+        if self.schedules is not None:
+            return self.schedules()
+        return {a.id: a.posting for a in self.accounts()}
+
     def posting_schedules(self) -> dict[str, PostingSchedule]:
-        """Accounts with a posting chat and their schedules, without touching Postgres in
-        postgres mode (the Dict copies the accounts service writes)."""
-        found = (self.schedules() if self.schedules is not None
-                 else {a.id: a.posting for a in self.accounts()})  # fmt: skip
+        """Accounts with a posting chat and their schedules, in id order."""
+        found = self.all_schedules()
         return {k: v for k, v in sorted(found.items()) if v.chat_id is not None}
 
     def account(self, account_id: str) -> Account | None:

@@ -335,13 +335,26 @@ def _send_best(
 def tick(ctx: BotContext, now: datetime) -> str:
     """One cron tick (spec §5.2): each account with a posting chat, in id order. The slot is
     computed from the schedule copies first, so a tick with no slot due never queries Postgres
-    (card 002 A3)."""
+    (card 002 A3). Silent failures go to the owner through ops alerts (ADR-45)."""
     posting = posting_of(ctx.deps)
+    ops = ctx.deps.ops
+    if ops is not None:
+        ops.flush(now)  # alerts held over quiet hours or the hourly cap
     if posting.problem is not None:
         log.warning("posting: %s", posting.problem)
+        if ops is not None:
+            ops.alert(f"Posting is off: {posting.problem}", "posting", "problem", now=now)
         return f"off: {posting.problem}"
+    schedules = posting.all_schedules()
+    if not schedules and posting.schedules is not None and ops is not None:
+        # postgres mode with no schedule copy at all: nothing would ever send (A3, #203)
+        ops.alert("Posting found no schedule copies (posting:schedule:*), so no account will "
+                  "send. Run the daily sync, or edit an account, to rewrite them.",
+                  "posting", "schedules", path="/accounts", now=now)  # fmt: skip
     results = []
-    for account_id, schedule in posting.posting_schedules().items():
+    for account_id, schedule in sorted(schedules.items()):
+        if schedule.chat_id is None:
+            continue
         try:
             outcome = _tick_account(ctx, posting, account_id, schedule, now)
         except Exception as exc:  # one account's failure never stops the others
@@ -349,6 +362,9 @@ def tick(ctx: BotContext, now: datetime) -> str:
             bug = not isinstance(exc, SQLAlchemyError | DatabaseUnavailable)
             log.warning("posting: tick for %s failed: %s", account_id, redact(exc), exc_info=bug)
             outcome = "error"
+            if ops is not None:
+                ops.alert(f"Posting tick for {account_id} failed: {redact(exc)}", "tick",
+                          account_id, path=f"/accounts/{account_id}", now=now)  # fmt: skip
         results.append(f"{account_id}: {outcome}")
     return "; ".join(results) or "off"
 
