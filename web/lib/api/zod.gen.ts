@@ -183,10 +183,20 @@ export const zAccountPosting = z.object({
     days_left: z.int().optional().default(0),
     enabled: z.boolean(),
     held: z.int().optional().default(0),
+    last_sent_at: z.iso.datetime({ offset: true, local: true }).nullish(),
     next_slot: z.iso.datetime({ offset: true, local: true }).nullish(),
     paused: z.boolean(),
     per_day: z.int().optional().default(0),
+    posted_total: z.int().optional().default(0),
+    state: z.enum([
+        'off',
+        'problem',
+        'paused',
+        'waiting',
+        'on'
+    ]).optional().default('off'),
     timezone: z.string().optional().default('UTC'),
+    unanswered: z.int().optional().default(0),
     waiting: z.int().optional().default(0)
 });
 
@@ -220,7 +230,15 @@ export const zPostingOverview = z.object({
     next_slot: z.iso.datetime({ offset: true, local: true }).nullable(),
     paused: z.boolean(),
     per_day: z.int(),
+    posted_total: z.int().optional().default(0),
     problem: z.string().nullish(),
+    state: z.enum([
+        'off',
+        'problem',
+        'paused',
+        'waiting',
+        'on'
+    ]).optional().default('off'),
     waiting: z.int()
 });
 

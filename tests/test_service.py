@@ -3,27 +3,36 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from clipforge.db.engine import Database
+from clipforge.db.jobs import JobsRepo
 from clipforge.jobs import DictJobStore
 from clipforge.models import (
     LEGACY_PLATFORMS,
     JobInput,
     JobStatus,
     Permission,
+    PostSend,
     PostStatus,
     PostVerdict,
     StageName,
 )
 from clipforge.pipeline.deps import MemoryKV, SpawnCall
-from clipforge.pipeline.steps import JobNotResumable
+from clipforge.pipeline.steps import JobNotResumable, fail_job, resume
 from clipforge.posting.repo import DictPostingRepo
-from clipforge.service import create_job, get_job_view, posting_overview, resume_job
+from clipforge.service import (
+    create_job,
+    get_job_view,
+    job_summaries,
+    posting_overview,
+    resume_job,
+)
 from tests.bot.fakes import ALLOWED_USER, make_settings
 from tests.bot.helpers import two_account_ctx
 from tests.pipeline.fakes import FakeStages
 from tests.pipeline.harness import Harness
-from tests.posting.builders import ACCOUNT
+from tests.posting.builders import ACCOUNT, JOB
 from tests.posting.builders import run_channel_job as channel_job
 from tests.test_models import ALL_SAMPLES, JobMetadata
 
@@ -115,3 +124,117 @@ def test_overview_has_every_account_and_keeps_top_level_fields(
     assert view.waiting == realtalk.waiting == 1 and view.per_day == realtalk.per_day == 1
     assert view.enabled is True and view.channels == realtalk.channels
     assert realtalk.timezone == "America/New_York"
+
+
+# ---- card 002 A5: the jobs table first
+
+
+def _expire(harness: Harness, job_id: str) -> None:
+    """The Dict's 7-day expiry (ADR-24) took the job's core record."""
+    harness.store.kv.delete(f"job:{job_id}")
+
+
+def test_job_view_reads_the_jobs_table_first(tmp_path: Path, db: Database) -> None:
+    harness = Harness.build(tmp_path)
+    harness.deps.jobs_db = JobsRepo(db)
+    done = channel_job(harness)
+    failed = harness.submit()
+    fail_job(harness.deps, failed, StageName.INGEST, "boom", "no audio")
+    # both still in the Dict: the row's status, the Dict's clips
+    view = get_job_view(harness.store, harness.root, done, harness.deps.jobs_db)
+    assert view.status is JobStatus.DONE and view.clips
+    assert view.cost.total_usd == pytest.approx(JobsRepo(db).get(done).cost_usd)  # type: ignore[union-attr]
+    # expired from the Dict: the row still answers, a failed job too (metadata.json has none)
+    _expire(harness, done)
+    _expire(harness, failed)
+    gone = get_job_view(harness.store, harness.root, done, harness.deps.jobs_db)
+    assert gone.status is JobStatus.DONE and gone.clips == [] and gone.cost.stages
+    assert gone.output_zip == f"{done}/job.zip"
+    lost = get_job_view(harness.store, harness.root, failed, harness.deps.jobs_db)
+    assert lost.status is JobStatus.FAILED and lost.output_zip is None
+    with pytest.raises(KeyError):  # without the table, the failed job was unknown
+        get_job_view(harness.store, harness.root, failed)
+
+
+def test_a_newer_dict_record_beats_the_row(tmp_path: Path, db: Database) -> None:
+    stages = FakeStages(transient=Counter({"highlights": 99}))
+    harness = Harness.build(tmp_path, stages)
+    harness.deps.jobs_db = JobsRepo(db)
+    job_id = harness.submit()
+    harness.run()
+    assert JobsRepo(db).get(job_id).status is JobStatus.FAILED  # type: ignore[union-attr]
+    harness.deps.jobs_db = None  # the resume's row write is lost
+    resume(harness.deps, job_id)
+    view = get_job_view(harness.store, harness.root, job_id, JobsRepo(db))
+    assert view.status is JobStatus.RUNNING
+
+
+def test_job_view_falls_back_to_the_dict_when_the_table_is_down(harness: Harness) -> None:
+    class Down:
+        def get(self, job_id: str) -> None:
+            raise OperationalError("SELECT", {}, Exception("neon asleep"))
+
+    job_id = harness.submit()
+    harness.run()
+    view = get_job_view(harness.store, harness.root, job_id, Down())  # type: ignore[arg-type]
+    assert view.status is JobStatus.DONE and len(view.clips) == 5
+
+
+def test_job_summaries_are_the_table_plus_dict_jobs_it_lacks(tmp_path: Path, db: Database) -> None:
+    harness = Harness.build(tmp_path)
+    harness.deps.jobs_db = JobsRepo(db)
+    in_table = channel_job(harness)
+    harness.deps.jobs_db = None
+    only_dict = harness.submit()  # its row write never happened (before the backfill)
+    harness.deps.jobs_db = JobsRepo(db)
+    _expire(harness, in_table)
+    assert [s.job_id for s in job_summaries(harness.deps)] == sorted([in_table, only_dict])
+
+    class Down:
+        def list(self) -> None:
+            raise OperationalError("SELECT", {}, Exception("neon asleep"))
+
+    harness.deps.jobs_db = Down()  # type: ignore[assignment]
+    assert [s.job_id for s in job_summaries(harness.deps)] == [only_dict]
+
+
+def test_overview_state_posted_total_unanswered_and_last_send(tmp_path: Path, db: Database) -> None:
+    ctx = two_account_ctx(tmp_path, db)
+    posting = ctx.deps.posting
+    assert posting is not None
+    noon = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
+    view = posting_overview(ctx.deps, ctx.settings, noon)
+    assert (view.state, view.posted_total) == ("on", 0)
+    assert view.accounts[1].unanswered == 0 and view.accounts[1].last_sent_at is None
+
+    ref = f"{JOB}:clip_01"
+    sent_at = datetime(2026, 9, 29, 12, 1, tzinfo=UTC)
+    posting.repo.add_send(
+        ref, PostSend(n=1, at=sent_at, slot=None, message_id=5, video_message_id=4), ALLOWED_USER
+    )
+    realtalk = posting_overview(ctx.deps, ctx.settings, noon).accounts[1]
+    assert (realtalk.unanswered, realtalk.last_sent_at, realtalk.state) == (1, sent_at, "on")
+
+    for platform in LEGACY_PLATFORMS:
+        posting.repo.set_posted(ref, platform, True, sent_at)
+    posting.repo.set_paused("founder-tapes-en", True, sent_at)
+    view = posting_overview(ctx.deps, ctx.settings, noon)
+    founder, realtalk = view.accounts
+    assert (view.posted_total, realtalk.posted_total, realtalk.unanswered) == (1, 1, 0)
+    assert (founder.state, realtalk.state, view.state) == ("paused", "on", "on")
+
+
+def test_overview_state_waiting_off_and_problem(harness: Harness) -> None:
+    channel_job(harness)
+    store = DictPostingRepo(harness.store.kv, ACCOUNT)
+    at = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
+    first, second, _ = sorted(store.records(ACCOUNT), key=lambda r: r.item.id)
+    for n, record in enumerate((first, second), start=1):
+        store.add_send(
+            record.item.id, PostSend(n=1, at=at, slot=None, message_id=n, video_message_id=n)
+        )
+    on = make_settings(harness.root, posting_chat_id=ALLOWED_USER)
+    assert posting_overview(harness.deps, on, at).state == "waiting"  # the pause rule holds
+    assert posting_overview(harness.deps, make_settings(harness.root), at).state == "off"
+    broken = make_settings(harness.root, posting_chat_id=ALLOWED_USER, posting_slots="9am")
+    assert posting_overview(harness.deps, broken, at).state == "problem"

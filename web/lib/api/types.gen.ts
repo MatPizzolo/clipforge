@@ -145,6 +145,10 @@ export type AccountPosting = {
      */
     held?: number;
     /**
+     * Last Sent At
+     */
+    last_sent_at?: string | null;
+    /**
      * Next Slot
      */
     next_slot?: string | null;
@@ -157,9 +161,21 @@ export type AccountPosting = {
      */
     per_day?: number;
     /**
+     * Posted Total
+     */
+    posted_total?: number;
+    /**
+     * State
+     */
+    state?: 'off' | 'problem' | 'paused' | 'waiting' | 'on';
+    /**
      * Timezone
      */
     timezone?: string;
+    /**
+     * Unanswered
+     */
+    unanswered?: number;
     /**
      * Waiting
      */
@@ -609,9 +625,17 @@ export type PostingOverview = {
      */
     per_day: number;
     /**
+     * Posted Total
+     */
+    posted_total?: number;
+    /**
      * Problem
      */
     problem?: string | null;
+    /**
+     * State
+     */
+    state?: 'off' | 'problem' | 'paused' | 'waiting' | 'on';
     /**
      * Waiting
      */

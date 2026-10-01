@@ -111,7 +111,7 @@ def _status(ctx: BotContext, job_id: str) -> str:
     if not is_job_id(job_id):
         return f"No job {job_id}."
     try:
-        view = get_job_view(ctx.deps.store, ctx.deps.root, job_id)
+        view = get_job_view(ctx.deps.store, ctx.deps.root, job_id, ctx.deps.jobs_db)
     except KeyError:
         return f"No job {job_id}."
     return status_text(with_download_url(view, ctx.settings))

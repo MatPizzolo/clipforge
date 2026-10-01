@@ -207,7 +207,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         deps = ctx.deps()
         reload(deps)
         try:
-            found = get_job_view(deps.store, deps.root, job_id)
+            found = get_job_view(deps.store, deps.root, job_id, deps.jobs_db)
         except KeyError:
             raise HTTPException(404, "unknown job") from None
         return with_download_url(found, settings)
