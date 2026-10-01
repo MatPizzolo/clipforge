@@ -1,12 +1,23 @@
 # Studio S3c: account workspaces (design)
 
-Date: 2026-09-30 · Status (stop card, 2026-09-30):
-- §0 goal and scope, §1 data model: **approved** (given by the owner before this design).
-- §2 pages: **approved** (with the Experiments nav item, added only when S3c is built).
-- §3 producers, §4 results, §5 API/data/migration/rollback, §6 roadmap: **approved** in chat, one section at a time.
-- The written spec as a whole, and ADR-42 (draft in 05): **written, awaiting owner review**.
-- §7 open points, the coordinator's addendum D1–D10 (not received in this session), the per-page "home" lines for ADR-44 and the notification policy for ADR-45: **not started**.
-- Implementation plan: **not started**, on purpose: it waits until S1 is finished, so it builds on S1's final schema.
+Date: 2026-09-30 · Status (revised by card 003, 2026-09-30; **awaiting the owner's review**):
+- §0 goal and scope, §1 data model: **approved** (given by the owner before this design). §1.1 now states D1.
+- §2 pages: **approved** (with the Experiments nav item, added only when S3c is built). Revised for D7 (§2.6, §2.7, §2.8) and D10 (§2.3, §2.4 paths, new §2.9).
+- §3 producers, §4 results, §5 API/data/migration/rollback, §6 roadmap: **approved** in chat, one section at a time. Revised for D3 (§5.3, §5.5, §5.6) and D4 (§3.4 rewritten, §5.1); §6's phases list the new pieces.
+- §7 open points: **written** (six items for the plan).
+- The coordinator's addendum:
+  - **D1** one setup id: done, §1.1 (`(account_id, account_version)`, #88).
+  - **D2** `PATCH /accounts` saves a version with an actor: done, §5.1.
+  - **D3** `post_events.actor` in 0002: done, §5.3 (written by `posting/actions.py`, card 002 A4; `data.actor` until 0002, then backfilled).
+  - **D4** one dry run: done, §3.4 and §5.1 (`POST /setup/preview`, used by save, restore, apply and experiment start).
+  - **D5** edits apply to new items only: done, §3.2.
+  - **D6** Telegram's role per page: done in 08 §2; S3c's pages in §2.9.
+  - **D7** keep or revert only on the experiment page: done, §2.6, §2.7.
+  - **D8** the pre-S2 Review page as a queue manager, and **D9** `admin` as a second ASGI app: S3's, added to 06's S3 card.
+  - **D10** deep links: done, §2.9 (08 §2b formats, plus `/categories/<code>` and `/blueprints/<name>`).
+- ADR-44 (home per task) and ADR-45 (notifications) for S3c: §2.9. ADR-43 and ADR-46 are referenced, not redefined (§0).
+- ADR-42 (draft in 05): revised with D1, D3, D4 and D7; **awaiting the owner's acceptance**.
+- Implementation plan: **not started**, on purpose: it waits until card 002's final review, so it builds on S1's final schema.
 
 Decision: ADR-42 (draft in [docs/studio/05](../../studio/05-proposed-adrs.md)), which replaces ADR-35's "blueprints are files" part.
 Background: ADR-25, 26, 29, 35, 38, 41, 43–46; [01](../../studio/01-vision-and-strategy.md), [07](../../studio/07-channel-portfolio.md), [08 §2](../../studio/08-dashboard-and-operations.md#2-dashboard-information-architecture-nextjs), [09](../../studio/09-account-registry.md); the S1 spec and plan (2026-09-29); the S3a spec (2026-09-29).
@@ -41,7 +52,7 @@ An **experiment** ties them together: a change, measured over a window, then kep
   - **Blueprint:** pillars, series formats, voice and visual briefs, money, prompts (as in S1's `Blueprint` contract).
   - **Account:** overrides of any category or blueprint value, plus its own fields (handles, budget, pair, posting schedule, review tier).
 - **Effective setup** = category defaults, overridden by the blueprint, overridden by the account. The dashboard shows where each value comes from.
-- **Versions:** every save writes a full, validated snapshot, with an author (owner, session or experiment) and a note. **Restore** saves an old version as a new one; history is never rewritten. Every content item records the account version it was made from.
+- **Versions:** every save writes a full, validated snapshot, with an author (an actor string, §5.3: `web:<login>`, `telegram:<id>`, `session:<name>` or S1's `cli:<os user>`; a version written by an experiment also records its `experiment_id`) and a note. **Restore** saves an old version as a new one; history is never rewritten. Every content item records the account version it was made from.
 - **Experiments:** hypothesis; the change (from and to version); one metric; a window (N days or N items); status `draft`, `running`, `done` (plus `stopped`, §4.4); result (before vs during); decision **keep** or **revert** with a reason. One running experiment per account. Category- or blueprint-level experiments run on the accounts you choose.
 - **Notes:** kind `idea`, `learning` or `question`; attached to a category, blueprint, account or experiment; status `open`, `done` or `dropped`. An idea becomes an experiment in one click, and a finished result can become a learning on the category playbook.
 - **Seed data:** S1's blueprints and accounts imported as version 1; the 5 category playbooks drafted from 01, 07 and 09 for the owner to edit.
@@ -49,6 +60,8 @@ An **experiment** ties them together: a change, measured over a window, then kep
 ### 1.1 Accounts pin their parent versions (approved in §3)
 
 Each **account version** stores the exact category version and blueprint version it builds on, plus its overrides and identity fields. So `(account_id, account_version)` fully determines the effective setup, and that pair is what a content item records.
+
+**The setup's identity (D1, log #88).** There is no separate setup id. A setup is identified by `(account_id, account_version)`; the pinned parent versions inside that account version make the pair complete. Everything that refers to a setup uses that pair: `JobInput.setup`, `content_items.setup_version` (with the item's `account_id`), `post_events.data.setup_version`, `experiment_accounts.from_version`/`to_version` and the `/setup/preview` request (§3.4).
 
 - Saving a category or blueprint **doesn't flow silently** into accounts. The save dialog offers **"Apply to accounts"** (all ticked by default); each ticked account gets a new version with the note "adopts blueprint v5". Accounts with a running experiment are skipped and listed ("will adopt when their experiment ends").
 - A category- or blueprint-level experiment moves only the chosen accounts to the new parent version. **Keep** offers to move the rest; **Revert** moves the chosen accounts back.
@@ -66,13 +79,13 @@ Every page works on phone and laptop, on S3a's responsive shell (S3a spec §6b):
 
 ### 2.1 Navigation
 
-`web/components/nav.ts` gains **Experiments** after Accounts **when S3c is built** (not before): Home, Jobs, Review, Calendar, Accounts, Experiments, Sources, Produce, Costs. "Accounts" is the way into the workspaces. On the phone, Accounts and Experiments are the first items under More.
+`web/components/nav.ts` gains **Experiments** after Accounts **when S3c is built** (not before): Home, Jobs, Review, Calendar, Accounts, Experiments, Sources, Produce, Costs. "Accounts" is the way into the workspaces, and it stays highlighted on `/categories/…` and `/blueprints/…` too. On the phone, Accounts and Experiments are the first items under More.
 
 ### 2.2 Accounts: the studio map (`/accounts`)
 
 One section per category in fixed order (clips, story, band, avatar, model). A category header shows its playbook link, account count and running experiments, and opens the category workspace. Laptop: a table per category (account, status, blueprint and version, review tier, 7-day posted, ⚗ running experiment). Phone: cards. Categories without accounts stay visible, so their playbook can be written first.
 
-### 2.3 Category workspace (`/accounts/c/<code>`)
+### 2.3 Category workspace (`/categories/<code>`)
 
 - **Playbook:** editable text (versioned), plus a **Learnings** list (learning notes from finished experiments).
 - **Rules:** the compliance profile (change class `rules`, §3.5).
@@ -80,7 +93,7 @@ One section per category in fixed order (clips, story, band, avatar, model). A c
 - **Blueprints:** each with its accounts.
 - **Experiments, Notes, History:** the shared components of §2.5.
 
-### 2.4 Blueprint workspace (`/accounts/b/<name>`)
+### 2.4 Blueprint workspace (`/blueprints/<name>`)
 
 Setup (pillars, series formats, voice and visual briefs, money, prompts), Accounts using it (with the version each is pinned to), Experiments, Notes, History.
 
@@ -103,16 +116,36 @@ Laptop: tabs across the workspace, Setup as a 3-column table (field, value, orig
 2. **Scope:** one account, or a category or blueprint plus a checklist of its accounts. Accounts with a running experiment are shown disabled with the reason.
 3. **Define:** hypothesis; the change (the edit form, previewed as a diff against the current version); one metric (only those available now, §4.1); the window (N days or N items); the **cost preview** (§3.4) with the optional "also re-cut the backlog" tick-box.
 4. **Run:** Start writes the new version(s) and makes them effective; status `running`. The account shows the banner with progress, before vs during so far, and the "too few items" warning while it applies.
-5. **Decide:** when the window closes and outcomes have settled (§4.2), the experiment shows as **needs a decision** on Home and on Experiments. **Keep** (the version stays; for a category or blueprint experiment, offers to move the other accounts too) or **Revert** (restores the from-version as a new version), each with a required reason. Either way, "Add a learning to the playbook" is offered with the result pre-filled.
+5. **Decide:** when the window closes and outcomes have settled (§4.2), the experiment shows as **needs a decision** on Home, on Experiments and in the account's banner, each linking to its page `/experiments/<id>` (§2.7). **Keep and Revert exist only on that page (D7).** Home's card, the lists, the account banner and the 09:00 digest only link to it; no other page, route caller or Telegram message decides an experiment (ADR-44). **Keep** (the version stays; for a category or blueprint experiment, offers to move the other accounts too) or **Revert** (restores the from-version as a new version), each with a required reason. Either way, "Add a learning to the playbook" is offered with the result pre-filled.
 
 ### 2.7 Experiments (`/experiments`)
 
-Four lists across all accounts: **Needs a decision**, **Running**, **Drafts**, **Ideas** (open idea notes, each with "Try this"). Tables on a laptop, cards on a phone.
+Four lists across all accounts: **Needs a decision**, **Running**, **Drafts**, **Ideas** (open idea notes, each with "Try this"). Tables on a laptop, cards on a phone. `/experiments?needs=decision` opens the page filtered to the first list (the digest links there).
+
+**The experiment page (`/experiments/<id>`):** hypothesis, scope and accounts, the change as a diff (from and to version), metric, window and progress, the cost line from its preview (§3.4), the before and during cards (§4.2) and the verdict (§4.3). The actions depend on the status: a draft has **Edit**, **Start** and **Delete**; a running one has **Stop**; one that needs a decision has **Keep** and **Revert** (each with a required reason) and then "Add a learning to the playbook". This is the only place an experiment is decided (D7).
 
 ### 2.8 Notes and Home
 
 - A floating **+ Note** button on category, blueprint and account pages (phone): kind and text in one step, for ideas that come up while scrolling the feeds.
-- **Home:** a "Needs a decision" card, next to S3's permission-expiry banner.
+- **Home:** a "Needs a decision" card, next to S3's permission-expiry banner. It links to each experiment's page and has no Keep or Revert buttons (D7).
+
+### 2.9 Page links, Telegram's role and notifications (D10, ADR-44, ADR-45)
+
+S3c's pages, with the deep-link formats of [08 §2b](../../studio/08-dashboard-and-operations.md#2b-two-surfaces-one-product-adr-44-adr-45). The formats 08 §2b lists are used as they are; S3c adds the rows marked *new*, which follow the same pattern (a path, plus a query for a filter or tab). Login keeps the target (`callbackUrl`, relative paths only, log #99).
+
+| Page | Path | In 08 §2b | Linked from Telegram |
+|---|---|---|---|
+| Studio map | `/accounts` | — | no |
+| Account workspace | `/accounts/<id>`; a tab with `?tab=setup\|history\|results\|experiments\|notes\|sources`; a diff with `?tab=history&from=<n>&to=<n>` | `/accounts/<id>` | yes, as listed in 08 §2b (the bot side is S1 A4) |
+| Category workspace | `/categories/<code>` | *new* | no |
+| Blueprint workspace | `/blueprints/<name>` | *new* | no |
+| Experiments | `/experiments`; filtered with `?needs=decision` | `/experiments?needs=decision` | the digest's "experiments need a decision" line |
+| Experiment page | `/experiments/<id>` | `/experiments/<id>` | yes, where a message names one experiment |
+
+- Category and blueprint workspaces sit at top-level paths, not under `/accounts/…`, because an account id (`[a-z0-9][a-z0-9-]{0,39}`) could otherwise be `c`, `b` or any segment name. The paths match the API routes (§5.1).
+- An unknown id on any of these pages shows "not found" with a link back to `/accounts` or `/experiments`, never a blank page.
+- **Telegram's role (ADR-44):** none for setup edits, notes, versions or experiment decisions; those are dashboard tasks (08 §2, Accounts and Experiments rows). Telegram only deep-links.
+- **Notifications (ADR-45):** "experiments need a decision" is a **digest** line at 09:00 (not instant), linking to `/experiments?needs=decision`. Version saves, "Apply to accounts", note changes and experiment starts are **dashboard only**. S3c adds no instant alert. The digest itself is built in S2 (04 S2); S3c provides the count as a derived read (§5.1).
 
 ## 3. How producers use the setup (approved)
 
@@ -148,9 +181,20 @@ Four lists across all accounts: **Needs a decision**, **Running**, **Drafts**, *
 
 Prices come from `config.Prices`; the plan re-checks the per-clip numbers against `metadata.json` costs.
 
-### 3.4 Cost shown before an experiment starts
+### 3.4 One dry run: `POST /setup/preview` (D4)
 
-The experiment form classifies each changed field with §3.3 and shows one line, for example: "New jobs: no extra cost. Re-cutting the 3 sources already clipped for this account (4.2 source hours): ~$0.29 + ~$0.09 for 60 clips = **~$0.38**." The re-cut is an explicit tick-box ("also re-cut the backlog"); without it, the experiment uses only new jobs and costs nothing extra. The estimate uses `config.Prices` and the source hours in S1's `jobs` table.
+Saving a version and starting an experiment show the same preview, from one service function (`accounts/preview.py`, Modal-free) behind one route. `GET …/diff` alone isn't enough: it compares two **saved** versions, while a save or an experiment start has to be previewed **before** anything is written. So the preview is a standalone route, and both flows call it.
+
+- **Request:** `{target: {kind: category|blueprint|account, id}, expected_version, proposed: <the full snapshot the form would save>, accounts?: [ids] (for a category or blueprint save, the "Apply to accounts" ticks; for an experiment, its chosen accounts), recut_backlog?: bool}`.
+- **Response:**
+  - `diff`: field by field, `{path, from, to, change_class}` (§3.5), the same shape `GET …/diff` returns for saved versions;
+  - `reruns`: which stages a new job re-runs because of the change (from §3.3: none, or highlights onward, or transcribe onward, or captions and render), and whether the change takes effect at the next enqueue or send (`live`) or on new jobs;
+  - `affected`: the accounts that get a new version (with those skipped because of a running experiment, and why); per account, the queued items whose next send uses a changed `live` field; whether `format_changed` is set (the first 10 new items go to `review`, §3.5); with `recut_backlog`, the sources and clips that would be re-cut;
+  - `estimate`: "new jobs: no extra cost" plus, with `recut_backlog`, the re-cut cost, for example "Re-cutting the 3 sources already clipped for this account (4.2 source hours): ~$0.29 + ~$0.09 for 60 clips = **~$0.38**", from `config.Prices` and the source hours in S1's `jobs` table;
+  - `blocked`: reasons the save or start would be refused (a running experiment and a non-identity change, §4.4; a rules field in an experiment; loosening a rule without `confirm_loosen`), with the same codes the write route returns.
+- **Validation:** a proposal that doesn't validate answers 422 with field errors (§5.2), exactly as the save would. A stale `expected_version` answers 409 with the latest version.
+- **It writes nothing.** The save (`PUT …`) and the experiment start (`POST /experiments/{id}/start`) recompute the same function inside their transaction and refuse if the result is `blocked`, so the preview and the write can't disagree. A drift between preview and write (someone saved in between) is caught by `expected_version` (409).
+- **In the dashboard:** the save dialog shows the diff, what re-runs, who is affected and "no extra cost for new jobs" before the required note and Save. The experiment form shows the same block, plus the "also re-cut the backlog" tick-box, which reruns the preview with `recut_backlog`. Without the tick, the experiment uses only new jobs and costs nothing extra. A plain save never re-cuts (existing items are never touched, §3.2).
 
 ### 3.5 Change classes: what's live-editable and what needs review
 
@@ -219,18 +263,20 @@ The experiment form offers only metrics available now; S7 metrics show greyed ou
 
 ### 5.1 Routes
 
-All on S3's **`admin`** endpoint (ADR-38) with the bearer token; the author comes from S1's `X-Clipforge-Actor` header. S1's `/accounts` and `/sources` routes and CLI (S1 Task 18) are reused; after S3c, **`PATCH /accounts/{id}` writes a new version** instead of updating in place.
+All on S3's **`admin`** endpoint (ADR-38) with the bearer token; the author comes from S1's `X-Clipforge-Actor` header, which the dashboard's route handlers set to `web:<login>` (§5.3). S1's `/accounts` and `/sources` routes and CLI (S1 Task 18) are reused; after S3c, **`PATCH /accounts/{id}` writes a new version** instead of updating in place.
 
 | Area | Routes |
 |---|---|
 | Categories | `GET /categories`, `GET /categories/{code}`, `PUT /categories/{code}` (save → new version), `GET …/versions`, `GET …/versions/{n}`, `POST …/versions/{n}/restore` |
 | Blueprints | the same under `/blueprints/{name}`, plus `POST /blueprints` (copy an existing one), `POST /blueprints/{name}/apply {version, accounts[]}` |
 | Accounts | `GET /accounts/{id}/setup` (effective setup, origins, version), `PUT /accounts/{id}/setup`, `GET …/versions`, `GET …/diff?from=&to=`, `POST …/versions/{n}/restore`, `GET …/results?metric=` |
-| Experiments | `POST /experiments` (draft), `GET /experiments?status=`, `GET /experiments/{id}` (with the live result), `GET …/{id}/estimate` (§3.4), `POST …/{id}/start`, `…/stop`, `…/decide {keep\|revert, reason, promote?, learning?}` |
+| Setup preview | `POST /setup/preview` (§3.4): the one dry run for a save, a restore, "Apply to accounts" and an experiment start; writes nothing |
+| Experiments | `POST /experiments` (draft), `PUT /experiments/{id}` and `DELETE /experiments/{id}` (drafts only), `GET /experiments?status=&needs=decision`, `GET /experiments/{id}` (with the live result and the draft's preview), `POST …/{id}/start`, `…/stop`, `…/decide {keep\|revert, reason, promote?, learning?}` (called only from the experiment page, D7) |
 | Notes | `POST /notes`, `GET /notes?target=&status=`, `PATCH /notes/{id}`, `POST /notes/{id}/experiment` |
 | Pickers | `GET /metrics` (§4.1), `GET /prompts` (released versions from `prompts/metadata.json`) |
 
-- **No new cron:** "window closed" and "needs a decision" are **derived on read** from the stored `running` status and the data (the ADR-27 cron limit). Only `decide` and `stop` write a final status.
+- **No new cron:** "window closed" and "needs a decision" are **derived on read** from the stored `running` status and the data (the ADR-27 cron limit). Only `decide` and `stop` write a final status. The same derived read gives the digest its "experiments need a decision" count (§2.9).
+- **Every write runs the preview first.** `PUT …` saves, `…/restore`, `…/apply` and `…/start` call the §3.4 function in their transaction and refuse with its `blocked` reason, so there is one dry-run path. The earlier `GET /experiments/{id}/estimate` is folded into it.
 - **Contract (#49):** `POST /jobs` gains an optional `setup` in `JobInput`. `GET /jobs/{id}` and `GET /posting` don't change (`PostingOverview.accounts` already carries per-account data). `web/openapi.json` is regenerated in the same checkpoint.
 
 ### 5.2 Error paths
@@ -252,6 +298,8 @@ All on S3's **`admin`** endpoint (ADR-38) with the bearer token; the author come
 - `notes(id, target_type, target_id, kind, status, text, experiment_id, author, created_at, updated_at)`. A learning is a `learning` note on the category, listed under the playbook; the playbook text itself is versioned in `category_versions`.
 - `content_items.setup_version int NULL`, FK `(account_id, setup_version)` → `account_versions`. NULL for items made before versioning ("before versioning").
 - `post_events.data.setup_version`: a JSON key only.
+- **`post_events.actor text NULL` (D3):** who made a posting change, in the actor format every S3 and S3c write uses: `telegram:<user id>`, `web:<login>` or `session:<name>` (S1's `cli:<os user>` stays valid where the CLI writes). `NULL` means a system write with no person behind it: the tick's sends, imports and rows from before actors were recorded. It is written only by `posting/actions.py` (card 002, A4), in the same transaction as the change. Card 002 lands before 0002 and 0001 is frozen, so until 0002 the actor goes in `post_events.data.actor`; 0002 adds the column and backfills it with `UPDATE post_events SET actor = data->>'actor' WHERE data ? 'actor'` (a one-time `UPDATE` on a table without the append-only trigger), and `actions.py` then writes the column only. A check constraint allows `NULL` or `^(telegram|web|session|cli):.+$`, at most 80 characters (S1's header limit).
+- The `author` columns of the `*_versions` tables and `notes` use the same actor format, `NOT NULL`.
 - The `*_versions` tables are **append-only**, enforced by a trigger that rejects UPDATE and DELETE.
 
 ### 5.4 Migration: `clipforge setup import [--dry-run]` and `setup verify`
@@ -268,17 +316,17 @@ After the import, `blueprints/*.toml` is no longer read: `account create --bluep
 ### 5.5 Tests
 
 Local Postgres, as in S1. Previews are build-only, so the checks run locally and in production.
-- **Pure:** the resolver and origins (an override wins; reset inherits); field-registry classes; the cost estimate; before/during windows, including a window extended by a pause; the Wilson verdict and the 10-item floor.
-- **DB:** `*_versions` append-only (trigger); restore writes a new version; 409 on `expected_version`; one running experiment per account; non-identity edits blocked during a run; import re-runnable and `verify` at 0 differences; the `accounts` projection equals the current version.
+- **Pure:** the resolver and origins (an override wins; reset inherits); field-registry classes; the preview (diff, re-runs, affected accounts and items, blocked reasons, the estimate with and without the re-cut); before/during windows, including a window extended by a pause; the Wilson verdict and the 10-item floor.
+- **DB:** `*_versions` append-only (trigger); restore writes a new version; 409 on `expected_version`; one running experiment per account; non-identity edits blocked during a run; import re-runnable and `verify` at 0 differences; the `accounts` projection equals the current version; 0002 backfills `post_events.actor` from `data.actor` and the check constraint rejects a bad actor; a save refused by the preview writes nothing.
 - **Pipeline:** `create_job` stamps the setup and fills `ClipOptions`; the **setup version is in no cache key** (a hashtag change gives identical keys); a pinned captions key for the `default` preset.
-- **API:** every route answers 401 without the token, 422 with field errors, and 409 and 503 where they apply.
-- **Web:** Playwright in the phone and desktop projects for the account workspace, the edit → diff → restore loop, and the experiment flow, against a mocked admin API.
+- **API:** every route answers 401 without the token, 422 with field errors, and 409 and 503 where they apply; `POST /setup/preview` and the matching write agree (the same `blocked` reasons and diff); `decide` refuses an experiment that doesn't need a decision.
+- **Web:** Playwright in the phone and desktop projects for the account workspace, the edit → preview → save → diff → restore loop, and the experiment flow, against a mocked admin API; every §2.9 path loads (and an unknown id shows "not found"); Keep and Revert appear only on `/experiments/<id>`.
 
 ### 5.6 Rollback
 
-- Everything is additive: new tables, one nullable column, one optional `JobInput` field.
+- Everything is additive: new tables, two nullable columns (`content_items.setup_version`, `post_events.actor`), one optional `JobInput` field.
 - **`SETUP_SOURCE=db|off`** (default `off` until `verify` passes). With `off`, producers ignore the setup and use today's constants, and the dashboard shows the workspaces read-only. Rolling back is a config change plus a redeploy (or `modal app rollback`).
-- Last resort: `alembic downgrade` to 0001 drops the new tables and column. Take a `setup export` JSON snapshot first, because that loses history.
+- Last resort: `alembic downgrade` to 0001 drops the new tables and columns. Take a `setup export` JSON snapshot first, because that loses history. `post_events.data.actor` is kept by the backfill, so dropping the column loses no actor.
 
 ### 5.7 Cost
 
@@ -290,9 +338,9 @@ Design $0. Build: tests run locally; no Modal or LLM spend beyond one smoke run 
 
 | Phase | Builds | Depends on | Switch |
 |---|---|---|---|
-| **S3c-1: versions and workspaces** | migration 0002, the resolver and field registry, `setup import` and `verify`, the category, blueprint and account workspaces (setup with origins, history, diff, restore), notes, the Accounts page | S1 finished (all tasks; 0001 frozen); S3's `admin` endpoint (S3 action 4) | `SETUP_SOURCE=off`: edit and review only |
+| **S3c-1: versions and workspaces** | migration 0002 (with `post_events.actor`, D3), the resolver and field registry, `POST /setup/preview` (diff, re-runs, affected, blocked; D4), `setup import` and `verify`, the category, blueprint and account workspaces at the §2.9 paths (setup with origins, history, diff, restore), notes, the Accounts page | S1 finished (all tasks; 0001 frozen); S3's `admin` endpoint (S3 action 4) | `SETUP_SOURCE=off`: edit and review only |
 | **S3c-2: wiring into the clip producer** | `create_job` reads and stamps the setup; `content_items.setup_version`; the send records its version; caption preset in the captions key (only when not `default`); prompts from released versions; the language-mismatch hold | S3c-1; S1 Tasks 14, 15, 17 and 21 live | `SETUP_SOURCE=db` after `verify` reports 0 differences |
-| **S3c-3: experiments and results** | the experiment flow and cost preview, one running per account, the edit block during a run, results with the metrics available now, the Wilson verdict and 10-item floor, the Experiments nav item, Home's "Needs a decision" card, learnings in the playbook | S3c-2 | — |
+| **S3c-3: experiments and results** | the experiment flow and page (`/experiments/<id>`, the only place to keep or revert, D7), the re-cut estimate in the preview, one running per account, the edit block during a run, results with the metrics available now, the Wilson verdict and 10-item floor, the Experiments nav item, Home's "Needs a decision" card, learnings in the playbook | S3c-2 | — |
 | **In S7** | views, retention, followers, clicks and revenue in the metric registry, with maturity ages | S7 | — |
 
 - **S2** enforces §3.5's "a format change sends the first 10 items to `review`" (reads `account_versions.format_changed`).
@@ -307,3 +355,5 @@ Design $0. Build: tests run locally; no Modal or LLM spend beyond one smoke run 
 - The exact field list and validation per level, taken from S1's final `Account` and `Blueprint` contracts.
 - The drafted category playbooks (the plan writes them from 01, 07 and 09; the owner edits them in the dashboard).
 - Whether `PATCH /accounts/{id}` keeps S1's request shape (recommended: same shape, now writing a version).
+- Confirm that card 002's `posting/actions.py` (A4) writes the actor into `post_events.data.actor`, so 0002's backfill finds it (§5.3, D3). If A4 recorded it elsewhere, the backfill reads from there instead.
+- The digest's "experiments need a decision" line is S2's digest reading S3c's derived count (§2.9); the plan checks which lands first and leaves the line out until both exist.
