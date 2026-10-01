@@ -132,3 +132,14 @@ deny = [
     "prompts/**",
     "docs/reports/**",  # its own report stays allowed (checked before deny)
 ]
+
+# Card 009 (dashboard design): design documents only; the build is a later s3/ card.
+[prefix."s3/"]
+stream = "s3"
+log = [420, 439]
+allow = [
+    "docs/superpowers/specs/*s3-dashboard*",
+    "docs/superpowers/plans/*s3-dashboard*",
+    "docs/design/dashboard/**",
+    "docs/studio/08-dashboard-and-operations.md",
+]
