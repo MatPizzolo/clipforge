@@ -18,10 +18,11 @@ Research date: 2026-09-29.
 We don't design a channel from scratch each time. We **instantiate a blueprint**:
 
 ```
-Category   clips | story | band | avatar          → producer + compliance profile (code)
+Category   clips | story | band | avatar | model  → producer + compliance profile (code)
 Blueprint  e.g. untold-archive                   → niche, pillars, series formats, voice/visual
                                                    style brief, platform defaults, money sources
-                                                   (versioned file: blueprints/<name>.toml + prompts)
+                                                   (blueprints/<name>.toml + prompts until S3c,
+                                                   then versions in the database, ADR-42)
 Account    blueprint + language + persona + handles + Upload-Post profile + budget + review tier
 Series     a recurring format inside an account   → "The day that…", "Part 1/2", "Sounds like X, from Y"
 Item       one video (ContentItem)
@@ -33,7 +34,7 @@ Item       one video (ContentItem)
   clipforge account create --blueprint untold-archive --lang es --handle historias.ocultas
   ```
 
-  This spawns a `persona` job (designed voice, plus a face for avatar accounts), creates the database rows and a calendar, and starts the account in `review` tier.
+  Today (S1) this creates the account row from the blueprint, in `review` tier, and writes its posting schedule copy. The target (S8) also spawns a `persona` job (designed voice, plus a face for avatar accounts) and creates a calendar.
 - **Series rotation** is the answer to YouTube's July 2026 inauthentic-content rule. Each item varies its series, structure and research, and the variation is logged.
 - **EN/ES pairs:** the two accounts share a blueprint, with `paired_account_id` linking them. The Spanish side is a **native adaptation** (local examples, native voice, neutral LatAm Spanish), not a literal translation. The two languages never share one feed.
 - **Compliance profile per category**, enforced by the policy gate:

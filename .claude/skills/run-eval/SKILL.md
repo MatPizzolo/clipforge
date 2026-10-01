@@ -4,6 +4,8 @@ description: Run the highlight eval and compare against the last result. Use whe
 argument-hint: "[prompt_version] [model]"
 ---
 
+**Not built yet (ROADMAP Phase 5):** `clipforge eval` and `evals/` don't exist. Stop and tell the owner.
+
 1. Run `uv run clipforge eval --set evals/v1 $ARGUMENTS`.
 2. Load the newest and previous files in `evals/results/`.
 3. Report a table: precision@5, recall, boundary error, cost per source hour, latency, with deltas.

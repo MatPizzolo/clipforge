@@ -1,3 +1,5 @@
+> **Historical (ADR-21, 2026-09-28):** built and deployed; docs/ARCHITECTURE.md and the code are current.
+
 # Speaker-aware framing: cut to whoever is talking in two-person shots
 
 Date: 2026-09-28 · Status: Accepted, implemented and deployed · ADR: 21 · Sub-project 2 of 3 from the "professional clips" brainstorm (1: retention polish, done; 3: pacing)

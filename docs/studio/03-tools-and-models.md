@@ -30,7 +30,7 @@ Research date: 2026-09-29. **Estimates** are marked (est.). Everything is to be 
 | Persona face | **Z-Image-Turbo** + one **LoRA per persona** (20–40 curated synthetic shots) | Qwen-Image-Edit-**2509** for pose and outfit changes (pin the version; 2.1 is non-commercial); PuLID-FLUX **FaceNet variant** only | Apache-2.0 | L40S (LoRA training: H100) | one-off, ~$1–3 per persona (est.) |
 | B-roll stills | **Z-Image-Turbo** (8 steps) | Qwen-Image-2512 + Lightning (images with text); FLUX.2 klein **4B** | Apache-2.0 | L40S (or L4 in FP8) | ~$0.002–0.006 per image |
 | B-roll video (5 s) | **Wan2.2 A14B + lightx2v 4-step LoRA** | Wan2.2 TI2V-5B (L40S) | Apache-2.0 | H100 | ~$0.07–0.13 per clip |
-| Talking head | **InfiniteTalk** (Wan2.1-I2V-14B + audio adapter; head, body and lips; 480p then upscale; audio encoder chinese-wav2vec2-base is MIT, no InsightFace in its requirements) | **LongCat-Video-Avatar 1.5** (MIT; check InsightFace use) in a bake-off; **EchoMimicV3** (1.3B, cheap) | Apache-2.0 / MIT / Apache-2.0 | H100 or A100-80 | ~$0.35–0.55 per 30 s at 480p; use it only for presenter segments |
+| Talking head | **InfiniteTalk** (Wan2.1-I2V-14B + audio adapter; head, body and lips; 480p then upscale; audio encoder chinese-wav2vec2-base is MIT, no InsightFace in its requirements). InfiniteTalk and EchoMimic Flash use chinese-wav2vec2-base, pretrained on non-commercial WenetSpeech: open question O7 in 10, so prefer LongCat unless X2 shows a wav2vec model clearly better (log #121, spikes/x2-talking-head.md) | **LongCat-Video-Avatar 1.5** (MIT; no InsightFace; Whisper audio encoder) in a bake-off; **EchoMimicV3** Flash (1.3B, cheap) | Apache-2.0 / MIT / Apache-2.0 | H100 or A100-80 | ~$0.35–0.55 per 30 s at 480p; use it only for presenter segments |
 | Face detection | YuNet (existing, MIT) or MediaPipe | — | MIT / Apache | CPU | — |
 
 ## LLM text (paid credits: the only paid AI)
@@ -50,7 +50,7 @@ Before changing a model on any quality-level stage, run an eval (ADR-4, docs/EVA
 | Posting | **Upload-Post** | Zernio (~$318/mo at 100 connections) | Basic $24/mo (5 profiles), Professional $50 (25), Advanced $147 (75); yearly billing −40%. Paid plans: unlimited uploads, FFmpeg-minute caps. **Free has no TikTok.** One profile = one account on every platform | Public TikTok posts through its own audited app (paid plans; the TikTok account must allow public posts, else `tiktok_privacy_unavailable`). AI-label fields: `is_aigc`/`tiktok_is_ai_generated`, `containsSyntheticMedia`, `is_ai_generated`, `facebook_is_ai_generated`. Media by URL or upload; photos and carousels. HMAC-SHA256 webhooks (`X-Upload-Post-Signature` over `<timestamp>.<body>`; deliveries before the secret exists are unsigned). Analytics (live lookup 100 req per 5 min). Python SDK `upload-post` (checked 2026-09-29). Avoid self-hosted Postiz (the TikTok audit falls on us) and Buffer (no video posting) |
 | Official APIs (later) | YouTube Data v3 (upload quota: 100/day, its own bucket) plus YouTube Analytics | Instagram Graph (100 posts per 24 h, `is_ai_generated`) | free | TikTok's own API: unaudited apps can only post privately |
 | Database | **Neon Postgres** | Supabase | Free: 0.5 GB and 100 CU-h/mo **per project**; scales to zero after 5 idle minutes (resume in a few hundred ms). Launch $0.106/CU-h, storage $0.35/GB-mo | Use the pooled endpoint from Modal, in Modal's AWS region. A query every 5 minutes keeps compute awake (~180 CU-h/mo at 0.25 CU), which is over the free tier |
-| Media hosting | **Cloudflare R2** | S3 | $0.015/GB-month, **free egress**, 10 GB free | Public bucket with unguessable keys, or presigned URLs |
+| Media hosting | **Signed, expiring Volume links** (ADR-13's mechanism, ADR-28) | Cloudflare R2 (or S3), only if those prove unreliable | R2: $0.015/GB-month, **free egress**, 10 GB free | R2 would use a public bucket with unguessable keys, or presigned URLs |
 | Dashboard hosting | **Vercel Pro** | Cloudflare Pages | $20/mo (includes $20 of usage) | Hobby is "non-commercial personal use only"; the fair-use page counts ads, and sites whose primary purpose is affiliate linking, as commercial. A monetized studio's dashboard needs Pro |
 | Dashboard auth | **Auth.js** (one owner) | Clerk (free up to 50k MRU) | $0 | |
 | API client | **@hey-api/openapi-ts** | openapi-typescript | $0 | Export the OpenAPI spec in CI; the docs routes stay off |
@@ -84,7 +84,7 @@ Cold starts dominate at low volume. That's why GPU work is batched per account p
 | Vercel Pro | $20 |
 | Neon | $0 if it can scale to zero; ~$20 on Launch if a 5-minute cron keeps it awake |
 | Claude API | ~$5–10 |
-| R2 | $0 (under 10 GB) |
+| R2 (only if Volume links prove unreliable) | $0 (under 10 GB) |
 | **Total** | **~$50–75** |
 
 **Scenario 2: 19 accounts** (the 07 portfolio: 3 clip accounts at 4/day; 6 story, 3 band, 4 avatar and 3 AI-model accounts at 1–1.5/day ≈ 1,000 videos a month)
@@ -96,7 +96,7 @@ Cold starts dominate at low volume. That's why GPU work is batched per account p
 | Vercel Pro | $20 |
 | Neon Launch | ~$20 |
 | Claude API | ~$20–30 |
-| R2 | ~$1–2 |
+| R2 (only if Volume links prove unreliable) | ~$1–2 |
 | xAI X Search trend job (optional, ~4K posts a month) | ~$20 |
 | **Total** | **~$215–245** (~$195–225 without X Search) |
 

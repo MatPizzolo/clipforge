@@ -50,10 +50,10 @@ uv run modal secret create clipforge-secrets \
 
 uv run modal run src/clipforge/app.py::doctor    # check ffmpeg + the GPU image
 uv run modal run src/clipforge/app.py::smoke     # one real job on the 10 s fixture (~$0.01)
-uv run modal deploy src/clipforge/app.py         # deploy the API, webhook and pipeline
+scripts/deploy.sh --dry-run && scripts/deploy.sh --reason "first deploy"   # owner only: the API, webhook and pipeline
 ```
 
-`modal deploy` prints the `web` URL. Put it in `API_URL` in `.env` and in the secret (re-run `modal secret create --force clipforge-secrets` with every value plus `API_URL=...`), then register the bot's webhook:
+The deploy prints the `web` URL. Put it in `API_URL` in `.env` and in the secret (Modal dashboard → Secrets → `clipforge-secrets` → **Edit**, add `API_URL`, save, then redeploy; never `modal secret create --force`, which replaces the whole secret), then register the bot's webhook:
 
 ```bash
 uv run clipforge set-webhook
@@ -63,7 +63,7 @@ uv run clipforge set-webhook
 
 ### Clip videos from your computer
 
-Put each channel's videos (`.mp4 .mov .mkv .webm .m4v .avi`) in its own folder, `videos/<channel>/`, and describe the channel once in `videos/channels.toml` (credit name, optional url, permission; ADR-22). Then:
+Put each channel's videos (`.mp4 .mov .mkv .webm .m4v .avi`) in its own folder, `videos/<channel>/`, and describe the channel once (credit name, optional url, permission). Until the S1 rollout that's `videos/channels.toml` (ADR-22), the fallback `clip` uses while the API has no database. After it, sources live in the database: `uv run clipforge source add` (or `source import-toml` once to copy `channels.toml`). Then:
 
 ```bash
 uv run clipforge clip                                       # upload + submit every new video, then exit
@@ -112,7 +112,7 @@ uv run clipforge status                    # posting overview: per channel, queu
 uv run clipforge status --rebuild          # re-queue every finished channel job for posting
 ```
 
-The defaults live in `.env`: `DEFAULT_CLIP_COUNT=auto`, `DEFAULT_MIN_SCORE=0.80`, `DEFAULT_CLIP_LEN=30-60`. For the Telegram bot to use the same defaults, update the Modal secret too (`uv run modal secret create --force clipforge-secrets --from-dotenv .env`). More in [videos/README.md](videos/README.md).
+The defaults live in `.env`: `DEFAULT_CLIP_COUNT=auto`, `DEFAULT_MIN_SCORE=0.80`, `DEFAULT_CLIP_LEN=30-60`. For the Telegram bot to use the same defaults, add them to the Modal secret too (Modal dashboard → Secrets → `clipforge-secrets` → **Edit**, then redeploy; never `modal secret create --force`). More in [videos/README.md](videos/README.md).
 
 Inputs must be direct media links (or Telegram uploads up to 20 MB). YouTube links are not supported, because YouTube blocks Modal's servers (see ADR-10).
 
@@ -126,7 +126,7 @@ Inputs must be direct media links (or Telegram uploads up to 20 MB). YouTube lin
 
 A bare link uses the defaults (automatic count, score ≥ 0.80). A video file up to 20 MB works too; put options in its caption (`score=0.85 len=20-45`). Only users in `TELEGRAM_ALLOWED_USER_IDS` get an answer. The bot sends each clip as a video as soon as it is rendered, then a download link for the zip.
 
-**Posting assistant (plan C, live since 2026-09-29; ADR-23, ADR-24).** Once `POSTING_CHAT_ID` is set, the bot sends the next queued clip at each slot (default 08:00, 10:30, 13:00, 16:00, 19:00, 21:30 New York time) with copy-ready captions for TikTok, Instagram and YouTube, and buttons: ✅ per platform (tap again to undo), ⏭ Skip (back after 24 h) and 🗑 Reject (with an optional reason). `/status` shows the posting overview; `/next`, `/pause` and `/go` run the queue. After 2 clips without a tap it waits and reminds you once. A daily keep-alive stops the queue expiring (the Modal Dict drops entries after 7 idle days) and snapshots it; `clipforge status --restore` puts back anything lost. Owner steps and commands: [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md).
+**Posting assistant (plan C, live since 2026-09-29; ADR-23, ADR-24).** Once `POSTING_CHAT_ID` is set, the bot sends the next queued clip at each slot (default 08:00, 10:30, 13:00, 16:00, 19:00, 21:30 New York time) with copy-ready captions for TikTok, Instagram and YouTube, and buttons: ✅ per platform (tap again to undo), ⏭ Skip (back after 24 h) and 🗑 Reject (with an optional reason). `/status` shows the posting overview; `/next`, `/pause` and `/go` run the queue. After 2 clips without a tap it waits and reminds you once. A daily cron, `posting_daily` (ADR-46), stops the queue expiring (the Modal Dict drops entries after 7 idle days) and snapshots it; `clipforge status --restore` puts back anything lost. Owner steps and commands: [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md).
 
 ## Project docs
 

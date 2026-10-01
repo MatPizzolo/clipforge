@@ -1,3 +1,5 @@
+> **Historical (ADR-19, 2026-09-28):** built and deployed; docs/ARCHITECTURE.md and the code are current.
+
 # Plan 4: Face-centered reframing per shot
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

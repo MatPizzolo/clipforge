@@ -1,5 +1,7 @@
 # Checkpoint protocol
 
+Sessions: use the `checkpoint` skill (`.claude/skills/checkpoint/SKILL.md`); it follows this protocol.
+
 At every checkpoint a session:
 1. Runs `scripts/check.sh` until it's green, and pastes its summary lines into the report.
 2. Writes or updates its report in `docs/reports/` (template: `handoff-report.md`).

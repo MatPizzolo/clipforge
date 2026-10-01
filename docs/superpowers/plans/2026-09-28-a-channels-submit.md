@@ -1,3 +1,5 @@
+> **Historical (posting assistant, plans A, B and C, ADR-22–24, live since 2026-09-29):** built and deployed; the "not deployed" status below is from before that. docs/ARCHITECTURE.md and the code are current.
+
 # Plan A: Channels and batch submit — Implementation Plan
 
 > **Status (2026-09-29): done.** All 3 tasks plus the final-review fix pass (5 Important findings fixed; 9 minors deferred). Ledger: `.superpowers/sdd/2026-09-28-a-channels-submit/progress.md`. Not deployed yet.

@@ -1,6 +1,6 @@
 # Studio S3c: account workspaces (design)
 
-Date: 2026-09-30 · Status (revised by card 003, 2026-09-30; **awaiting the owner's review**):
+Date: 2026-09-30 · Status (revised by card 003, 2026-09-30; **accepted by the owner on 2026-09-30**, with ADR-42, decision log #131):
 - §0 goal and scope, §1 data model: **approved** (given by the owner before this design). §1.1 now states D1.
 - §2 pages: **approved** (with the Experiments nav item, added only when S3c is built). Revised for D7 (§2.6, §2.7, §2.8) and D10 (§2.3, §2.4 paths, new §2.9).
 - §3 producers, §4 results, §5 API/data/migration/rollback, §6 roadmap: **approved** in chat, one section at a time. Revised for D3 (§5.3, §5.5, §5.6) and D4 (§3.4 rewritten, §5.1); §6's phases list the new pieces.
@@ -16,10 +16,10 @@ Date: 2026-09-30 · Status (revised by card 003, 2026-09-30; **awaiting the owne
   - **D8** the pre-S2 Review page as a queue manager, and **D9** `admin` as a second ASGI app: S3's, added to 06's S3 card.
   - **D10** deep links: done, §2.9 (08 §2b formats, plus `/categories/<code>` and `/blueprints/<name>`).
 - ADR-44 (home per task) and ADR-45 (notifications) for S3c: §2.9. ADR-43 and ADR-46 are referenced, not redefined (§0).
-- ADR-42 (draft in 05): revised with D1, D3, D4 and D7; **awaiting the owner's acceptance**.
+- ADR-42: revised with D1, D3, D4 and D7; **accepted 2026-09-30** (#131). Its text is in [docs/DECISIONS.md](../../DECISIONS.md#adr-42-versioned-categories-blueprints-and-accounts-in-the-database).
 - Implementation plan: **not started**, on purpose: it waits until card 002's final review, so it builds on S1's final schema.
 
-Decision: ADR-42 (draft in [docs/studio/05](../../studio/05-proposed-adrs.md)), which replaces ADR-35's "blueprints are files" part.
+Decision: [ADR-42](../../DECISIONS.md#adr-42-versioned-categories-blueprints-and-accounts-in-the-database) in `docs/DECISIONS.md` (accepted 2026-09-30), which replaces ADR-35's "blueprints are files" part.
 Background: ADR-25, 26, 29, 35, 38, 41, 43–46; [01](../../studio/01-vision-and-strategy.md), [07](../../studio/07-channel-portfolio.md), [08 §2](../../studio/08-dashboard-and-operations.md#2-dashboard-information-architecture-nextjs), [09](../../studio/09-account-registry.md); the S1 spec and plan (2026-09-29); the S3a spec (2026-09-29).
 
 ## 0. Goal and scope
