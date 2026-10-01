@@ -48,6 +48,9 @@ allow = [
     # the API contract and the dashboard's generated client, regenerated with S1's route changes
     "web/openapi.json",
     "web/lib/api/**",
+    # the two dashboard fixtures typed by the generated client (card 002 A5, owner ruling, log #132)
+    "web/lib/mocks.ts",
+    "web/tests/unit/summaries.test.ts",
 ]
 
 [prefix."s3c/"]
