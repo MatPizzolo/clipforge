@@ -1,78 +1,78 @@
 # Status
 
-The one page that says where things stand. The coordinator updates it after every merged PR and every report. Detail lives in the linked files; this page only summarizes.
+The one page that says where things stand. The coordinator updates it after every merged PR and every report. Detail lives in the linked files; this page only summarizes, and closed items move out (their record is in `docs/reports/` and the decision log).
 
-Last updated: 2026-10-01 (card 002 merged, PR #5; cards 001 and 003 earlier, PRs #3 and #6; ADR-42 accepted). Production: the `clipforge` Modal app runs the code deployed on 2026-09-30, Dict-only (`STATE_READS=dict`, no database wired); `posting_tick` runs every 5 minutes; deploy blackout in runbook §1. **Not deployed yet:** card 002's code. The next `scripts/deploy.sh` replaces the `posting_keepalive` cron with `posting_daily` (daily idempotent rebuild; the sticky `posting:outage` flag), adds ⚠️ ops alerts (failed channel/CLI jobs, tick and daily errors, within ADR-45's limits) and `db_doctor`, and mounts `blueprints/`; the database stays unwired until `DATABASE_URL` is in the secret (rollout step 4c.2).
+Last updated: 2026-10-01.
 
-## Next cards (in order)
+## Now
+
+**Production.** The `clipforge` Modal app runs the code deployed on 2026-09-30, Dict-only (`STATE_READS=dict`, no database wired). `posting_tick` runs every 5 minutes; deploy blackout in runbook §1.
+
+**Merged but not deployed:** card 002 (S1). The next `scripts/deploy.sh`:
+- replaces the `posting_keepalive` cron with `posting_daily` (same 07:00 UTC slot; a daily idempotent rebuild; the sticky `posting:outage` flag);
+- adds ⚠️ ops alerts (failed channel and CLI jobs, tick and daily errors, within ADR-45's limits) and `db_doctor`;
+- mounts `blueprints/`.
+
+The database stays unwired until `DATABASE_URL` is back in the Modal secret at rollout step 2 (runbook §4).
+
+**Open PRs:**
+
+| PR | What | State |
+|---|---|---|
+| #13 | Card 006, S4 Timeline renderer | Spec approved 2026-10-01 (ADR-47, `assets` out of the cache key); the session writes the plan, then stops for review |
+| #14 | Card 008, X0 follow-ups | Checkpoint A done (migration-head check, CI deploy tags, Stop hook); checkpoint B: keep a failing step's output, fix clock-dependent tests |
+| #15 | Coordinator: ADR-47 accepted, 02's Timeline sketch | Ready to merge when green |
+
+## Waiting on the owner (most important first)
+
+1. **O3 and O5: the only blockers for S1's rollout (Task 22).** O3: the final handles for founder.tapes and hombre.en.construccion, checked free on TikTok, Instagram, YouTube and Facebook. O5: Billy Garton Jr.'s permission record (granted when and by whom, where the agreement is stored, monetization yes/no, translations yes/no, any expiry). Then the coordinator writes the rollout card.
+2. **Take `DATABASE_URL` out of `clipforge-secrets`** (Modal dashboard → Secrets → Edit → delete that key only; never recreate the secret from `.env`). Do it before the next deploy.
+3. **O7, WenetSpeech-pretrained models (gates card 005):** **treat as "needs review"; prefer LongCat 1.5 unless a wav2vec model is clearly better in the X2 blind test.**
+4. **The S0 checks:** the phone test (`/status`, `/next`, ✅ on and off, ⏭, 🗑 + reason, `/pause`, `/go`), one scheduled slot end to end, and the 07:00 UTC daily log line with its snapshot (`uv run modal app logs clipforge`).
+5. **Branch protection for `main`:** require a PR and the `check` and `scope` checks; block force pushes (may need GitHub Pro on a private repo).
+6. **The Vercel steps (runbook §5b), when you want the dashboard online:** they unlock card 004.
+7. **X2's ~227 GB on the Volume:** **keep it if card 005 runs within a couple of weeks**, else `uv run modal volume rm -r clipforge-models x2`.
+8. **Deploy card 002's code** whenever you like, after step 2 and outside the blackout: `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "card 002"`.
+9. Before S2: O4 (Upload-Post plan) and O6 (clip series formats).
+10. After card 008: the GitHub settings for `DEPLOY_ENABLED` (runbook §8 "still left").
+
+## Next cards
 
 | Card | What | Can start | Runs alongside |
 |---|---|---|---|
-| [001](docs/cards/001-x0-tooling.md) | X0: check.sh, scope check, docs tests, CI, worktree and deploy scripts, and `.claude/` guardrails (hooks, permissions, agents, skills) | **done 2026-09-30** (PR #3) | — |
-| [002](docs/cards/002-s1-finish.md) | S1 finish, stop before the rollout | **done 2026-10-01** (PR #5) | — |
-| [003](docs/cards/003-s3c-revision.md) | S3c design revision (D3, D4, D10) | **done 2026-09-30** (PR #6) | — |
-| [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | 002, 003, 005 (merge after 002) |
-| [005](docs/cards/005-x2-resume.md) | X2 talking-head spike, resume | after O7 is ruled | 002, 003, 004 |
-| [006](docs/cards/006-s4-timeline.md) | S4 Timeline renderer | **sent 2026-10-01** (designing; spec next, for the owner's review) | 003, 004, 005 |
-| [007](docs/cards/007-cleanup-docs.md) | Docs audit and refresh: every Markdown file checked against main and corrected (branch `cleanup/`, Markdown only); unused code and assets proposed to their owners | **done 2026-10-01** (PR #11: 46 Markdown files refreshed, log #400–#403; nothing deleted) | — |
-| [008](docs/cards/008-x0-followups.md) | X0 follow-ups: migration-head check in `deploy.py`, CI deploys tagged, the Stop hook stops asking the coordinator for reports | **now** | 006, 007 |
+| [006](docs/cards/006-s4-timeline.md) | S4 Timeline renderer | **sent 2026-10-01** (spec approved; plan next) | 008, 004, 005 |
+| [008](docs/cards/008-x0-followups.md) | X0 follow-ups: migration-head check in `deploy.py`, CI deploys tagged, Stop hook on main/coord, failing-step log | **sent 2026-10-01** (checkpoint B) | 006 |
+| rollout (to write) | S1 Task 22, run with the owner: migrate, deploy, accounts, sources, import, verify, switch reads | after O3 and O5 | — |
+| S3c plan (to write) | S3c implementation plan, on S1's final schema | now (card to write) | 006 |
+| [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | 006, 008, 005 |
+| [005](docs/cards/005-x2-resume.md) | X2 talking-head spike, resume | after O7 is ruled | 004, 006, 008 |
+
+Done: [001](docs/cards/001-x0-tooling.md) X0 tooling (PR #3) · [002](docs/cards/002-s1-finish.md) S1 code (PR #5) · [003](docs/cards/003-s3c-revision.md) S3c design (PR #6) · [007](docs/cards/007-cleanup-docs.md) docs refresh (PR #11). Full list: [docs/cards/](docs/cards/README.md).
 
 ## Workstreams
-| Workstream | Status | Last finished | Continues at |
-|---|---|---|---|
-| **S0** posting assistant (plan C) | Live since 2026-09-29, redeployed 2026-09-30 (Dict-only). The session ended long ago | Plan C Tasks 1–6 and its final review | Owner checks only (below): phone test, one scheduled slot, the 07:00 UTC keep-alive line and first snapshot |
-| **S1** database, accounts, sources | Code finished, stopped before the rollout (card 002, PR #5). Fast suite 1057 passed | Tasks 1–21b, addendum A1–A6, the final whole-branch review (four reviewers), the sticky outage flag (#217), Task 23 amendments (#218) | **Task 22, the rollout**, with the owner: needs O3 and O5, then a rollout card; runbook §4 (step 7b: `posting_daily`, then `db_doctor` shows `schedule_drift: []` before step 7). Small fix for the rollout card: a manual `clipforge status --rebuild` isn't blocked by the outage flag (card 007's report) |
-| **X0** working environment | Done (card 001, PR #3) | `scripts/check.sh`, the scope check (`scripts/scopes.toml`), docs tests, CI on `check.sh` + a `scope` job, `worktree.sh` (`--no-track`), `deploy.sh` (blackout, `.env` settings required), `.claude/` hooks, permissions, agents, skills | Owner: branch protection for `main` (require `check` and `scope`) |
-| **S2** publishing | Not started | — | After S1's rollout (Task 22). 04 S2 lists the ADR-44/45 items added on 2026-09-30 |
-| **S3a** dashboard shell | About 92%. 68 unit tests, 21 Playwright tests pass | Tasks 1–11, checkpoint G (laptop layout), the audit fix card, deep links (#99) | `docs/superpowers/plans/2026-09-29-studio-s3a.md` Task 12 (a real local GitHub login, needs the local OAuth app) and Task 13 (Vercel deploy), both waiting on the owner's Vercel steps (§5b) |
-| **S3** dashboard v1 | Not started | — | 06's S3 card, after S1. It owns the `admin` endpoint (D9) and the pre-S2 Review page (D8) |
-| **S3c** account workspaces | Design **accepted** (ADR-42, 2026-09-30); card 003 revised it for D1, D3, D4, D7, D10 (PR #6) | `docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md` (§7: six points for the plan) | The implementation plan (S1 is now final). Its migration 0002 also takes card 002's deferrals: a `jobs.error` column, the `post_events.actor` column (backfilled from `data.actor`), and a pause actor on `posting_state` |
-| **S4+** (Timeline, media servers, producers) | Not started | — | card 006, ready to start |
-| **X1** voice | Done | Qwen3-TTS primary, Kokoro fallback (#69); report `docs/studio/spikes/x1-voice.md` | Continues in S5 (the TTS server and its guard, #72) |
-| **X2** talking head | Stopped at ~25% (licenses checked, no clips, ~$0.40 of $30) | `docs/studio/spikes/x2-talking-head.md` | card 005, after the owner rules on O7 |
-| **X3–X6** | Not started | — | 06's cards |
 
-## Addendum tracker
-S1's plan names its own addendum steps A1–A6 by task. The coordinator's items map onto them:
-
-| Item | S1 plan step | Status |
+| Workstream | Status | Continues at |
 |---|---|---|
-| Derived `producer_version` (ADR-43), `build` = git SHA | A1 | done (#111; `clips:14fcf790` at the pause) |
-| One sanitizer (`sanitize.clean` / `redact`) | A1 | done (R29: split into two audiences) |
-| Task 21 split: 21a (blueprints mounted, read-only `db_doctor`, `.env.example`) / 21b (DB wired, deployed only at 4c.2) | A2 = 21a; 21b | done (#200, #201, #212, #213) |
-| Platforms = account ∩ permission, account from the source | Task 14 | done (frozen-per-item test in A3) |
-| Slot guard from sends (#77) | A3 | done (#202) |
-| Slot computed before any DB call, schedule copy in the Dict | A3 | done (#203); zero copies alert (A6), rollout step 7b |
-| Hashtags from the account in postgres mode | Task 15 / A3 | done |
-| `add_send` failure rollback | Task 15 | done (#95) |
-| `posting/actions.py`, actor on every write, DB-down answers, `statement_timeout` | A4 | done (#204–#206; actor in `post_events.data.actor`) |
-| Bot URL buttons from `DASHBOARD_URL` (ADR-44 deep links) | A4 (added by the coordinator at the pause) | done (https only, localhost excepted) |
-| Job view and overview from the `jobs` table, additive fields | A5 | done (#207, #208; fixtures by #132) |
-| `ops_alert` + `posting_daily` (ADR-45, ADR-46) | A6 | done (#210, #211; final-review fixes #214–#216; outage flag #217) |
-| Task 23 deletion conditions | plan addendum | done (written; enforced at Task 23) |
-| Ledger rulings copied into the log | — | done |
-| S3c D1 one setup id | S3c | **closed**: `(account_id, account_version)` with pinned parents (#88) |
-| S3c D2 `PATCH /accounts` saves a version with an actor | S3c spec §5.1 | done in design |
-| S3c D3 `post_events.actor` column in 0002 | S3c spec §5.3; card 002 A4 | done in design (#251); until 0002, A4 writes `post_events.data.actor` |
-| S3c D4 one dry-run preview for save and experiment start | S3c spec §3.4, §5.1 | done in design: `POST /setup/preview` (#250) |
-| S3c D5 edits apply to new items only | S3c spec §3.2 | done in design |
-| S3c D6 home tasks / Telegram role per page | 08 §2 | done at the pause (08 §2 column and §2b) |
-| S3c D7 keep/revert only on the experiment page | S3c spec §2.6, §2.7 | done in design (#252) |
-| S3c D8 pre-S2 Review page as a queue manager | 06's S3 card, action 3 | in S3's card (#253); built in S3 |
-| S3c D9 `admin` = second ASGI app with its own `ADMIN_API_TOKEN` | 06's S3 card, action 4 | in S3's card (#253); built in S3 |
-| S3c D10 deep-link formats, `DASHBOARD_URL` | 08 §2b; S1 A4; S3c spec §2.9 | S3c pages done in design (#252; `/categories/<code>`, `/blueprints/<name>`); the bot side is S1 A4 |
-| S3a fix card 2, deep-link card | S3a | done (#82, #83, #99) |
+| **S0** posting assistant (plan C) | Live since 2026-09-29 (Dict-only) | Owner checks only (above, item 4) |
+| **S1** database, accounts, sources | Code finished and merged (card 002, PR #5; 1057 fast tests at merge) | **Task 22, the rollout** (runbook §4, step 6b before step 7), after O3 and O5 |
+| **X0** working environment | Card 001 done; card 008 in progress | Card 008 checkpoint B |
+| **S2** publishing | Not started | After S1's rollout. 04 S2 lists the ADR-44/45 items |
+| **S3a** dashboard shell | About 92% (68 unit, 21 Playwright tests) | Card 004, after the owner's Vercel steps |
+| **S3** dashboard v1 | Not started | 06's S3 card, after S1. Owns the `admin` endpoint (D9) and the pre-S2 Review page (D8) |
+| **S3c** account workspaces | Design accepted (ADR-42) | A plan card now that S1 is final; its migration 0002 also carries the items below |
+| **S4** Timeline renderer | Spec approved (ADR-47) | Card 006: the plan, then the build |
+| **X1** voice | Done (Qwen3-TTS primary, Kokoro fallback; `docs/studio/spikes/x1-voice.md`) | S5 (the TTS server) |
+| **X2** talking head | Stopped at ~25% (~$0.40 of $30) | Card 005, after O7 |
+| **X3–X6, S5+** | Not started | 06's cards |
 
-## Owner: open decisions and steps (recommendations in bold)
-1. ✅ Done at the pause: `web/openapi.json` regenerated, 68 web tests green.
-2. ✅ The pause commit `405c8ec`, the tag and the push are done. CI is green since PR #1 (2026-09-30: the web lockfile regenerated with CI's npm 11.19, and root `.gitignore` `jobs/` → `/jobs/`, which had kept three dashboard jobs files out of git). Still open: take `DATABASE_URL` out of `clipforge-secrets` (§8 step 5; **the dashboard way**).
-3. ✅ Read-only git for the coordinator: allowed by card 001's permissions (log #388).
-4. The S0 checks: the phone test (`/status`, `/next`, ✅ on and off, ⏭, 🗑 + reason, `/pause`, `/go`), one scheduled slot end to end, and the 07:00 UTC keep-alive log line with its first snapshot (`uv run modal app logs clipforge`). After the next deploy that line comes from `posting_daily`.
-5. O3, the handles for founder.tapes and hombre.en.construccion, and O5, Billy Garton Jr.'s permission facts. **Collect both now: they are all that blocks S1's rollout (Task 22).**
-6. O7, WenetSpeech-pretrained models: **treat as "needs review"; prefer LongCat 1.5 unless a wav2vec model is clearly better in the X2 blind test.**
-7. ✅ ADR-42 accepted 2026-09-30 (log #131).
-8. X2's ~227 GB on the Volume: **keep it if X2 resumes within a couple of weeks**, else `uv run modal volume rm -r clipforge-models x2`.
-9. The Vercel steps (§5b), when you want the dashboard online: they unlock S3a Task 12/13.
-10. O4 (Upload-Post plan) and O6 (clip series formats): before S2.
-11. Later, not now: the Actions secrets and `DEPLOY_ENABLED` (§8 "still left").
+## Open follow-ups (assigned, not yet done)
 
+| Item | Goes to |
+|---|---|
+| A manual `clipforge status --rebuild` isn't blocked by the outage flag | the rollout card |
+| `DEPLOY_DB_CHECK` in `.env.example` (card 008's flag; `.env.example` is `s1/`'s file) | the rollout card |
+| Migration 0002: a `jobs.error` column, the `post_events.actor` column (backfilled from `data.actor`), a pause actor on `posting_state` | the S3c plan |
+| The `keywords_v1` comments in captions code and tests (the code loads `keywords_v2`) | card 006 |
+| `web/scripts/pin-versions.mjs` undocumented; 4 high `npm audit` findings | card 004 |
+| `--rollout-step 4c.7` dropped from `deploy.py` once Postgres reads are permanent | an X0 card at S1 Task 23 |
+| The S1 addendum (A1–A6) and S3c's D1–D10 | **closed**: card 002's report and the S3c spec's status block; D8 and D9 are in 06's S3 card |
