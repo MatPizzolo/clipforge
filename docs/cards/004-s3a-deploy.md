@@ -31,4 +31,4 @@ As `scripts/scopes.toml` allows for `s3a/`.
 - Before: the Vercel steps (runbook §5b). Then `scripts/worktree.sh s3a/deploy` and paste `Run card docs/cards/004-s3a-deploy.md`.
 
 ## Hand-off
-The report goes in `docs/reports/004-s3a-<date>.md`. Don't commit.
+The report goes in `docs/reports/004-s3a-<date>.md`. Don't commit. The owner's first push from the worktree is `git push -u origin <branch>`, then `gh pr create --fill`; PRs are squash-merged with the card number in the title.

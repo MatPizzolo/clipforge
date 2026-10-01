@@ -30,4 +30,4 @@ The report table has measured GPU-seconds, cold start, dollars per output second
 Rule on O7 first. Then `scripts/worktree.sh x2/talking-head` and paste `Run card docs/cards/005-x2-resume.md`.
 
 ## Hand-off
-The report goes in `docs/reports/005-x2-<date>.md`. Don't commit.
+The report goes in `docs/reports/005-x2-<date>.md`. Don't commit. The owner's first push from the worktree is `git push -u origin <branch>`, then `gh pr create --fill`; PRs are squash-merged with the card number in the title.

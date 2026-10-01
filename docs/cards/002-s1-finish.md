@@ -51,6 +51,7 @@ S1 stopped cleanly at the 2026-09-30 pause (tag `pause-2026-09-30`), with 736 fa
    - `db=database_from_settings` in `app.py`'s `build_deps`;
    - ADR-41 into `docs/DECISIONS.md`;
    - `ci.yml`: `alembic upgrade head` (secret `DATABASE_URL_UNPOOLED`) before `modal deploy`. Skip the deploy job when only `web/**` or docs changed, and keep the `DEPLOY_ENABLED` gate and X0's `check.sh` job.
+   - The CI deploy job must apply the same blackout check as `scripts/deploy.sh` (reuse `scripts/deploy.py`'s `blackout_slot`, with the slots and timezone from repository variables), so turning on `DEPLOY_ENABLED` can't deploy inside a posting slot.
    - ARCHITECTURE (Postgres, `STATE_READS`, the per-account keys) and the `CLAUDE.md` commands.
 7. **The final whole-branch review.** Fix the Critical and Important findings. List the deferred minors:
    - the per-account overview isn't isolated;
@@ -58,7 +59,7 @@ S1 stopped cleanly at the 2026-09-30 pause (tag `pause-2026-09-30`), with 736 fa
    - `resume` records its row before the spawn;
    - the backfill dry run has no preview;
    - the rebuild test doesn't check the video path.
-8. **STOP before Task 22** (the rollout). Remove nothing listed under Task 23.
+8. **STOP before Task 22** (the rollout). Remove nothing listed under Task 23. Write into the plan's Task 23 that `scripts/deploy.py` drops its `--rollout-step 4c.7` requirement once `STATE_READS=postgres` is permanent (an `x0/` change, since `scripts/` is X0's scope).
 
 ## Checkpoints
 One per action (A–G). Each is a PR update. Suggested commits are `card 002: <action>`.
@@ -73,4 +74,4 @@ One per action (A–G). Each is a PR update. Suggested commits are `card 002: <a
 - At each checkpoint: `docs/templates/checkpoint.md`. Merge card 002 **before** cards 004 and 006.
 
 ## Hand-off
-Reports go in `docs/reports/002-s1-<date>.md`. Don't commit.
+Reports go in `docs/reports/002-s1-<date>.md`. Don't commit. The owner's first push from the worktree is `git push -u origin <branch>`, then `gh pr create --fill`; PRs are squash-merged with the card number in the title.

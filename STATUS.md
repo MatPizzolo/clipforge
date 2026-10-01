@@ -2,15 +2,15 @@
 
 The one page that says where things stand. The coordinator updates it after every merged PR and every report. Detail lives in the linked files; this page only summarizes.
 
-Last updated: 2026-09-30 (the pause, tag `pause-2026-09-30`). Production: the `clipforge` Modal app is live and Dict-only (`STATE_READS=dict`, no database wired); `posting_tick` runs every 5 minutes; deploy blackout in runbook §1.
+Last updated: 2026-09-30 (card 001 merged, PR #3; the pause is tag `pause-2026-09-30`). Production: the `clipforge` Modal app is live and Dict-only (`STATE_READS=dict`, no database wired); `posting_tick` runs every 5 minutes; deploy blackout in runbook §1.
 
 ## Next cards (in order)
 
 | Card | What | Can start | Runs alongside |
 |---|---|---|---|
-| [001](docs/cards/001-x0-tooling.md) | X0: check.sh, scope check, docs tests, CI, worktree and deploy scripts, and `.claude/` guardrails (hooks, permissions, agents, skills) | **sent 2026-09-30** (worktree `../clipForge-x0`) | nothing (everyone else needs its scripts) |
-| [002](docs/cards/002-s1-finish.md) | S1 finish, stop before the rollout | after 001 is merged | 003, 005 |
-| [003](docs/cards/003-s3c-revision.md) | S3c design revision (D3, D4, D10) | after 001 is merged | 002, 004, 005 |
+| [001](docs/cards/001-x0-tooling.md) | X0: check.sh, scope check, docs tests, CI, worktree and deploy scripts, and `.claude/` guardrails (hooks, permissions, agents, skills) | **done 2026-09-30** (PR #3) | — |
+| [002](docs/cards/002-s1-finish.md) | S1 finish, stop before the rollout | **now** | 003, 005 |
+| [003](docs/cards/003-s3c-revision.md) | S3c design revision (D3, D4, D10) | **now** | 002, 004, 005 |
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | 002, 003, 005 (merge after 002) |
 | [005](docs/cards/005-x2-resume.md) | X2 talking-head spike, resume | after O7 is ruled | 002, 003, 004 |
 | [006](docs/cards/006-s4-timeline.md) | S4 Timeline renderer | after 002 is merged | 003, 004, 005 |
@@ -20,6 +20,7 @@ Last updated: 2026-09-30 (the pause, tag `pause-2026-09-30`). Production: the `c
 |---|---|---|---|
 | **S0** posting assistant (plan C) | Live since 2026-09-29, redeployed 2026-09-30 (Dict-only). The session ended long ago | Plan C Tasks 1–6 and its final review | Owner checks only (below): phone test, one scheduled slot, the 07:00 UTC keep-alive line and first snapshot |
 | **S1** database, accounts, sources | About 80%, stopped cleanly. Fast suite 736 passed | Tasks 1–20, fix card 1 (13b), checkpoint D fixes, addendum A1 (ADR-43 derived `producer_version`, one sanitizer) | card 002: the plan's STATUS block, then A2 → A6, Task 21b, the final review; **stop before Task 22** |
+| **X0** working environment | Done (card 001, PR #3) | `scripts/check.sh`, the scope check (`scripts/scopes.toml`), docs tests, CI on `check.sh` + a `scope` job, `worktree.sh` (`--no-track`), `deploy.sh` (blackout, `.env` settings required), `.claude/` hooks, permissions, agents, skills | Owner: branch protection for `main` (require `check` and `scope`) |
 | **S2** publishing | Not started | — | After S1's rollout (Task 22). 04 S2 lists the ADR-44/45 items added on 2026-09-30 |
 | **S3a** dashboard shell | About 92%. 68 unit tests, 21 Playwright tests pass | Tasks 1–11, checkpoint G (laptop layout), the audit fix card, deep links (#99) | `docs/superpowers/plans/2026-09-29-studio-s3a.md` Task 12 (a real local GitHub login, needs the local OAuth app) and Task 13 (Vercel deploy), both waiting on the owner's Vercel steps (§5b) |
 | **S3** dashboard v1 | Not started | — | 06's S3 card, after S1. It owns the `admin` endpoint (D9) and the pre-S2 Review page (D8) |
