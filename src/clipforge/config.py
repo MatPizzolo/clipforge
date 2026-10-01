@@ -101,6 +101,10 @@ class Settings(BaseSettings):
     # Why posting is off despite POSTING_CHAT_ID (set by the check below; not an env value)
     posting_problem: str | None = None
 
+    # The dashboard (ADR-38, ADR-44): bot messages get URL buttons to its pages (08 §2b).
+    # Unset or invalid = no buttons; never an error, since every step loads these settings.
+    dashboard_url: str | None = None
+
     # Durable state (ADR-26, S1): Neon's pooled URL; reads come from `state_reads` (ADR-41)
     database_url: SecretStr | None = None
     state_reads: Literal["dict", "postgres"] = "dict"
@@ -172,6 +176,17 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [part.strip() for part in value.split(",") if part.strip()]
         return value
+
+    @field_validator("dashboard_url", mode="before")
+    @classmethod
+    def _dashboard_url(cls, value: object) -> object:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        url = value.strip().rstrip("/")
+        if not url.startswith(("https://", "http://")) or any(c.isspace() for c in url):
+            log.warning("DASHBOARD_URL ignored: it must be an http(s) URL")
+            return None
+        return url
 
     @field_validator("posting_chat_id", mode="before")
     @classmethod

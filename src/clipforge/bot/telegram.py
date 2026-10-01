@@ -26,7 +26,7 @@ from telegram.request import BaseRequest, HTTPXRequest
 
 CAPTION_LIMIT = 1024
 UPLOAD_TIMEOUT_S = 300.0  # a 45 MB clip on a slow uplink
-Button = tuple[str, str]  # (label, callback data)
+Button = tuple[str, str]  # (label, callback data), or (label, "https://…") for a URL button
 Keyboard = list[list[Button]]
 UPDATE_TYPES = ["message", "callback_query"]
 
@@ -56,15 +56,21 @@ class TelegramSender(Protocol):
     def delete_message(self, chat_id: int, message_id: int) -> None: ...
 
 
+def is_url(data: str) -> bool:
+    """Callback data never starts with a scheme (it's `p:…`), so a URL is a link button."""
+    return data.startswith(("https://", "http://"))
+
+
+def _button(label: str, data: str) -> InlineKeyboardButton:
+    if is_url(data):
+        return InlineKeyboardButton(label, url=data)
+    return InlineKeyboardButton(label, callback_data=data)
+
+
 def _markup(buttons: Keyboard | None) -> InlineKeyboardMarkup | None:
     if buttons is None:
         return None
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton(label, callback_data=data) for label, data in row]
-            for row in buttons
-        ]
-    )
+    return InlineKeyboardMarkup([[_button(label, data) for label, data in row] for row in buttons])
 
 
 def default_request() -> BaseRequest:

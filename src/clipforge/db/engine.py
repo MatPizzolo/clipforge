@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Connection, Engine, Pool, create_engine
+from sqlalchemy import Connection, Engine, Pool, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from clipforge.sanitize import redact
@@ -22,6 +22,9 @@ __all__ = [
     "make_engine",
     "redact",
 ]
+
+
+STATEMENT_TIMEOUT = "5s"
 
 
 class DatabaseUnavailable(RuntimeError):
@@ -58,7 +61,11 @@ class Database:
 
     @contextmanager
     def begin(self) -> Iterator[Connection]:
+        """One transaction. Every statement in it is capped at 5 s (SET LOCAL lasts only for the
+        transaction, so it is safe through PgBouncer's transaction mode): a slow Neon never holds
+        a tap or a tick for long (card 002 A4). Migrations don't use this."""
         with self.engine.begin() as conn:
+            conn.execute(text(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'"))
             yield conn
 
     def dispose(self) -> None:

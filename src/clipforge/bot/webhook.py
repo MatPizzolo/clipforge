@@ -19,23 +19,18 @@ from clipforge.bot.commands import (
 )
 from clipforge.bot.context import BotContext
 from clipforge.bot.messages import (
-    PAUSED,
-    POSTING_OFF,
-    RESUMED,
     TOO_BIG,
     USAGE,
     job_accepted,
     posting_overview_text,
     status_text,
-    unknown_account,
 )
-from clipforge.bot.posting import handle_callback, send_next
-from clipforge.db.engine import redact
+from clipforge.bot.posting import handle_callback
 from clipforge.jobs import is_job_id, utcnow
 from clipforge.links import with_download_url
 from clipforge.models import JobInput, TelegramTarget
 from clipforge.pipeline.steps import JobNotResumable
-from clipforge.posting.backend import posting_of
+from clipforge.posting import actions
 from clipforge.service import create_job, get_job_view, posting_overview, resume_job
 
 __all__ = ["BotContext", "handle_update"]  # BotContext lives in bot/context.py
@@ -58,7 +53,7 @@ def handle_update(body: dict[str, Any], ctx: BotContext) -> None:
         handle_callback(
             ctx, query.id, query.data,
             tapped.chat.id if tapped else None, tapped.message_id if tapped else None,
-            utcnow(),
+            utcnow(), query.from_user.id,
         )  # fmt: skip
         return
     message = update.message  # edited messages and channel posts are ignored
@@ -100,34 +95,12 @@ def _reply_for(message: Message, target: TelegramTarget, ctx: BotContext) -> str
             view = posting_overview(ctx.deps, ctx.settings, utcnow())
             return posting_overview_text(view, ctx.settings.posting_timezone)
         case PostingCommand(name="next", account=account):
-            return send_next(ctx, utcnow(), account)
+            return actions.send_next(ctx, utcnow(), account)
         case PostingCommand(name="pause" | "go" as name, account=account):
-            return _set_paused(ctx, account, name == "pause")
+            actor = actions.telegram_actor(message.from_user.id) if message.from_user else ""
+            return actions.pause(ctx, account, name == "pause", actor, utcnow())
         case _:
             return USAGE
-
-
-def _set_paused(ctx: BotContext, account_id: str | None, on: bool) -> str:
-    posting = posting_of(ctx.deps)
-    accounts = posting.posting_accounts()
-    if not accounts:
-        # Posting is off (no chat): keep the flag working for the default account, so a
-        # /pause sent while fixing the settings still holds once posting turns on.
-        if account_id is not None:
-            return unknown_account(account_id, [])
-        try:
-            posting.repo.set_paused(posting.default_account_id, on, utcnow())
-        except Exception as exc:
-            log.warning("posting: setting the pause flag failed: %s", redact(exc))
-            return POSTING_OFF
-        return PAUSED if on else RESUMED
-    targets = [a for a in accounts if account_id is None or a.id == account_id]
-    if account_id is not None and not targets:
-        return unknown_account(account_id, [a.id for a in accounts])
-    for account in targets:
-        posting.repo.set_paused(account.id, on, utcnow())
-    reply = PAUSED if on else RESUMED
-    return reply if account_id is None else f"{account_id}: {reply}"
 
 
 def _submit(ctx: BotContext, job_input: JobInput) -> str:

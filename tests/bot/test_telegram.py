@@ -107,3 +107,15 @@ def test_httpx_request_urls_are_not_logged_at_info() -> None:
         assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
     finally:
         root.setLevel(before)
+
+
+def test_a_url_in_a_keyboard_is_a_link_button() -> None:
+    # card 002 A4: dashboard deep links (ADR-44) ride in the same Keyboard type
+    client, request = _client()
+    client.send_message(7, "hi", buttons=[[("Job ↗", "https://dash.example/jobs/J")]])
+    _, params, _ = request.calls[-1]
+    markup = params["reply_markup"]
+    markup = json.loads(markup) if isinstance(markup, str) else markup
+    assert markup == {
+        "inline_keyboard": [[{"text": "Job ↗", "url": "https://dash.example/jobs/J"}]]
+    }

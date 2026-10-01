@@ -133,6 +133,7 @@ PAUSED = "Paused. No clips until you send /go."
 RESUMED = "Back on. Clips resume at the next slot."
 GONE = "That clip isn't in the queue any more."
 SAVE_FAILED = "Couldn't save that. Tap again."
+STORE_UNAVAILABLE = "Store unavailable, nothing changed. Try again in a minute."
 
 
 def unknown_account(given: str, known: list[str]) -> str:

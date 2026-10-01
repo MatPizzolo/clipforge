@@ -18,7 +18,8 @@ from telegram.error import TelegramError
 
 from clipforge.bot import messages
 from clipforge.bot.context import BotContext
-from clipforge.bot.telegram import Keyboard
+from clipforge.bot.deeplinks import account_row, item_row
+from clipforge.bot.telegram import Button, Keyboard
 from clipforge.db.engine import DatabaseUnavailable, is_db_error, redact
 from clipforge.jobs import is_job_id
 from clipforge.models import (
@@ -29,7 +30,6 @@ from clipforge.models import (
     PostRecord,
     PostSend,
     PostStatus,
-    PostVerdict,
     RejectReason,
     Source,
 )
@@ -98,13 +98,23 @@ def _platform_row(
     ]
 
 
-def fresh_keyboard(ref: str, platforms: list[Platform]) -> Keyboard:
-    return [_platform_row(ref, platforms, set()),
-            [("⏭ Skip", f"p:skip:{ref}"), ("🗑 Reject", f"p:rej:{ref}")]]  # fmt: skip
+def _with_links(rows: Keyboard, links: Sequence[Button]) -> Keyboard:
+    """Dashboard URL buttons (ADR-44) as a last row, kept through every redraw."""
+    return [*rows, list(links)] if links else rows
 
 
-def keyboard(record: PostRecord) -> Keyboard:
+def fresh_keyboard(ref: str, platforms: list[Platform], links: Sequence[Button] = ()) -> Keyboard:
+    return _with_links([_platform_row(ref, platforms, set()),
+                        [("⏭ Skip", f"p:skip:{ref}"), ("🗑 Reject", f"p:rej:{ref}")]],
+                       links)  # fmt: skip
+
+
+def keyboard(record: PostRecord, links: Sequence[Button] = ()) -> Keyboard:
     """The buttons that match the clip's current state (spec §7)."""
+    return _with_links(_state_rows(record), links)
+
+
+def _state_rows(record: PostRecord) -> Keyboard:
     ref = record.item.id
     state = status(record)
     if state is PostStatus.POSTED:
@@ -258,7 +268,9 @@ def _deliver(
             chat,
             post_html(item, tags, record.platforms, links),
             video_id,
-            buttons=fresh_keyboard(item.id, record.platforms),
+            buttons=fresh_keyboard(
+                item.id, record.platforms, item_row(ctx.settings.dashboard_url, item)
+            ),
             html=True,
         )
     except Exception as exc:
@@ -369,7 +381,9 @@ def _tick_account(
     if len(waiting) >= PAUSE_AFTER:
         oldest = min(r.sends[-1].at for r in waiting)
         if posting.claims.claim_reminder(account.id, oldest):
-            ctx.sender.send_message(chat, messages.waiting_reminder(len(waiting)))
+            link = account_row(ctx.settings.dashboard_url, account.id)
+            ctx.sender.send_message(chat, messages.waiting_reminder(len(waiting)),
+                                    buttons=[link] if link else None)  # fmt: skip
         return "waiting"
     if not posting.claims.claim_slot(account.id, slot):
         return "taken"
@@ -404,6 +418,12 @@ def send_next(ctx: BotContext, now: datetime, account_id: str | None = None) -> 
             reply = "" if ref else messages.QUEUE_EMPTY
         except SendFailed:
             reply = messages.SEND_FAILED
+        except Exception as exc:
+            if not is_db_error(exc):
+                raise
+            # nothing was recorded: a failed add_send takes its messages back (#95)
+            log.warning("posting: /next for %s failed: %s", account.id, redact(exc))
+            reply = messages.STORE_UNAVAILABLE
         if reply:
             replies.append(reply if len(accounts) == 1 else f"{account.id}: {reply}")
     return "\n".join(replies)
@@ -411,9 +431,12 @@ def send_next(ctx: BotContext, now: datetime, account_id: str | None = None) -> 
 
 def handle_callback(
     ctx: BotContext, callback_id: str, data: str | None, chat_id: int | None,
-    message_id: int | None, now: datetime,
+    message_id: int | None, now: datetime, user_id: int | None = None,
 ) -> None:  # fmt: skip
-    """One button tap (spec §8). Always answers the tap; edits the buttons to the new state."""
+    """One button tap (spec §8). Always answers the tap; edits the buttons to the new state.
+    The writes go through `posting/actions.py` with the actor `telegram:<user id>` (the posting
+    chat is the owner's private chat, so its id is the user id when none is given)."""
+    from clipforge.posting import actions  # actions builds on this module
 
     def answer(text: str) -> None:
         # The state is written before the answer and the update is already claimed, so a failed
@@ -428,64 +451,52 @@ def handle_callback(
     if parsed is None or chat_id is None or message_id is None:
         answer("")
         return
-    store = posting.repo
     try:
-        record = store.get(parsed.ref)
+        record = posting.repo.get(parsed.ref)
+        account = posting.account(record.item.account_id) if record is not None else None
     except Exception as exc:
         log.warning("posting: reading %s failed: %s", parsed.ref, redact(exc))
-        answer(messages.SAVE_FAILED)
+        answer(messages.STORE_UNAVAILABLE if is_db_error(exc) else messages.SAVE_FAILED)
         return
     if record is None:
         answer(messages.GONE)
         return
-    account = posting.account(record.item.account_id)
     if account is None or account.posting.chat_id != chat_id:
         answer("")
         return
-
-    def redraw(rec: PostRecord) -> None:
-        """Every message of the clip shows the same buttons (a re-sent clip has several)."""
-        for mid in sorted({message_id, *(s.message_id for s in rec.sends)}):
-            try:
-                ctx.sender.edit_buttons(chat_id, mid, keyboard(rec))
-            except Exception:
-                log.warning("posting: editing message %s of %s failed", mid, parsed.ref,
-                            exc_info=True)  # fmt: skip
-
-    current = keyboard(record)
+    links = item_row(ctx.settings.dashboard_url, record.item)
+    current = keyboard(record, links)
     if data not in {d for row in current for _, d in row}:  # a stale button: change nothing
         answer("")
-        redraw(record)
+        actions.redraw_all(ctx, parsed.ref, also=[message_id])
         return
+    actor = actions.telegram_actor(user_id if user_id is not None else chat_id)
     note, then_next = "", False
     try:
         if parsed.action in PLATFORM_ACTIONS:
             platform = PLATFORM_ACTIONS[parsed.action]
-            on = store.toggle_posted(parsed.ref, platform, now)
+            on = actions.set_posted(posting, parsed.ref, platform, None, actor, now)
             note = f"{LABELS[platform]} ✓" if on else f"{LABELS[platform]} undone"
         elif parsed.action == "skip":
-            store.set_verdict(parsed.ref, PostVerdict(kind="skipped", at=now))
+            actions.skip(posting, parsed.ref, actor, now)
             note, then_next = "Skipped", True
         elif parsed.action == "rej":
-            store.set_verdict(parsed.ref, PostVerdict(kind="rejected", at=now))
+            actions.reject(posting, parsed.ref, actor, now)
             note = "Rejected. Why? (optional)"
         elif parsed.action == "why" and parsed.reason is not None:
-            store.set_reason(parsed.ref, parsed.reason)
+            actions.set_reason(posting, parsed.ref, parsed.reason, actor)
             note = "Thanks"
+    except actions.ActionFailed as exc:
+        answer(str(exc))
+        return
     except Exception as exc:
         log.warning("posting: saving a tap on %s failed: %s", parsed.ref, redact(exc))
         answer(messages.SAVE_FAILED)
         return
     answer(note)
     if parsed.action != "noop":
-        try:
-            updated = store.get(parsed.ref)
-        except Exception as exc:
-            log.warning("posting: re-reading %s failed: %s", parsed.ref, redact(exc))
-            updated = None
-        if updated is not None:
-            redraw(updated)
+        actions.redraw_all(ctx, parsed.ref, also=[message_id])
     if then_next:
-        reply = send_next(ctx, now, record.item.account_id)
+        reply = actions.send_next(ctx, now, record.item.account_id)
         if reply:
             ctx.sender.send_message(chat_id, reply)

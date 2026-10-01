@@ -68,6 +68,17 @@ def test_failed_message_names_stage_and_resume(harness: Harness) -> None:
     assert sender.messages == [(CHAT, f"transcribe: no speech found\n/resume {job_id}", 3)]
 
 
+def test_done_and_failed_link_to_the_job_page_when_the_dashboard_is_set(harness: Harness) -> None:
+    # card 002 A4 (ADR-44): a "Job ↗" button, none without DASHBOARD_URL (tests above)
+    sender = _wire(harness, dashboard_url="https://dash.example")
+    harness.stages.permanent["transcribe"] = "no speech found"
+    job_id = harness.submit()
+    harness.run()
+    [(_, _, _)] = sender.messages
+    [buttons] = [b for b in sender.keyboards.values() if b is not None]
+    assert buttons == [[("Job ↗", f"https://dash.example/jobs/{job_id}")]]
+
+
 def test_status_text() -> None:
     at = datetime(2026, 9, 23, tzinfo=UTC)
     view = JobView(
