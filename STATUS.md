@@ -14,6 +14,7 @@ Last updated: 2026-09-30 (cards 001 and 003 merged, PRs #3 and #6; ADR-42 accept
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | 002, 003, 005 (merge after 002) |
 | [005](docs/cards/005-x2-resume.md) | X2 talking-head spike, resume | after O7 is ruled | 002, 003, 004 |
 | [006](docs/cards/006-s4-timeline.md) | S4 Timeline renderer | after 002 is merged | 003, 004, 005 |
+| [007](docs/cards/007-cleanup-docs.md) | Docs audit and refresh: every Markdown file checked against main and corrected (branch `cleanup/`, Markdown only); unused code and assets proposed to their owners | after 002 is merged | 004, 005, 006 (leaves files their open PRs touch) |
 
 ## Workstreams
 | Workstream | Status | Last finished | Continues at |
