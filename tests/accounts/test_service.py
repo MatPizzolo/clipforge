@@ -9,10 +9,13 @@ from clipforge.accounts.service import (
     create_account,
     edit_account,
     env_account,
+    read_schedules,
+    sync_schedules,
 )  # fmt: skip
 from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database
 from clipforge.models import Platform
+from clipforge.pipeline.deps import MemoryKV
 from tests.bot.fakes import ALLOWED_USER, make_settings
 from tests.dbhelpers import NOW, make_account
 
@@ -97,3 +100,28 @@ def test_edit_chat_needs_slots(db: Database, tmp_path: Path) -> None:
         repo, settings, before.id, AccountEdit(chat_id=ALLOWED_USER, slots=["9:00"]), NOW
     )
     assert edited.posting.chat_id == ALLOWED_USER and edited.posting.slots == ["09:00"]
+
+
+def test_create_and_edit_write_the_schedule_copy(db: Database, tmp_path: Path) -> None:
+    # card 002 A3: the tick reads schedules from the Dict; only this service writes them
+    repo, settings, kv = AccountsRepo(db), make_settings(tmp_path), MemoryKV()
+    create_account(repo, settings, AccountCreate(blueprint="founder-tapes", language="en",
+                                                 handle="founder.tapes"), NOW, kv=kv)  # fmt: skip
+    assert read_schedules(kv)["founder-tapes-en"].chat_id is None
+    edit_account(repo, settings, "founder-tapes-en",
+                 AccountEdit(chat_id=ALLOWED_USER, slots=["9:00"]), NOW, kv=kv)  # fmt: skip
+    copy = read_schedules(kv)["founder-tapes-en"]
+    assert copy.chat_id == ALLOWED_USER and copy.slots == ["09:00"]
+    with pytest.raises(AccountError):  # a refused edit leaves the copy alone
+        edit_account(repo, settings, "founder-tapes-en", AccountEdit(timezone="Mars/Base"),
+                     NOW, kv=kv)  # fmt: skip
+    assert read_schedules(kv)["founder-tapes-en"] == copy
+
+
+def test_sync_rewrites_lost_copies_and_drops_stray_ones(db: Database) -> None:
+    repo, kv = AccountsRepo(db), MemoryKV()
+    repo.create(make_account(chat_id=ALLOWED_USER), NOW)
+    kv.put("posting:schedule:gone-account", make_account().posting.model_dump_json())
+    kv.put("posting:schedule:broken", "{not json")
+    assert sync_schedules(repo, kv) == 1
+    assert set(read_schedules(kv)) == {"realtalk-clips-en"}

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database
 from clipforge.models import (
     LEGACY_PLATFORMS,
@@ -118,3 +119,16 @@ def test_enqueue_queues_only_covered_platforms(
     none_left = BILLY_SOURCE.model_copy(update={"permission": SourcePermission(
         type="creator_agreement", platforms=[Platform.FACEBOOK])})  # fmt: skip
     assert enqueue_job(_posting_with(none_left), _job(), [_facts()], T0, "v") == 0
+
+
+def test_item_platforms_are_frozen_when_the_account_changes(tmp_path: Path, db: Database) -> None:
+    # card 002 A3: platforms = the account's enabled platforms ∩ the permission, fixed per item
+    account = make_account(platforms=[Platform.TIKTOK, Platform.YOUTUBE])
+    seed(db, account, sources=[BILLY_SOURCE])
+    posting = build_posting(make_settings(tmp_path, state_reads="postgres"), MemoryKV(), db)
+    assert enqueue_job(posting, _job(), [_facts()], T0, "v") == 1
+    AccountsRepo(db).update(make_account(platforms=list(Platform)), T0)  # Facebook and IG on
+    [rec] = posting.repo.records(account.id)
+    assert rec.platforms == [Platform.TIKTOK, Platform.YOUTUBE]
+    again = posting.repo.get(rec.item.id)
+    assert again is not None and again.platforms == [Platform.TIKTOK, Platform.YOUTUBE]

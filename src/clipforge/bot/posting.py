@@ -25,6 +25,7 @@ from clipforge.models import (
     Account,
     ContentItem,
     Platform,
+    PostingSchedule,
     PostRecord,
     PostSend,
     PostStatus,
@@ -320,34 +321,50 @@ def _send_best(
 
 
 def tick(ctx: BotContext, now: datetime) -> str:
-    """One cron tick (spec §5.2): each account with a posting chat, in id order."""
+    """One cron tick (spec §5.2): each account with a posting chat, in id order. The slot is
+    computed from the schedule copies first, so a tick with no slot due never queries Postgres
+    (card 002 A3)."""
     posting = posting_of(ctx.deps)
     if posting.problem is not None:
         log.warning("posting: %s", posting.problem)
         return f"off: {posting.problem}"
     results = []
-    for account in posting.posting_accounts():
+    for account_id, schedule in posting.posting_schedules().items():
         try:
-            results.append(f"{account.id}: {_tick_account(ctx, posting, account, now)}")
+            outcome = _tick_account(ctx, posting, account_id, schedule, now)
         except Exception as exc:  # one account's failure never stops the others
             # tracebacks only for code bugs: a driver error's can carry the database URL
             bug = not isinstance(exc, SQLAlchemyError | DatabaseUnavailable)
-            log.warning("posting: tick for %s failed: %s", account.id, redact(exc), exc_info=bug)
-            results.append(f"{account.id}: error")
+            log.warning("posting: tick for %s failed: %s", account_id, redact(exc), exc_info=bug)
+            outcome = "error"
+        results.append(f"{account_id}: {outcome}")
     return "; ".join(results) or "off"
 
 
-def _tick_account(ctx: BotContext, posting: Posting, account: Account, now: datetime) -> str:
-    if posting.repo.paused(account.id):
-        return "paused"
-    slot = current_slot(account.posting, now)
+def slot_already_sent(records: list[PostRecord], slot: datetime) -> bool:
+    """The slot guard (decision log #77, #108): a send recorded for this slot means it was
+    served, even if its claim key is gone (a deploy that changed the key, or an expiry)."""
+    return any(s.slot == slot for r in records for s in r.sends)
+
+
+def _tick_account(
+    ctx: BotContext, posting: Posting, account_id: str, schedule: PostingSchedule, now: datetime
+) -> str:
+    slot = current_slot(schedule, now)
     if slot is None:
         return "no slot"
+    # From here on the database is read: a slot is due.
+    account = posting.account(account_id)
+    if account is None or account.posting.chat_id is None:
+        return "no account"
+    if posting.repo.paused(account.id):
+        return "paused"
+    every = posting.repo.records(account.id)
+    if slot_already_sent(every, slot):
+        return "taken"
     sources = _Sources(posting)
-    records = [r for r in posting.repo.records(account.id)
-               if held(r, sources(r.item.source_id), now) is None]  # fmt: skip
+    records = [r for r in every if held(r, sources(r.item.source_id), now) is None]
     chat = account.posting.chat_id
-    assert chat is not None
     waiting = unanswered(records)
     if len(waiting) >= PAUSE_AFTER:
         oldest = min(r.sends[-1].at for r in waiting)

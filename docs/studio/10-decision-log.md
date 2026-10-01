@@ -51,6 +51,8 @@ Last updated: 2026-09-30.
 | 28 | 2026-09-29 | `paused` is runtime state (its own row), not account config; posting slots are the only timing source; `POSTING_*` settings are read only in Dict mode | current | S1 spec |
 | 29 | 2026-09-29 | Each clip records the platforms it's due on; "posted everywhere" means all of those. Facebook joins as a platform | current | S1 spec |
 | 30 | 2026-09-29 | Per-platform post copy (`ContentItem.copy`) arrives in S2; until then captions are built at send time | current | S1 spec |
+| 202 | 2026-09-30 | Slot guard from sends: before `claim_slot`, the tick answers "taken" when any of the account's records already has a send whose `slot` equals the due slot, so a deploy that changes the claim key, or a lost claim, can't send a slot twice (#77, #108). The runbook §1 blackout stays until this is verified in production | current | card 002 A3, `bot/posting.py` `slot_already_sent` |
+| 203 | 2026-09-30 | The tick reads schedules from a Dict copy `posting:schedule:<account>` (a `PostingSchedule` JSON) and touches Postgres only once a slot is due. Order per account: slot → account row → pause → slot guard → reminder → claim → send. One writer (ADR-14): `accounts/service.py` (`publish_schedule` on create and edit, after the database write; `sync_schedules` rewrites all copies and drops strays, called daily from A6). Dict mode still uses the `POSTING_*` env account | current | card 002 A3, `accounts/service.py`, `posting/backend.py` |
 
 ## Accounts and content
 

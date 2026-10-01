@@ -6,13 +6,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from clipforge.accounts.service import env_account
+from clipforge.accounts.service import env_account, read_schedules
 from clipforge.config import Settings
 from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database, DatabaseUnavailable
 from clipforge.db.posting import SqlPostingRepo
 from clipforge.db.sources import SourcesRepo
-from clipforge.models import Account, Source
+from clipforge.models import Account, PostingSchedule, Source
 from clipforge.pipeline.deps import KV
 from clipforge.posting.repo import DictPostingRepo, DualPostingRepo, PostingClaims, PostingRepo
 
@@ -44,6 +44,15 @@ class Posting:
     default_account_id: str
     requires_source: bool = False
     problem: str | None = None
+    # The tick's schedules, read before any database call (card 002 A3). None: from accounts().
+    schedules: Callable[[], dict[str, PostingSchedule]] | None = None
+
+    def posting_schedules(self) -> dict[str, PostingSchedule]:
+        """Accounts with a posting chat and their schedules, without touching Postgres in
+        postgres mode (the Dict copies the accounts service writes)."""
+        found = (self.schedules() if self.schedules is not None
+                 else {a.id: a.posting for a in self.accounts()})  # fmt: skip
+        return {k: v for k, v in sorted(found.items()) if v.chat_id is not None}
 
     def account(self, account_id: str) -> Account | None:
         return next((a for a in self.accounts() if a.id == account_id), None)
@@ -81,6 +90,7 @@ def build_posting(settings: Settings, kv: KV, db: Database | None) -> Posting:
     sources = SourcesRepo(db)
     if settings.state_reads == "postgres":
         return Posting(DualPostingRepo(sql, dict_repo), claims, AccountsRepo(db).list,
-                       sources.get, default, requires_source=True)  # fmt: skip
+                       sources.get, default, requires_source=True,
+                       schedules=lambda: read_schedules(kv))  # fmt: skip
     env = env_account(settings)
     return Posting(DualPostingRepo(dict_repo, sql), claims, lambda: [env], sources.get, default)

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from clipforge.accounts.service import read_schedules
 from clipforge.api.main import ApiContext, create_app
 from clipforge.db.engine import Database
 from tests.bot.fakes import make_settings
@@ -11,8 +12,8 @@ AUTH = {"Authorization": "Bearer t0ken"}
 CREATE = {"blueprint": "founder-tapes", "language": "en", "handle": "founder.tapes"}
 
 
-def api_client(tmp_path: Path, db: Database | None) -> TestClient:
-    harness = Harness.build(tmp_path)
+def api_client(tmp_path: Path, db: Database | None, harness: Harness | None = None) -> TestClient:
+    harness = harness or Harness.build(tmp_path)
     ctx = ApiContext(settings=make_settings(tmp_path), deps=lambda: harness.deps,
                      sender=lambda: None, db=lambda: db)  # fmt: skip
     return TestClient(create_app(ctx))
@@ -45,3 +46,13 @@ def test_blueprint_name_cannot_traverse(tmp_path: Path, db: Database) -> None:
     client = api_client(tmp_path, db)
     response = client.post("/accounts", json={**CREATE, "blueprint": "../x"}, headers=AUTH)
     assert response.status_code == 422
+
+
+def test_account_routes_write_the_schedule_copy(tmp_path: Path, db: Database) -> None:
+    harness = Harness.build(tmp_path)
+    client = api_client(tmp_path, db, harness)
+    assert client.post("/accounts", json=CREATE, headers=AUTH).status_code == 201
+    kv = harness.deps.store.kv
+    assert "founder-tapes-en" in read_schedules(kv)
+    client.patch("/accounts/founder-tapes-en", json={"slots": ["7:30"]}, headers=AUTH)
+    assert read_schedules(kv)["founder-tapes-en"].slots == ["07:30"]

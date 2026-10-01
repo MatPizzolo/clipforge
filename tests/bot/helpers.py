@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from clipforge.accounts.service import publish_schedule
 from clipforge.bot.context import BotContext
 from clipforge.db.engine import Database
 from clipforge.models import LEGACY_PLATFORMS
@@ -23,13 +24,16 @@ def dict_ctx(tmp_path: Path) -> BotContext:
 
 def two_account_ctx(tmp_path: Path, db: Database, founder_chat: int = ALLOWED_USER) -> BotContext:
     """realtalk (slot 08:00 New York) and founder (slot 09:00 Mexico City), both with clips."""
-    seed(db, make_account(chat_id=ALLOWED_USER, slots=["08:00"]),
-         make_account("founder-tapes-en", chat_id=founder_chat, slots=["09:00"],
-                      timezone="America/Mexico_City"),
+    accounts = [make_account(chat_id=ALLOWED_USER, slots=["08:00"]),
+                make_account("founder-tapes-en", chat_id=founder_chat, slots=["09:00"],
+                             timezone="America/Mexico_City")]  # fmt: skip
+    seed(db, *accounts,
          sources=[BILLY_SOURCE, BILLY_SOURCE.model_copy(
              update={"id": "founder-src", "account_id": "founder-tapes-en"})])  # fmt: skip
     settings = make_settings(tmp_path, state_reads="postgres")
     deps = Harness.build(tmp_path).deps
+    for account in accounts:  # as the accounts service does on create (card 002 A3)
+        publish_schedule(deps.store.kv, account)
     deps.posting = build_posting(settings, deps.store.kv, db)
     for acct, src, hash_ in (("realtalk-clips-en", "billy-garton", "a" * 64),
                              ("founder-tapes-en", "founder-src", "b" * 64)):  # fmt: skip

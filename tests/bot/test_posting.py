@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from clipforge.accounts.service import env_account
+from clipforge.accounts.service import env_account, publish_schedule
 from clipforge.bot import messages
 from clipforge.bot.context import BotContext
 from clipforge.bot.posting import (
@@ -25,10 +25,12 @@ from clipforge.bot.posting import (
     tick,
     video_caption,
 )
+from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database
 from clipforge.db.sources import SourcesRepo
 from clipforge.models import (
     LEGACY_PLATFORMS,
+    Account,
     CampaignRules,
     Platform,
     PostSend,
@@ -37,7 +39,7 @@ from clipforge.models import (
     Source,
     SourcePermission,
 )
-from clipforge.posting.backend import dict_posting
+from clipforge.posting.backend import build_posting, dict_posting
 from clipforge.posting.repo import DictPostingRepo
 from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
 from tests.bot.helpers import dict_ctx, two_account_ctx
@@ -324,6 +326,8 @@ def _both_live(ctx: BotContext) -> datetime:
         for a in posting.accounts()
     ]
     posting.accounts = lambda: accounts
+    for account in accounts:
+        publish_schedule(ctx.deps.store.kv, account)
     return datetime(2026, 9, 29, 8, 1, tzinfo=ZoneInfo("America/New_York"))
 
 
@@ -432,3 +436,50 @@ def test_save_failure_is_answered_not_raised(
         handle_callback(ctx, "cb", f"p:tt:{REF}", ALLOWED_USER, 100, T0)
     assert ctx.sender.answers[-1] == ("cb", messages.SAVE_FAILED)  # type: ignore[attr-defined]
     assert "down" in caplog.text
+
+
+def test_slot_guard_from_sends_when_the_claim_is_gone(ctx: BotContext) -> None:
+    # decision log #77/#108: a deploy that changes the claim key (or an expired claim) must not
+    # send the same slot twice; the recorded send's slot is the guard
+    assert tick(ctx, at(8)).startswith(f"{ACCOUNT}: sent ")
+    posting = ctx.deps.posting
+    assert posting is not None
+    posting.claims.release_slot(ACCOUNT, at(8, 0))
+    assert tick(ctx, at(8, 6)) == f"{ACCOUNT}: taken"
+    assert len(_sender(ctx).videos) == 1
+    assert tick(ctx, at(12)).startswith(f"{ACCOUNT}: sent ")  # the next slot still sends
+
+
+class _NoDatabase:
+    def __getattr__(self, name: str) -> object:
+        raise AssertionError(f"the database was read: {name}")
+
+
+def _no_accounts() -> list[Account]:
+    raise AssertionError("the database was read: accounts")
+
+
+def test_tick_without_a_due_slot_never_reads_the_database(tmp_path: Path, db: Database) -> None:
+    # card 002 A3: schedules come from the Dict copies, so Neon can scale to zero between slots
+    ctx = two_account_ctx(tmp_path, db)
+    posting = ctx.deps.posting
+    assert posting is not None
+    posting.repo = _NoDatabase()  # type: ignore[assignment]
+    posting.accounts = _no_accounts
+    noon = datetime(2026, 9, 29, 12, 0, tzinfo=ZoneInfo("America/New_York"))
+    assert tick(ctx, noon) == "founder-tapes-en: no slot; realtalk-clips-en: no slot"
+
+
+def test_postgres_mode_hashtags_come_from_the_account(tmp_path: Path, db: Database) -> None:
+    ctx = two_account_ctx(tmp_path, db)
+    realtalk = AccountsRepo(db).get("realtalk-clips-en")
+    assert realtalk is not None
+    AccountsRepo(db).update(realtalk.model_copy(update={"posting": realtalk.posting.model_copy(
+        update={"hashtags": ["fromaccount"]})}), T0)  # fmt: skip
+    env = make_settings(tmp_path, state_reads="postgres", posting_chat_id=ALLOWED_USER,
+                        posting_slots=["08:00"], posting_hashtags="fromenv")  # fmt: skip
+    ctx.deps.posting = build_posting(env, ctx.deps.store.kv, db)
+    result = tick(ctx, datetime(2026, 9, 29, 8, 1, tzinfo=ZoneInfo("America/New_York")))
+    assert "realtalk-clips-en: sent" in result
+    [(_, text, _)] = _sender(ctx).messages
+    assert "#fromaccount" in text and "#fromenv" not in text
