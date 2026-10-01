@@ -41,6 +41,7 @@ The database stays unwired until `DATABASE_URL` is back in the Modal secret at r
 | [006](docs/cards/006-s4-timeline.md) | S4 Timeline renderer | **sent 2026-10-01** (plan approved; Group 1 done, CP2) | 004, 005 |
 | rollout (to write) | S1 Task 22, run with the owner: migrate, deploy, accounts, sources, import, verify, switch reads | after O3 and O5 | — |
 | S3c plan (to write) | S3c implementation plan, on S1's final schema | now (card to write) | 006 |
+| [009](docs/cards/009-s3-dashboard-design.md) | Dashboard design: the control room for every account (routine, autopilot per account, IA, hook editor, mockups with impeccable) | **now** (design only) | 006, the S3c plan |
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | 006, 005 |
 | [005](docs/cards/005-x2-resume.md) | X2 talking-head spike, resume | after O7 is ruled | 004, 006 |
 
