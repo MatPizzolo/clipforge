@@ -1,6 +1,6 @@
 # Card 008: X0 — deploy and hook follow-ups from card 002
 
-Status: proposed
+Status: done 2026-10-01 (report: docs/reports/008-x0-2026-10-01.md; PR #14)
 Stream: X0 (tooling) · Branch: `x0/followups` · Worktree: `../clipForge-x0` (created with `scripts/worktree.sh x0/followups`)
 Decision-log range: #380–#399 (append only, in this range; #380–#390 are taken, re-read the log)
 Model: mid-tier
