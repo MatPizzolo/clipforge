@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -60,3 +61,17 @@ def test_filter_path_rejects_characters_that_need_escaping() -> None:
     for bad in ("/tmp/a:b.ass", "/tmp/it's.ass", "/tmp/a,b.ass", "/tmp/[x].ass", "/tmp/a;b.ass"):
         with pytest.raises(ValueError):
             filter_path(Path(bad))
+
+
+def test_run_passes_the_loglevel(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[list[str]] = []
+
+    def fake(cmd: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        seen.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake)
+    ffmpeg.run(["-version"], loglevel="info")
+    assert seen[0][seen[0].index("-loglevel") + 1] == "info" and "-nostats" in seen[0]
+    ffmpeg.run(["-version"])
+    assert seen[1][seen[1].index("-loglevel") + 1] == "warning" and "-nostats" not in seen[1]

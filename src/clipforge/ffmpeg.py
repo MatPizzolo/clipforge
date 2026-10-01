@@ -23,9 +23,10 @@ class FfmpegError(RuntimeError):
         super().__init__(f"{tool} failed: {self.stderr_tail}")
 
 
-def run(args: list[str], timeout: float = 900) -> str:
-    """Run ffmpeg with `args`; returns its stderr (warnings) on success."""
-    cmd = ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-loglevel", "warning", *args]
+def run(args: list[str], timeout: float = 900, loglevel: str = "warning") -> str:
+    """Run ffmpeg with `args`; returns its stderr (warnings, or more at a higher loglevel)."""
+    quiet = [] if loglevel == "warning" else ["-nostats"]
+    cmd = ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-loglevel", loglevel, *quiet, *args]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
     if result.returncode != 0:
         raise FfmpegError("ffmpeg", result.stderr)
