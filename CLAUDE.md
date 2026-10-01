@@ -66,7 +66,7 @@ src/clipforge/
   inbox.py          # videos/ inbox for `clipforge clip`: channels.toml, channel folders, ledger, Volume paths
   api/main.py       # FastAPI job API + Telegram webhook route
   bot/              # Telegram: telegram.py (PTB sync bridge), messages, notifier, commands, webhook, context, posting (ADR-23), deeplinks (DASHBOARD_URL)
-  stages/           # one module per stage + segmenting.py (sentences/windows) + shots.py/faces.py/speakers.py (reframe helpers) + runner.py (PipelineStages)
+  stages/           # one module per stage + segmenting.py (sentences/windows) + shots.py/faces.py/speakers.py (reframe helpers) + timeline.py/render_graph.py/loudness.py (render helpers, ADR-31) + runner.py (PipelineStages)
     ingest.py transcribe.py highlights.py reframe.py captions.py render.py package.py
   models.py         # pydantic contracts shared by stages
   jobs.py           # DictJobStore, JobContext, cached_stage (ADR-14)

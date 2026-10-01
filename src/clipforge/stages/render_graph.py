@@ -118,6 +118,12 @@ def _whole(seg: VideoSegment, media: MediaInput) -> bool:
     return abs(seg.in_s - media.seek) < EPS and seg.end - seg.start >= media.span - EPS
 
 
+def _frames(start: float, end: float, fps: int) -> int:
+    """A segment's frame count from the frame boundaries, so the counts of contiguous
+    segments add up to the Timeline's (rounding each length alone drifted: review I-1)."""
+    return max(1, round(end * fps) - round(start * fps))
+
+
 def _ken_burns(kb: KenBurns, frames: int, w: int, h: int, fps: int) -> str:
     d1 = max(1, frames - 1)
 
@@ -141,7 +147,7 @@ def _still(seg: StillSegment, k: int, i: int, tl: Timeline) -> str:
     # each still's last frame (found at review CP2 and Task 6).
     tail = "format=yuv420p"
     if seg.ken_burns is not None:
-        frames = max(1, round((seg.end - seg.start) * tl.fps))
+        frames = _frames(seg.start, seg.end, tl.fps)
         return f"[{k}:v]{_ken_burns(seg.ken_burns, frames, w, h, tl.fps)},{tail}[p{i}]"
     if seg.fit == "blur":
         return _blur(f"{k}:v", f"q{i}", w, h, f"b{i}") + f";[q{i}]{tail}[p{i}]"
@@ -182,11 +188,23 @@ def video_graph(tl: Timeline, inputs: Inputs, subs: str | None) -> str:
             continue
         parts.append(f"[{src}]split={len(indices)}" + "".join(f"[s{i}]" for i in indices))
         label.update({i: f"s{i}" for i in indices})
+    # Mixed inputs (stills, or several files with their own frame rates): every segment is
+    # made exactly its frame count at the Timeline's rate (fps, hold the last frame, cut by
+    # frame number) before concat. Left to the output -r, ffmpeg 5.1 (the Modal image)
+    # dropped a frame at the end (359 of 360). Clip graphs (one source) stay v3's strings.
+    mixed = bool(inputs.stills) or len(users) > 1
     for i, seg in enumerate(tl.visual):
         if isinstance(seg, VideoSegment):
-            parts.append(_video(seg, label[i], inputs.files[seg.path], i, w, h))
+            part = _video(seg, label[i], inputs.files[seg.path], i, w, h)
         else:
-            parts.append(_still(seg, inputs.stills[i], i, tl))
+            part = _still(seg, inputs.stills[i], i, tl)
+        if mixed:
+            frames = _frames(seg.start, seg.end, tl.fps)
+            part = part.removesuffix(f"[p{i}]") + (
+                f"[r{i}];[r{i}]fps={tl.fps},tpad=stop_mode=clone:stop_duration=1,"
+                f"trim=end_frame={frames},setpts=PTS-STARTPTS[p{i}]"
+            )
+        parts.append(part)
     n = len(tl.visual)
     parts.append("".join(f"[p{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0{tail}[v]")
     return ";".join(parts)

@@ -58,8 +58,20 @@ All contracts are pydantic models in `src/clipforge/models.py`. Paths inside con
 | highlights | `highlights_step` | `Transcript`, `ClipOptions` | `HighlightsResult` (ranked `ClipCandidate[]`, prompt version, model) → top-n `ClipSpec[]` | CPU + LLM API |
 | reframe | `clip_step` | `ClipSpec` | `CropTrack` (per-shot crop boxes around the largest face, cuts between speakers in multi-person shots, or blur segments) | CPU |
 | captions | `clip_step` | `ClipSpec`, `Transcript` | `CaptionFiles` (`.ass` + `.srt` paths, time offset) | CPU + LLM API (key words) |
-| render | `clip_step` | `ClipSpec`, `CropTrack`, `CaptionFiles` | `RenderedClip` (path, encoder, ffprobe info) | CPU (libx264) |
+| render | `clip_step` | `Timeline` (built from `ClipSpec`, `CropTrack`, `CaptionFiles` by `stages/timeline.py`) | `RenderedVideo` (path, encoder, ffprobe info, loudness), wrapped into `RenderedClip` | CPU (libx264) |
 | package | `package_step` | `RenderedClip[]`, metadata | `PackageResult` (`PackagedClip[]`, `metadata.json` as `JobMetadata`, zip) | CPU |
+
+### Timeline (ADR-31, S4)
+- **The only render input.** `render` takes a `Timeline`:
+  - contiguous visual segments: a `VideoSegment` (source, b-roll or talking head, framed by crop, cover or blur), or a `StillSegment` (optional Ken Burns);
+  - audio tracks: source, narration, and music, which can be ducked under the voice;
+  - one ASS overlay holding the captions and the hook title card (#340);
+  - `assets`, for the policy gate.
+- **One ffmpeg encode per Timeline.** `stages/render_graph.py` builds the inputs and filtergraphs. A clip Timeline (`timeline.for_clip`) gives exactly the v3 clip graph.
+- **Two-pass loudness** (`stages/loudness.py`, #341). A measurement pass runs first, then the encode.
+- **Cache key** (#342, #343): the Timeline without `assets`, without the paths of hashed media, and without the srt path.
+- **Short video:** a Timeline with produced media whose picture ends early fails with `PermanentError`. Clip Timelines keep v3's behavior (#345).
+- `render.STAGE_VERSION` 4.
 
 ### Key rules
 - **Caching (ADR-8):** each stage output lives at `/jobs/cache/<stage>/<key>/`. The key is built from the narrowest inputs that determine the output, plus the stage version and the prompt/model version. If `result.json` exists and validates, the stage is skipped.
@@ -83,7 +95,7 @@ Per-shot face framing (ADR-19) and cutting to the speaker in multi-person shots 
 - **Ingest:** streams are copied, never re-encoded (render re-encodes each clip anyway): mp4 for H.264/HEVC with AAC/MP3, mkv otherwise, and a transcode only if copying fails. Sources without a container duration (browser or screen recordings) are accepted, and the duration limit is applied to the normalized copy.
 - **Reframe (ADR-19):** landscape sources in `auto` are cut at camera changes (ffmpeg scene score > 0.2, shots under 0.5 s merged). Each shot is cropped to 9:16 around its largest face: YuNet, the median of 3 samples, and faces at least 4% of the frame width. The crop is fixed per shot. Shots without a face, and any detection failure, use the blurred fit. Render cuts the video into segments, crops or blurs each, and rejoins them in one encode. Already-9:16 and near-square sources, and forced `center`/`blur`, keep the fixed crop or fit. In shots with two or more people (ADR-21), the crop follows whoever is talking: each word goes to the seat whose mouth moved most (mouth motion minus head motion, sampled at 10 fps), turns last at least 2 s, and switches are hard cuts mid-pause. People who fit in one crop are framed together.
 - **Captions:** Anton (OFL, `assets/fonts/`), uppercase, white with a 7 px black border, ≤ 3 words per line, one caption per line (short pauses are bridged so captions don't flicker). Key words chosen by Haiku (`prompts/keywords_v1.md`, ADR-18) are yellow, with at most one per line and one per 4 words. If the reply is invalid twice, the clip keeps plain white captions. Bottom-center with MarginV 380 on 1920, just above the platform UI in the bottom 20%. ASS control characters in speech are stripped. A hook title card, the LLM's `title` (≤ 10 words, uppercase), is shown top-center for the first 3 s with a 0.3 s fade, and its key word, chosen in the same `keywords_v2` call, is yellow. Every caption line pops in, from 110% to 100% over 0.1 s (ADR-20).
-- **Render:** one libx264 encode per clip (accurate `-ss`, crop or blur-fit, ASS burn-in), AAC 48 kHz 128 kb/s, video capped at `min(8 Mb/s, 45 MB·8/duration − audio)` so every clip fits Telegram's 50 MB. The video bitrate is also capped by the source's short side (so a vertical 720x1280 video counts as 720p): ≤ 480 p at 3 Mb/s, ≤ 720 p at 5 Mb/s. Audio is normalized to -14 LUFS (`loudnorm`, TP -1.5, LRA 11) (ADR-20).
+- **Render:** one libx264 encode per clip (accurate `-ss`, crop or blur-fit, ASS burn-in), AAC 48 kHz 128 kb/s, video capped at `min(8 Mb/s, 45 MB·8/duration − audio)` so every clip fits Telegram's 50 MB. The video bitrate is also capped by the source's short side (so a vertical 720x1280 video counts as 720p): ≤ 480 p at 3 Mb/s, ≤ 720 p at 5 Mb/s. Audio is normalized to -14 LUFS (TP -1.5, LRA 11) in two passes: a measurement, then a linear `loudnorm` where the true peak allows (ADR-20 targets; proposed ADR-47, log #341). Render's input is a `Timeline` (see above).
 - **Package:** `<job_id>/output/clip_NN_scoreX.XX/{video.mp4,captions.srt,post.md}`, `metadata.json` (with per-clip costs merged in), and an uncompressed `job.zip`.
 
 ## Transcription (ADR-11)

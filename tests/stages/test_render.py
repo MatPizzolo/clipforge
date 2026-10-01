@@ -364,3 +364,19 @@ def test_measurement_run_skips_video_and_silence_is_logged(
     measure = next(args for args in seen if "null" in args)
     assert "-vn" in measure
     assert "silent" in caplog.text
+
+
+def test_clip_at_the_tail_of_a_short_video_stream_still_renders(tmp_path: Path) -> None:
+    # Final review I-2: browser and screen recordings can stop the picture before the sound.
+    # A clip ending there shipped in v3 with a short picture; it must not fail permanently.
+    early = tmp_path / "early.mp4"
+    ffmpeg.run([
+        "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=5.5",
+        "-f", "lavfi", "-i", "sine=f=440:d=6:sample_rate=48000",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac",
+        str(early),
+    ])  # fmt: skip
+    spec = spec_for(source_from(tmp_path, early), "center", start=3.0, end=5.95)
+    rendered = render_timeline(tmp_path, clip_timeline(tmp_path, spec, reframe.plan(spec)))
+    assert rendered.probe.audio_duration_s is not None
+    assert abs(rendered.probe.audio_duration_s - 2.95) < 0.05

@@ -15,7 +15,14 @@ from clipforge import ffmpeg
 from clipforge.config import Settings
 from clipforge.hashing import cache_key
 from clipforge.jobs import JobContext, Stored, cached_stage
-from clipforge.models import Loudness, RenderedVideo, StageCost, StageName, Timeline
+from clipforge.models import (
+    Loudness,
+    RenderedVideo,
+    StageCost,
+    StageName,
+    Timeline,
+    VideoSegment,
+)
 from clipforge.pipeline.errors import PermanentError
 from clipforge.stages import loudness, render_graph
 
@@ -114,10 +121,15 @@ def run(
         if "fontselect" in stderr or "Glyph" in stderr:
             log.warning("caption font problem while rendering %s: %s", name, stderr[-300:])
         probe = ffmpeg.probe_info(out)
-        shown = probe.video_duration_s or 0.0
-        if tl.duration_s - shown > SHORT_VIDEO_S + 1 / tl.fps:
-            # Audio is padded to duration_s, video isn't: media shorter than its segments
-            # would ship frozen-out sound (review CP3 #1). A producer bug, never retried.
+        shown = probe.video_duration_s or probe.duration_s
+        produced = any(
+            not (isinstance(seg, VideoSegment) and seg.kind == "source") for seg in tl.visual
+        )
+        if produced and tl.duration_s - shown > SHORT_VIDEO_S + 1 / tl.fps:
+            # Audio is padded to duration_s, video isn't: produced media shorter than its
+            # segments would ship sound under no picture (review CP3 #1, log #345). A
+            # producer bug, never retried. Source-only (clip) Timelines keep v3's behavior:
+            # a recording whose picture stops before its sound still ships (review I-2).
             raise PermanentError(
                 f"{name}: video ends at {shown:.2f} s of a {tl.duration_s:.2f} s timeline"
             )

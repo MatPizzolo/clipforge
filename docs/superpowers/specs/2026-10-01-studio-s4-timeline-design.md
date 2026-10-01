@@ -139,7 +139,7 @@ Validators:
 - The Telegram budget uses `duration_s`.
 - `fps` comes from the Timeline. The clip builder sets it to today's `min(60, round(source fps) or 30)`.
 
-**Short video guard (review at CP3):** audio is padded to `duration_s` but video isn't. When the encoded video stream is shorter than the Timeline by more than one frame plus 0.1 s (a media file shorter than its segments), render raises `PermanentError` instead of shipping picture and sound out of sync.
+**Short video guard (review at CP3):** audio is padded to `duration_s` but video isn't. When the encoded video stream is shorter than the Timeline by more than one frame plus 0.1 s (a media file shorter than its segments), render raises `PermanentError` instead of shipping picture and sound out of sync. This applies only to Timelines with produced media; clip Timelines (source segments only) keep v3's behavior, because a recording's picture can stop before its sound (log #345).
 
 **Unchanged:** libx264 `veryfast` CRF 21, `-maxrate`/`-bufsize`, yuv420p, AAC 128 kb/s 48 kHz stereo, `+faststart`, the >50 MB `PermanentError`, the font warning, and the `StageCost` (wall seconds, now including pass 1).
 

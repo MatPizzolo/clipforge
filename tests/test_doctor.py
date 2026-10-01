@@ -9,7 +9,7 @@ from tests.conftest import TALKING_HEAD, requires_ffmpeg
 def test_local_checks_pass_required() -> None:
     checks = local_checks()
     names = {c.name for c in checks}
-    assert {"ffmpeg", "libass (ass filter)", "libx264", "h264_nvenc"} <= names
+    assert {"ffmpeg", "libass (ass filter)", "libx264", "h264_nvenc", "timeline filters"} <= names
     assert all(c.ok for c in checks if c.required), format_checks(checks)
 
 

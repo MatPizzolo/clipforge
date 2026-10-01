@@ -161,6 +161,9 @@ def test_mixed_video_graph_shape() -> None:
     assert (
         "[0:v]trim=start=0.000,setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect" in video
     )
+    # Mixed inputs: each segment is cut to its exact frame count at the Timeline's rate, so
+    # the output -r has nothing to convert (ffmpeg 5.1, the Modal image, dropped a frame).
+    assert "[r1];[r1]fps=30,tpad=stop_mode=clone:stop_duration=1,trim=end_frame=90," in video
     assert video.endswith("[p0][p1][p2]concat=n=3:v=1:a=0[v]")  # no overlay: no ass filter
 
 
@@ -261,3 +264,20 @@ def test_looped_still_has_all_its_frames(tmp_path: Path, fit: str) -> None:
     )
     log = _run_graph(tmp_path, tl, "v", ["-f", "null", "-"])  # the last frame= line counts
     assert int(re.findall(r"frame=\s*(\d+)", log)[-1]) == 60
+
+
+@requires_ffmpeg
+def test_many_unaligned_stills_keep_the_total_frame_count(tmp_path: Path) -> None:
+    # Final review I-1: rounding each segment on its own drifted (20 x 1.01 s at 30 fps gave
+    # 600 frames, not 606); counts come from frame boundaries so the sum is exact.
+    a = tmp_path / "a"
+    a.mkdir()
+    ffmpeg.run(["-f", "lavfi", "-i", "testsrc2=size=108x192", "-frames:v", "1", str(a / "s.png")])
+    visual = [
+        StillSegment(path="a/s.png", width=108, height=192, start=i * 1.01, end=(i + 1) * 1.01,
+                     ken_burns=KenBurns() if i % 2 else None)
+        for i in range(20)
+    ]  # fmt: skip
+    tl = Timeline(width=108, height=192, fps=30, duration_s=20 * 1.01, visual=visual)
+    log = _run_graph(tmp_path, tl, "v", ["-f", "null", "-"])  # the last frame= line counts
+    assert int(re.findall(r"frame=\s*(\d+)", log)[-1]) == round(20 * 1.01 * 30)
