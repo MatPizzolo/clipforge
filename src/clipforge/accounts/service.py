@@ -119,6 +119,14 @@ def sync_schedules(repo: AccountsRepo, kv: KV) -> int:
     return len(accounts)
 
 
+def schedule_drift(repo: AccountsRepo, kv: KV) -> list[str]:
+    """Accounts with a posting chat whose Dict copy is missing or differs from the database
+    (read-only; `db_doctor` reports it before rollout step 4c.7, `sync_schedules` fixes it)."""
+    copies = read_schedules(kv)
+    return [a.id for a in repo.list()
+            if a.posting.chat_id is not None and copies.get(a.id) != a.posting]  # fmt: skip
+
+
 def create_account(
     repo: AccountsRepo, settings: Settings, req: AccountCreate, now: datetime,
     kv: KV | None = None,

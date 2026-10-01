@@ -40,6 +40,13 @@ uv run clipforge clip [videos/<channel>/<file>] [--fetch]   # videos/ inbox → 
 uv run clipforge status [<id>] [--rebuild|--restore [DATE]] / resume <id>     # read or continue a job; no id: the posting overview
 uv run clipforge set-webhook                     # point Telegram at the deployed API
 uv run clipforge eval --set evals/v1     # highlight eval (see docs/EVALS.md)
+uv run alembic upgrade head                      # migrate Neon (DATABASE_URL_UNPOOLED only; CI runs it before deploy)
+uv run modal run src/clipforge/app.py::db_doctor # read-only: revision, pooled host, schedule copies (rollout only)
+uv run clipforge account create|edit|list        # studio accounts (blueprints/)
+uv run clipforge source add|edit|list|show|submissions   # sources live in the database (option B)
+uv run clipforge source import-toml [--dry-run]  # one-off: videos/channels.toml -> sources
+uv run clipforge posting import [--dry-run]|verify   # S1 migration (ADR-41)
+uv run clipforge jobs backfill [--dry-run]       # jobs table from metadata.json and the Dict
 ```
 
 ## Layout
@@ -58,17 +65,25 @@ src/clipforge/
   cli.py            # `clipforge run|clip|status|resume|set-webhook` (thin API client)
   inbox.py          # videos/ inbox for `clipforge clip`: channels.toml, channel folders, ledger, Volume paths
   api/main.py       # FastAPI job API + Telegram webhook route
-  bot/              # Telegram: telegram.py (PTB sync bridge), messages, notifier, commands, webhook, context, posting (ADR-23)
+  bot/              # Telegram: telegram.py (PTB sync bridge), messages, notifier, commands, webhook, context, posting (ADR-23), deeplinks (DASHBOARD_URL)
   stages/           # one module per stage + segmenting.py (sentences/windows) + shots.py/faces.py/speakers.py (reframe helpers) + runner.py (PipelineStages)
     ingest.py transcribe.py highlights.py reframe.py captions.py render.py package.py
   models.py         # pydantic contracts shared by stages
   jobs.py           # DictJobStore, JobContext, cached_stage (ADR-14)
   pipeline/         # step chain (Modal-free): deps.py interfaces, steps.py, selection.py, errors.py
-  posting/          # posting queue (ADR-23): repo (PostingRepo: Dict/Sql/Dual), backend, queue rules, enqueue, slots, keepalive (ADR-24 snapshot/restore)
+  posting/          # posting queue (ADR-23/41): repo (PostingRepo: Dict/Sql/Dual), backend, actions (shared taps/commands, actors), queue rules, enqueue, slots, keepalive (ADR-24), daily (ADR-46), migrate (import/backfill/verify)
   service.py        # job service: create_job, get_job_view, resume_job (API, bot and CLI use it)
   config.py         # settings from env
+  db/               # Postgres (ADR-26/41): engine (Database, 5 s statement timeout), tables, migrations, doctor, accounts/sources/jobs/posting repos
+  accounts/         # blueprints loader + account service (create/edit, the posting:schedule:<account> Dict copies)
+  schedule.py       # slot and hashtag normalization shared by config and accounts
+  sources.py        # source permission hold rules
+  sanitize.py       # clean (user-facing) and redact (logs, driver errors)
+  ops.py            # ops alerts to the owner chat (ADR-45)
 prompts/            # versioned prompts, loaded by filename
 assets/             # fonts/ (Anton, OFL) and models/ (YuNet face model, MIT)
+alembic/            # migrations (0001 is frozen; new tables and columns go in 0002+)
+blueprints/         # account blueprints (ADR-35), mounted into the images
 tests/              # mirrors src/ layout; fixtures in tests/fixtures/
 evals/              # eval sets and results
 ```
@@ -90,6 +105,7 @@ evals/              # eval sets and results
 - Unit-test stages with tiny fixtures in `tests/fixtures/` (a 10-second clip, a short transcript JSON).
 - Mark GPU tests `@pytest.mark.gpu` and network/LLM tests `@pytest.mark.slow`; mock the Anthropic client in fast tests.
 - For ffmpeg changes, assert on output properties (duration, resolution 1080x1920, stream count) with ffprobe, not on bytes.
+- DB tests need Postgres: Docker Desktop (WSL integration) running, or `TEST_DATABASE_URL`. They fail, never skip, without it.
 
 ## Sessions
 

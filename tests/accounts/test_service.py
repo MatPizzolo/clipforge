@@ -125,3 +125,20 @@ def test_sync_rewrites_lost_copies_and_drops_stray_ones(db: Database) -> None:
     kv.put("posting:schedule:broken", "{not json")
     assert sync_schedules(repo, kv) == 1
     assert set(read_schedules(kv)) == {"realtalk-clips-en"}
+
+
+def test_schedule_drift_names_posting_accounts_without_a_current_copy(db: Database) -> None:
+    from clipforge.accounts.service import publish_schedule, schedule_drift
+
+    repo, kv = AccountsRepo(db), MemoryKV()
+    posting = make_account(chat_id=ALLOWED_USER)
+    repo.create(posting, NOW)
+    repo.create(make_account("founder-tapes-en"), NOW)  # no chat: never drift
+    assert schedule_drift(repo, kv) == ["realtalk-clips-en"]
+    publish_schedule(kv, posting)
+    assert schedule_drift(repo, kv) == []
+    repo.update(posting.model_copy(update={"posting": posting.posting.model_copy(
+        update={"slots": ["09:00"]})}), NOW)  # fmt: skip
+    assert schedule_drift(repo, kv) == ["realtalk-clips-en"]
+    sync_schedules(repo, kv)
+    assert schedule_drift(repo, kv) == []

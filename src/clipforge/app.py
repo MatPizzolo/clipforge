@@ -140,6 +140,7 @@ def _step_deps() -> Deps:
         spawner=_spawner(),
         stages=PipelineStages.from_settings(settings),
         sender=runtime.telegram_sender(settings),
+        db=_database(),
     )
 
 
@@ -154,6 +155,7 @@ def _service_deps() -> Deps:
         spawner=_spawner(),
         stages=runtime.UnavailableStages(),
         sender=runtime.telegram_sender(settings),
+        db=_database(),
     )
 
 
@@ -300,27 +302,39 @@ def posting_daily() -> None:
 def web() -> FastAPI:
     settings = get_settings()
     sender = runtime.telegram_sender(settings)
-    return create_app(ApiContext(settings=settings, deps=_service_deps, sender=lambda: sender))
+    return create_app(
+        ApiContext(settings=settings, deps=_service_deps, sender=lambda: sender, db=_database)
+    )
 
 
 @app.function(image=base_image, cpu=0.25, timeout=60, secrets=[secrets])
 def db_doctor() -> dict[str, object]:
-    """Read-only database check: connect ms, alembic_version vs the code's head, pooled host.
-    Never writes and never prints the URL (rollout, runbook §4c)."""
+    """Read-only database check: connect ms, alembic_version vs the code's head, pooled host,
+    and accounts whose `posting:schedule:*` copy is missing or stale (run before rollout step
+    4c.7). Never writes and never prints the URL (rollout, runbook §4c)."""
+    from clipforge.accounts.service import schedule_drift
     from clipforge.db import doctor
-    from clipforge.db.engine import database_from_settings
+    from clipforge.db.accounts import AccountsRepo
 
     settings = get_settings()
     url = None if settings.database_url is None else settings.database_url.get_secret_value()
     database = database_from_settings(settings)
+    report: dict[str, object] = {}
     try:
-        report = doctor.check(database, url)
+        report.update(doctor.check(database, url))
+        if database is not None and report["ok"]:
+            try:
+                drift = schedule_drift(AccountsRepo(database), runtime.DictKV(job_state))
+                report["schedule_drift"] = drift
+                report["ok"] = not drift
+            except Exception as exc:
+                report["ok"], report["error"] = False, f"schedule check: {redact(exc)}"
     finally:
         if database is not None:
             database.dispose()
     for key, value in report.items():
         print(f"db_doctor: {key}: {value}")
-    return dict(report)
+    return report
 
 
 @app.function(image=whisper_image, gpu=GPU, timeout=600)

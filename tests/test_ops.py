@@ -24,7 +24,9 @@ DASH = "https://dash.example"
 def _ops(sender: FakeSender | None = None) -> tuple[OpsAlerts, FakeSender, MemoryKV]:
     sender = sender or FakeSender()
     kv = MemoryKV()
-    return OpsAlerts(kv, sender, ALLOWED_USER, "America/New_York", DASH), sender, kv
+    # pinned to noon: callers that pass no `now` (fail_job, enqueue) must not hit quiet hours
+    ops = OpsAlerts(kv, sender, ALLOWED_USER, "America/New_York", DASH, clock=lambda: NOON)
+    return ops, sender, kv
 
 
 def test_one_alert_per_kind_and_subject_per_hour() -> None:

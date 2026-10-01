@@ -98,3 +98,11 @@ def test_posting_tick_outlasts_one_telegram_upload() -> None:
 def test_blueprints_are_mounted() -> None:
     assert app.CONTAINER_ENV["BLUEPRINTS_DIR"] == app.BLUEPRINTS_MOUNT
     assert (app.REPO_ROOT / "blueprints" / "realtalk-clips.toml").is_file()
+
+
+def test_steps_service_and_api_get_the_database() -> None:
+    # Task 21b: one lazy engine per container; None until DATABASE_URL is in the secret (#107)
+    text = Path(app.__file__).read_text()
+    assert text.count("db=_database()") == 2  # _step_deps and _service_deps
+    assert "db=_database)" in text  # the API's ApiContext (called per request, cached)
+    assert app._database.__wrapped__ is not None  # functools.cache

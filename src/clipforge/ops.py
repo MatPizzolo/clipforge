@@ -10,6 +10,7 @@ logged and never fails the step that raised the alert. Modal-free.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
@@ -36,6 +37,7 @@ class OpsAlerts:
     chat_id: int
     timezone: str
     dashboard_url: str | None = None
+    clock: Callable[[], datetime] = utcnow  # when a caller passes no `now` (tests pin it)
 
     def quiet(self, now: datetime) -> bool:
         hour = now.astimezone(ZoneInfo(self.timezone)).hour
@@ -49,7 +51,7 @@ class OpsAlerts:
         `urgent` (brake-worthy: publishing broken across accounts, spend over 2x budget) breaks
         through quiet hours. `path` is a dashboard page for a "Open ↗" button."""
         try:
-            return self._alert(text, kind, subject, urgent, path, now or utcnow())
+            return self._alert(text, kind, subject, urgent, path, now or self.clock())
         except Exception:
             log.warning("ops alert %s:%s failed", kind, subject, exc_info=True)
             return "error"
@@ -81,7 +83,7 @@ class OpsAlerts:
     def flush(self, now: datetime | None = None) -> int:
         """Outside quiet hours, send the held alerts as one message; returns how many."""
         try:
-            return self._flush(now or utcnow())
+            return self._flush(now or self.clock())
         except Exception:
             log.warning("flushing held ops alerts failed", exc_info=True)
             return 0
