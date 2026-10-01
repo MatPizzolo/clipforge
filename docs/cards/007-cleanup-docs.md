@@ -1,6 +1,6 @@
 # Card 007: docs — audit and refresh every Markdown file, and find unused files
 
-Status: sent 2026-10-01 (checkpoint A report done; checkpoint B after approval)
+Status: done 2026-10-01 (report: docs/reports/007-cleanup-2026-09-30.md; PR #11)
 Stream: cleanup · Branch: `cleanup/docs-refresh` · Worktree: `../clipForge-cleanup` (created with `scripts/worktree.sh cleanup/docs-refresh`)
 Decision-log range: #400–#419 (append only, in this range)
 Model: most capable (judging what is current needs the whole picture)

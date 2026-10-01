@@ -19,6 +19,8 @@ As `scripts/scopes.toml` allows for `s4/`.
 ## Actions
 Follow 06's S4 card through prompt B's steps: design, then the spec for the owner's review, then the plan, then the build.
 
+Also, in the build (from card 007's audit): the comments in `stages/captions.py`, `models.py` and `tests/stages/test_captions.py` say `keywords_v1`, but the code loads `keywords_v2`. Fix them while you're in captions.
+
 ## Done when
 06's S4 "done when", plus `scripts/check.sh` green.
 

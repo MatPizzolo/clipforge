@@ -13,15 +13,15 @@ Last updated: 2026-10-01 (card 002 merged, PR #5; cards 001 and 003 earlier, PRs
 | [003](docs/cards/003-s3c-revision.md) | S3c design revision (D3, D4, D10) | **done 2026-09-30** (PR #6) | — |
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | 002, 003, 005 (merge after 002) |
 | [005](docs/cards/005-x2-resume.md) | X2 talking-head spike, resume | after O7 is ruled | 002, 003, 004 |
-| [006](docs/cards/006-s4-timeline.md) | S4 Timeline renderer | **now** | 003, 004, 005 |
-| [007](docs/cards/007-cleanup-docs.md) | Docs audit and refresh: every Markdown file checked against main and corrected (branch `cleanup/`, Markdown only); unused code and assets proposed to their owners | **sent 2026-10-01** (checkpoint A report done; B after the owner's approval) | 004, 005, 006 (leaves files their open PRs touch) |
+| [006](docs/cards/006-s4-timeline.md) | S4 Timeline renderer | **sent 2026-10-01** (designing; spec next, for the owner's review) | 003, 004, 005 |
+| [007](docs/cards/007-cleanup-docs.md) | Docs audit and refresh: every Markdown file checked against main and corrected (branch `cleanup/`, Markdown only); unused code and assets proposed to their owners | **done 2026-10-01** (PR #11: 46 Markdown files refreshed, log #400–#403; nothing deleted) | — |
 | [008](docs/cards/008-x0-followups.md) | X0 follow-ups: migration-head check in `deploy.py`, CI deploys tagged, the Stop hook stops asking the coordinator for reports | **now** | 006, 007 |
 
 ## Workstreams
 | Workstream | Status | Last finished | Continues at |
 |---|---|---|---|
 | **S0** posting assistant (plan C) | Live since 2026-09-29, redeployed 2026-09-30 (Dict-only). The session ended long ago | Plan C Tasks 1–6 and its final review | Owner checks only (below): phone test, one scheduled slot, the 07:00 UTC keep-alive line and first snapshot |
-| **S1** database, accounts, sources | Code finished, stopped before the rollout (card 002, PR #5). Fast suite 1057 passed | Tasks 1–21b, addendum A1–A6, the final whole-branch review (four reviewers), the sticky outage flag (#217), Task 23 amendments (#218) | **Task 22, the rollout**, with the owner: needs O3 and O5, then a rollout card; runbook §4 (step 7b: `posting_daily`, then `db_doctor` shows `schedule_drift: []` before step 7) |
+| **S1** database, accounts, sources | Code finished, stopped before the rollout (card 002, PR #5). Fast suite 1057 passed | Tasks 1–21b, addendum A1–A6, the final whole-branch review (four reviewers), the sticky outage flag (#217), Task 23 amendments (#218) | **Task 22, the rollout**, with the owner: needs O3 and O5, then a rollout card; runbook §4 (step 7b: `posting_daily`, then `db_doctor` shows `schedule_drift: []` before step 7). Small fix for the rollout card: a manual `clipforge status --rebuild` isn't blocked by the outage flag (card 007's report) |
 | **X0** working environment | Done (card 001, PR #3) | `scripts/check.sh`, the scope check (`scripts/scopes.toml`), docs tests, CI on `check.sh` + a `scope` job, `worktree.sh` (`--no-track`), `deploy.sh` (blackout, `.env` settings required), `.claude/` hooks, permissions, agents, skills | Owner: branch protection for `main` (require `check` and `scope`) |
 | **S2** publishing | Not started | — | After S1's rollout (Task 22). 04 S2 lists the ADR-44/45 items added on 2026-09-30 |
 | **S3a** dashboard shell | About 92%. 68 unit tests, 21 Playwright tests pass | Tasks 1–11, checkpoint G (laptop layout), the audit fix card, deep links (#99) | `docs/superpowers/plans/2026-09-29-studio-s3a.md` Task 12 (a real local GitHub login, needs the local OAuth app) and Task 13 (Vercel deploy), both waiting on the owner's Vercel steps (§5b) |
