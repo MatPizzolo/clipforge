@@ -123,13 +123,13 @@ Implementation notes:
 
 ### 2c. Proposed by card 009 (pending the owner's review)
 
-> **Proposed, not accepted.** These changes come from the S3 dashboard design ([spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), log #420–#436). §2 and §2b above stay as they are until the owner accepts them; the coordinator then folds them in.
+> **Proposed, not accepted.** These changes come from the S3 dashboard design ([spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), log #420–#439). §2 and §2b above stay as they are until the owner accepts them; the coordinator then folds them in.
 
 **Pages (§2).** The structure is inbox-first (#430):
 - **Home** becomes "needs me" (one prioritized list across the fleet, one decision per row, with an attention meter against a ~20-minute daily budget), then the fleet scoreboard, then today's slots.
 - **New: `/act/<kind>/<id>`**, a focused action view for one row (context, 2–3 actions, then Next). Every Telegram alert's Open button lands there.
 - **Stats, Money and Costs merge into Results** (tabs Stats · Money · Costs, one filter row). Fixed subscriptions are shown on Costs and never count against caps.
-- **Accounts** gets two views: S3c's **Map** and a new **Compare** (every account side by side, led by "the 3 accounts that need you this week").
+- **Accounts** gets two views: a new **Compare** (every account side by side, led by "the 3 accounts that need you this week"), built in S3 as a read view (#439), and S3c's **Map**.
 - **The account workspace** gains these tabs:
   - **Overview:** the loop at a glance, the next rung, and day N of 90;
   - **Autopilot:** three switches and the Review dial, presets, rails and spend;

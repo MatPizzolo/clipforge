@@ -2,7 +2,7 @@
 
 Date: 2026-10-01 · Card: [009](../../cards/009-s3-dashboard-design.md) · Status:
 - §1 routine, §2 autopilot model, §3 jobs mapped to the loop, §4 Telegram and the dashboard, §5 staged availability, §6 information architecture: **approved by the owner at checkpoint A (2026-10-01)**, after two rounds of the coordinator's review. Decision log #420–#430.
-- §7 pages (revised after the owner's review: §7.3 type tabs, §7.8 Personas, log #431–#432; §8 revised for the owner's rulings #433–#436), §8 gaps (with the coordinator's six additions: crons, the queue filler, the "needs me" API, where autopilot settings live, the hook-variant cost, S2's card), §9 proposed ADRs (A, B, C; for the owner's review at B, then the coordinator accepts them), §10 proposed changes to other documents: **written at checkpoint B (2026-10-01), for the owner's review.** Mockups and `DESIGN.md` in `docs/design/dashboard/` (impeccable finish review: 8 material fixes in 2 correction rounds; 7 resolved at the final verdict, the last one fixed after it and confirmed by a computed-style check). 08 §2c carries the proposed 08 edits.
+- §7 pages (revised after the owner's review: §7.3 type tabs, §7.8 Personas, log #431–#432; §8 revised for the owner's rulings #433–#436), §8 gaps (revised again after merging `main`: #437–#439; with the coordinator's six additions: crons, the queue filler, the "needs me" API, where autopilot settings live, the hook-variant cost, S2's card), §9 proposed ADRs (A, B, C; for the owner's review at B, then the coordinator accepts them), §10 proposed changes to other documents: **written at checkpoint B (2026-10-01), for the owner's review.** Mockups and `DESIGN.md` in `docs/design/dashboard/` (impeccable finish review: 8 material fixes in 2 correction rounds; 7 resolved at the final verdict, the last one fixed after it and confirmed by a computed-style check). 08 §2c carries the proposed 08 edits.
 
 Builds on, and doesn't reopen: ADR-29 (review tiers, policy gate), ADR-38 (the dashboard over the API only), ADR-39 (disclosed synthetic personas), ADR-42 and the [S3c spec](2026-09-30-studio-s3-workspaces-design.md) (versioned setup, experiments, notes), ADR-43 (derived producer version), ADR-44 (one home per task), ADR-45 (notification budget), D8 (Review is a queue manager until S2), D9 (the `admin` endpoint and its token). Facts: [01](../../studio/01-vision-and-strategy.md) (money, review policy), [03](../../studio/03-tools-and-models.md) (cost model), [07](../../studio/07-channel-portfolio.md) and [09](../../studio/09-account-registry.md) (portfolio, accounts, pairs), [08 §2](../../studio/08-dashboard-and-operations.md#2-dashboard-information-architecture-nextjs) (page list).
 
@@ -268,6 +268,7 @@ A type tab appears only when its producer exists; before that the account shows 
 - **Data:** per account: rung, lifecycle day, runway, approval rate, cost per item, top hook, the owner's minutes a day, views (S7); a ranked focus list with its reason (experiments to decide, open windows, runway under 14 days, weak hooks, health, minutes spent).
 - **Actions:** open an account; create one from a blueprint (S3c).
 - **API:** `GET /accounts/compare?days=7`.
+- **Built in S3 as a read view** (#439), because the weekly hour opens on it (#420); S3c-1 later adds its Map and enriches Compare with versions and experiments.
 - **Map** stays S3c §2.2's studio map, as the other view of the same page.
 - **Phone:** focus cards, then compact rows. **Laptop:** three focus cards, then the table.
 
@@ -411,15 +412,15 @@ Not on the dispatcher: "needs me" rows, runway and graduation suggestions (deriv
 
 ### 8.4 Where the autopilot settings live
 
-- **Ruling (#433): operating state, not ADR-42 setup.** A table `autopilot(account_id PK, preset, produce, review_dial, publish, scale, runway_days, batch_line_usd, monthly_cap_usd, updated_by, updated_at)` with an **append-only change history** `autopilot_events(id, account_id, at, actor, field, from_value, to_value, reason)`, one row per changed field, never updated or deleted (a trigger rejects UPDATE and DELETE, like S3c's `*_versions`).
-  - **Who:** `actor` is `web:<login>`, `telegram:<id>`, `system:promotion` or `system:demotion`. A promotion is always the owner's tap, so its row carries `system:promotion` as the actor with the approving owner in `reason` ("promotion approved by web:owner: 34 days on Supervised, 13 spot checks, 0 rejected"); a demotion is automatic (`system:demotion`, reason "2 rejects in the last 5 spot checks").
+- **Ruling (#433, restated by #437): operating state, not ADR-42 setup.** A table `autopilot(account_id PK, preset, produce, review_dial, publish, scale, runway_days, batch_line_usd, monthly_cap_usd, updated_by, updated_at)` with an **append-only change history** `autopilot_events(id, account_id, at, actor, field, from_value, to_value, reason)`, one row per changed field, never updated or deleted (a trigger rejects UPDATE and DELETE, like S3c's `*_versions`).
+  - **Who (#437):** `actor` is the person who tapped, `web:<login>` or `telegram:<id>`, for every change someone made, **promotions included**: a promotion's row has the owner as the actor and the reason "promotion suggested by the ladder: 34 days on Supervised, 13 spot checks, 0 rejected". `system:<component>` is only for changes nobody tapped: `system:demotion` (reason "2 rejects in the last 5 spot checks") and `system:filler` (the queue filler's batches).
   - **When, from → to, why:** `at`, `from_value`, `to_value` and `reason` (required for the owner's changes to the Review dial, written by the system for its own).
   - **Readers:** the account's **Activity** tab and the "what ran without me" digest line and Home footer read it; Accounts → Compare shows the last change per account.
 - **Why not the versioned setup:**
   - demotions are automatic and must apply at once, even while a setup experiment runs (S3c §4.4 would block them);
   - the dial changes how items are reviewed, not what is produced, so it doesn't belong in `(account_id, account_version)`;
   - it is the same kind of runtime state as the pause in `posting_state` (ADR-41).
-- **One writer (ADR-41):** `accounts/autopilot.py` (Modal-free), called by the admin routes, the review service (demotions) and the ladder (promotions on the owner's tap). Automatic writes use a new actor prefix, `system:<component>` (`system:promotion`, `system:demotion`, and `system:filler` for the queue filler's jobs), which S3c's actor check constraint must allow (§10.3).
+- **One writer (ADR-41):** `accounts/autopilot.py` (Modal-free), called by the admin routes, the review service (demotions) and the ladder (promotions on the owner's tap). Changes nobody tapped use a new actor prefix, `system:<component>` (`system:demotion`, and `system:filler` for the queue filler's jobs), which S3c's actor check constraint must allow (§10.3); a promotion is the owner's tap and carries the owner as its actor.
 - **Traceability:** every send and review decision records the dial and windows in force in `post_events.data` (`review_dial`, `window`), so results stay attributable.
 - **Experiments:** an autopilot change during a running setup experiment is allowed; the experiment page shows it as a marker ("Produce switched on, day 3").
 - **Consequence for S3c:** the review tier (S3c's "rules" class) and the budget (its "identity" class) move out of the versioned setup into this table (§10.3).
@@ -439,7 +440,8 @@ Not on the dispatcher: "needs me" rows, runway and graduation suggestions (deriv
 - **Owner: a separate hooks card (ruling #436),** sequenced **after S1's rollout and before S6**, so the story producer is built on it. Outline:
   1. **Pattern versions:** tables `hook_patterns(id, account_id, blueprint_name NULL, status)` and `hook_pattern_versions(pattern_id, n, data jsonb, author, created_at)`, append-only (an edit writes v+1); drafts from + Hook idea (S3c notes); share to a blueprint; seed each clips account's library from its current hook title style.
   2. **Item stamping:** `content_items.hook_pattern_id`, `hook_version` and `hook_weights jsonb` (the weights in force when the item was made); the stamp also lands in `metadata.json`.
-  3. **Variants in producers:** the clips producer writes 2–3 hook-title variants from approved patterns and ranks them in one Haiku call (a new prompt version, so the captions `STAGE_VERSION` bumps; about $0.0025 per item, logged as cost, rule 7); the story producer uses the same interface from its first version (S6).
+  3. **Variants in producers:** for clips, the hook title card's text comes from highlights' `title`, and the captions stage writes it into the Timeline's one ASS overlay (`Timeline.overlay`, #340) with its key word from `keywords_v2`. The variants therefore go into the captions call: a new prompt version (`keywords_v3` or a `hooks_v1` prompt) writes 2–3 title variants from approved patterns, ranks them and picks the key word in one Haiku call (about $0.0025 per item, logged as cost, rule 7). The Timeline contract doesn't change; the render re-runs because the overlay changes. The story producer uses the same interface from its first version (S6), where the hook is also the script's first line.
+  - **Release note:** that prompt change bumps `captions.STAGE_VERSION` (3 → 4) and the prompt names in `producer_version` (ADR-43), so **every clips account's `producer_version` changes** and ADR B's 5-item review window applies to each. S4's render bump (`render.STAGE_VERSION` 3 → 4, Timeline input and ADR-47's two-pass loudness) is the same kind of change. **Bundle releases that bump stage or prompt versions**, so accounts go through one review window, not several (#439).
   4. **Rotation:** `hook_weights(account_id, pattern_id, weight, frozen_by_experiment NULL)`; per item, a weighted pick among approved patterns; weights freeze while the account runs a setup experiment (ADR C).
   5. **Ranking before S7:** the owner's 👍/👎 per hook in review (`hook_ratings`), approval and reject rates per pattern with the 90% interval and S3c's 10-item floor; weak patterns become a digest line.
   6. **Ranking after S7:** the 3-second hold and views at 24 h per pattern join the ranking, each with its maturity age; weights move only on settled results.
@@ -458,13 +460,19 @@ Not on the dispatcher: "needs me" rows, runway and graduation suggestions (deriv
 - the `autopilot` table with its append-only change history (§8.4);
 - **exit, restated:** realtalk auto-posts from its profile on its rung; founder.tapes and hombre.en.construccion are created and start Hands-on on S2's flow.
 
-### 8.7 Every other gap
+### 8.7 Migrations (#438)
+
+- **One card at a time writes migrations, in landing order.** The next migration takes the next number after the head on `main` (0001 is frozen, log #84 and #400) and, in the same change, moves `EXPECTED_HEAD` in `src/clipforge/db/doctor.py` to it, so `db_doctor` and `scripts/deploy.sh`'s head check (`DEPLOY_DB_CHECK`) stay right.
+- **The deferred items go into the first new migration,** whichever card writes it (S2, the hooks card or S3c): `jobs.error`, the `post_events.actor` column (backfilled from `data.actor`, S3c §5.3) and the pause actor on `posting_state`. Later cards don't repeat them.
+- A card whose migration is waiting behind another card's rebases onto it and renumbers before it lands; two open migrations never share a number.
+
+### 8.8 Every other gap
 
 | # | Gap | Proposed owner |
 |---|---|---|
 | G1 | `/act/<kind>/<id>` view and the "already handled" lookup (who, when, where, from `post_events` and review decisions) | S3 |
 | G2 | Fleet scoreboard (`GET /fleet/scoreboard`) and today's slots (`GET /slots`) | S3 (views columns in S7) |
-| G3 | Accounts → Compare and its focus ranking (`GET /accounts/compare`) | S3c-1 (the Accounts page) |
+| G3 | Accounts → Compare and its focus ranking (`GET /accounts/compare`), as a read view | **S3** (the weekly hour opens on it, #420); S3c-1 enriches it (versions, experiments) |
 | G4 | Graduation ladder: criteria on read, promote route, automatic demotion, spot-check floor | S2 |
 | G5 | Producer-version window (first 5) | S2 |
 | G6 | Dubs: translation permission check, target dial and budget, first 10 to review | S10 |
@@ -485,7 +493,7 @@ Not on the dispatcher: "needs me" rows, runway and graduation suggestions (deriv
 | G26 | Type tabs in the account workspace (§7.3 table): routes and data per type | S3 (clips), S6 (story), S8 (avatar), S9 (band), S13 (model) |
 | G21 | Review routes (copy edit, re-render, batch approve) | S2 (the review service), S3 (the page) |
 | G22 | Link-contract test (§7.10) | S3 |
-| G23 | `system:` actor prefix (`system:promotion`, `system:demotion`, `system:filler`) and the append-only `autopilot_events` history | S2 (with the `autopilot` table) and S3c-1's migration 0002, whichever lands first |
+| G23 | `system:` actor prefix for changes nobody tapped (`system:demotion`, `system:filler`; promotions carry the owner) and the append-only `autopilot_events` history | S2 (with the `autopilot` table) and S3c-1's migration 0002, whichever lands first |
 | G24 | `needs_snoozes` and `needs_log` | S3 |
 | G25 | Ops alerts with Open buttons to `/act` | S3 |
 
@@ -501,13 +509,13 @@ Decision:
 - Rails no control lifts: the policy gate; the batch line, account cap and fleet cap; new accounts start Hands-on; the review windows (format change: 10; producer version: 5, ADR B; first dubs in a pair: 10).
 - Always the owner's: spend over the line, sponsored and #ad items (first 30 days; brand deals always), new sources and new series formats.
 - A graduation ladder: the system suggests promotions on 01's criteria (Hands-on → Supervised) and on ≥ 30 days, ≥ 12 spot checks with ≤ 1 rejected, no gate failure or strike in 30 days and runway ≥ 14 days (Supervised → Autopilot); the owner taps. Demotions are automatic: one step after 2 rejects in the last 5 spot checks, to Hands-on after a strike. On `sample`, spot checks are at least 1 in 10 and at least 3 a week per account.
-- The settings are operating state in an `autopilot` table with one writer (`accounts/autopilot.py`) and an append-only change history (who, when, from → to, why), not part of ADR-42's versioned setup; automatic changes use the actors `system:promotion` and `system:demotion`. The Activity tab and "what ran without me" read the history.
-- Hard spend caps are enforced in `service.create_job` for every caller; the dashboard only shows them.
+- The settings are operating state in an `autopilot` table with one writer (`accounts/autopilot.py`) and an append-only change history (who, when, from → to, why), not part of ADR-42's versioned setup; every change records the person who tapped (`web:<login>` or `telegram:<id>`, promotions included, with the reason "promotion suggested by the ladder: <criteria>"), and `system:<component>` only for changes nobody tapped (`system:demotion`, `system:filler`). The Activity tab and "what ran without me" read the history.
+- Hard spend caps are enforced in `service.create_job` for every caller from the first automatic job creator on (S6's queue filler, or an earlier card that creates jobs automatically). Until then only owner-started jobs exist, and the per-batch line still asks first. The dashboard only shows caps.
 Consequences: owner time scales with how new each account is. ADR-29's tier becomes the Review dial and leaves S3c's "rules" class. Two new tables. Wave-2 clip accounts wait for S2 because assisted posting doesn't fit the attention budget.
 
 ### ADR B: Producer-version review window
 Date: 2026-10-01 · Status: Proposed (card 009; refines ADR-29 and ADR-43; log #423)
-Context: ADR-29 says a new producer version starts in `review`. With ADR-43, a `producer_version` changes whenever stage versions, prompts or models change (for example S4's render version bump), which would put every account back in full review.
+Context: ADR-29 says a new producer version starts in `review`. With ADR-43, a `producer_version` changes whenever stage versions, prompts or models change (for example S4's `render.STAGE_VERSION` 3 → 4: Timeline input and ADR-47's two-pass loudness), which would put every account back in full review.
 Decision: after a `producer_version` change, the first 5 items per account made under the new version go to `review`; then the account's dial applies again. The account's rung doesn't change. A format change keeps S3c's 10.
 Consequences: about 5 reviews per account per producer change (about 95 across 19 accounts), against a full return to Hands-on. S2 enforces it from `content_items.producer_version`.
 
@@ -525,7 +533,7 @@ Added to 08 as a new subsection, **§2c "Proposed by card 009 (pending the owner
 
 ### 10.2 06's S3 card (and 04's S3 list)
 
-- **Pages:** Home with "needs me", the attention meter, the scoreboard and slots; `/act`; Review; Calendar; Produce with the batch planner and the Jobs tab; Results with Costs (Stats and Money in S7); Sources; Settings; the account workspace's Overview, Autopilot and Activity tabs (on S3c's workspace once it exists; before that, a minimal `/accounts/<id>` read view). Remove "Costs" as its own page.
+- **Pages:** Home with "needs me", the attention meter, the scoreboard and slots; `/act`; **Accounts → Compare** (a read view, G3); Review; Calendar; Produce with the batch planner and the Jobs tab; Results with Costs (Stats and Money in S7); Sources; Settings; the account workspace's Overview, Autopilot and Activity tabs (on S3c's workspace once it exists; before that, a minimal `/accounts/<id>` read view). Remove "Costs" as its own page.
 - **API:** `GET /needs`, `GET /needs/{kind}/{id}`, `POST /needs/{kind}/{id}/{action}`, `GET /fleet/scoreboard`, `GET /slots`, `GET /accounts/{id}/activity`, `POST /batches/preview`, `POST /batches`, `GET /results/costs`, `GET /settings`, `PUT /settings`.
 - **Data:** `needs_snoozes`, `needs_log`, `settings`.
 - **Caps shown, not enforced:** Produce's estimate and the Autopilot tab show caps and lines; enforcement is in `create_job` (§8.2).
@@ -536,7 +544,7 @@ Added to 08 as a new subsection, **§2c "Proposed by card 009 (pending the owner
 
 - §3.5: the **review tier** leaves the "rules" class and the **budget** leaves "identity": both move to the `autopilot` table (§8.4). The format-change window (`format_changed`) stays in the setup.
 - §5.3: the actor check constraint allows `system:<component>` (automatic demotions, the filler).
-- §2.2: the Accounts page gains the **Compare** view next to the Map (§7.4).
+- §2.2: the Accounts page's **Compare** view is built first by S3 (a read view, G3); S3c adds the Map next to it and enriches Compare with versions and experiments (§7.4).
 - §2.5: the workspace gains Overview content, Autopilot, Style (S3c's setup fields grouped, same write path), Hooks and Activity tabs (§7.3).
 - §2.7: the experiment page shows autopilot changes as markers.
 - §4.1: hook-pattern metrics are reported on the Hooks tab, not in the experiment metric registry.
