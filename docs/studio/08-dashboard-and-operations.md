@@ -123,7 +123,7 @@ Implementation notes:
 
 ### 2c. Proposed by card 009 (pending the owner's review)
 
-> **Proposed, not accepted.** These changes come from the S3 dashboard design ([spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), log #420–#432). §2 and §2b above stay as they are until the owner accepts them; the coordinator then folds them in.
+> **Proposed, not accepted.** These changes come from the S3 dashboard design ([spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), log #420–#436). §2 and §2b above stay as they are until the owner accepts them; the coordinator then folds them in.
 
 **Pages (§2).** The structure is inbox-first (#430):
 - **Home** becomes "needs me" (one prioritized list across the fleet, one decision per row, with an attention meter against a ~20-minute daily budget), then the fleet scoreboard, then today's slots.

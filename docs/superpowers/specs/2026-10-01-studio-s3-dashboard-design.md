@@ -2,7 +2,7 @@
 
 Date: 2026-10-01 · Card: [009](../../cards/009-s3-dashboard-design.md) · Status:
 - §1 routine, §2 autopilot model, §3 jobs mapped to the loop, §4 Telegram and the dashboard, §5 staged availability, §6 information architecture: **approved by the owner at checkpoint A (2026-10-01)**, after two rounds of the coordinator's review. Decision log #420–#430.
-- §7 pages (revised after the owner's review: §7.3 type tabs, §7.8 Personas, log #431–#432), §8 gaps (with the coordinator's six additions: crons, the queue filler, the "needs me" API, where autopilot settings live, the hook-variant cost, S2's card), §9 proposed ADRs (A, B, C), §10 proposed changes to other documents: **written at checkpoint B (2026-10-01), for the owner's review.** Mockups and `DESIGN.md` in `docs/design/dashboard/` (impeccable finish review: 8 material fixes in 2 correction rounds; 7 resolved at the final verdict, the last one fixed after it and confirmed by a computed-style check). 08 §2c carries the proposed 08 edits.
+- §7 pages (revised after the owner's review: §7.3 type tabs, §7.8 Personas, log #431–#432; §8 revised for the owner's rulings #433–#436), §8 gaps (with the coordinator's six additions: crons, the queue filler, the "needs me" API, where autopilot settings live, the hook-variant cost, S2's card), §9 proposed ADRs (A, B, C; for the owner's review at B, then the coordinator accepts them), §10 proposed changes to other documents: **written at checkpoint B (2026-10-01), for the owner's review.** Mockups and `DESIGN.md` in `docs/design/dashboard/` (impeccable finish review: 8 material fixes in 2 correction rounds; 7 resolved at the final verdict, the last one fixed after it and confirmed by a computed-style check). 08 §2c carries the proposed 08 edits.
 
 Builds on, and doesn't reopen: ADR-29 (review tiers, policy gate), ADR-38 (the dashboard over the API only), ADR-39 (disclosed synthetic personas), ADR-42 and the [S3c spec](2026-09-30-studio-s3-workspaces-design.md) (versioned setup, experiments, notes), ADR-43 (derived producer version), ADR-44 (one home per task), ADR-45 (notification budget), D8 (Review is a queue manager until S2), D9 (the `admin` endpoint and its token). Facts: [01](../../studio/01-vision-and-strategy.md) (money, review policy), [03](../../studio/03-tools-and-models.md) (cost model), [07](../../studio/07-channel-portfolio.md) and [09](../../studio/09-account-registry.md) (portfolio, accounts, pairs), [08 §2](../../studio/08-dashboard-and-operations.md#2-dashboard-information-architecture-nextjs) (page list).
 
@@ -350,7 +350,7 @@ One row per decision, `id = <kind>:<subject>`. Its level comes from §4's table;
 | `publisher_disconnected` | account + platform | instant | Reconnect | S2 |
 | `strike` | account + platform | instant | Open | S2 (webhook) or S3 (manual entry) |
 | `spend_line` | batch | instant | Approve / Decline | S3 |
-| `cap_reached` | account or fleet | instant | Raise cap / Leave paused | S3 |
+| `cap_reached` | account or fleet | instant | Raise cap / Leave paused | the card that enforces caps in `create_job` (§8.2) |
 | `permission_expired` | source | instant | Open source | S1 data, S3 row |
 | `runway_low` | account | digest | Add a source / Approve a series | S3 |
 | `promotion_ready` | account | digest | Promote / Not yet | S2 |
@@ -381,13 +381,26 @@ Modal allows 5 deployed crons. Three are used: `sweeper` (every 10 min), `postin
 | S7's analytics pull | daily |
 | Notion weekly report (S3b) | weekly |
 
-**Recommendation: accept ADR-27 (one dispatcher cron) by S2,** when the digest arrives. The dispatcher replaces `posting_tick` at the same 5-minute cadence and calls the tick, the digest, the queue filler, the analytics pull and the weekly report when each is due (last-run markers in the Dict; Postgres only when a task is due, so Neon can scale to zero). `sweeper` and `posting_daily` stay. That is 3 crons with room for 2. The alternative, folding the digest into `posting_tick` and the filler into `posting_daily` until S7, needs no ADR but couples unrelated work to the posting tick and leaves S7 to do the move anyway.
+**Ruling (#434): accept ADR-27 (one dispatcher cron) by S2,** when the digest arrives. ADR-27 is drafted in 05; the coordinator accepts it into `docs/DECISIONS.md` with S2's card. The dispatcher replaces `posting_tick` at the same 5-minute cadence and runs each task when it is due, with last-run markers in the Dict and Postgres touched only when a task is due, so Neon can still scale to zero. `sweeper` and `posting_daily` stay as they are: 3 crons, room for 2.
+
+| Task the dispatcher runs | When | Added by |
+|---|---|---|
+| The posting tick (today's `posting_tick`: slots per account, assisted sends, the outage guard) | every 5 min | S2 (moved, unchanged) |
+| Upload-Post scheduling and the brake check before each publish | every 5 min, inside the tick | S2 |
+| The 09:00 digest (owner's time zone, claim `digest:<date>`) | daily | S2 |
+| Ops-alert folding after quiet hours (ADR-45) | 08:00 owner time | S2 (moved from the tick) |
+| The queue filler (Produce switch), per account at its batch hour | daily | S6 |
+| The analytics pull (Upload-Post, YouTube Analytics) | daily | S7 |
+| Program progress and view-collapse checks | daily, after the pull | S7 |
+| The Notion weekly report (S3b) | weekly | S3b/S7 |
+
+Not on the dispatcher: "needs me" rows, runway and graduation suggestions (derived on read), instant alerts and demotions (inline, by the event's writer), `sweeper` (every 10 min) and `posting_daily` (07:00 UTC, ADR-46).
 
 ### 8.2 The queue filler (Produce switch)
 
 - **Owner: S6.** S6 builds the first producer where automatic production matters (stories from briefs, its variation engine). Build the filler there as a generic `produce/filler.py` (Modal-free): per account, top up to N days of runway from approved series and sources, within the batch line and caps, through the same `POST /batches` path.
 - **For clips, before S11** the filler can only clip sources already imported (uploaded to the Volume or registered as sources) and not yet clipped; it can't fetch (ADR-34, local fetch). Runway (§3.3) shows "fetch more episodes" when that pool is empty. A clips adapter ships with the S6 filler.
-- **Budget enforcement before job start** is in S7 today (04 S7). The filler and the batch planner need it first: **move "budget check before job start" to S3** (the batch planner's per-batch line and caps) and have S6's filler use it.
+- **Hard spend caps (ruling #435):** the per-account monthly cap and the fleet cap are enforced in the job service, `service.create_job`, for **every** caller: the API, the CLI, Telegram, the batch planner and the queue filler. A job over a cap is refused with the cap and the month's spend; a batch over the account's per-batch line becomes a "needs me" row instead of a job. The check is built by **the first card that creates jobs automatically**: the queue filler (S6), unless an earlier card adds automatic job creation, in which case that card builds it. The dashboard only shows the caps, the lines and the burn (Produce's estimate, Results → Costs, the Autopilot tab). S7 keeps the reporting (spend per account and per stage, budget burn-down).
 
 ### 8.3 The "needs me" API
 
@@ -398,12 +411,15 @@ Modal allows 5 deployed crons. Three are used: `sweeper` (every 10 min), `postin
 
 ### 8.4 Where the autopilot settings live
 
-- **Recommendation: operating state, not ADR-42 setup.** A table `autopilot(account_id PK, preset, produce, review_dial, publish, scale, runway_days, batch_line_usd, monthly_cap_usd, updated_by, updated_at)` with an append-only `autopilot_events(account_id, at, actor, change jsonb, reason)`.
+- **Ruling (#433): operating state, not ADR-42 setup.** A table `autopilot(account_id PK, preset, produce, review_dial, publish, scale, runway_days, batch_line_usd, monthly_cap_usd, updated_by, updated_at)` with an **append-only change history** `autopilot_events(id, account_id, at, actor, field, from_value, to_value, reason)`, one row per changed field, never updated or deleted (a trigger rejects UPDATE and DELETE, like S3c's `*_versions`).
+  - **Who:** `actor` is `web:<login>`, `telegram:<id>`, `system:promotion` or `system:demotion`. A promotion is always the owner's tap, so its row carries `system:promotion` as the actor with the approving owner in `reason` ("promotion approved by web:owner: 34 days on Supervised, 13 spot checks, 0 rejected"); a demotion is automatic (`system:demotion`, reason "2 rejects in the last 5 spot checks").
+  - **When, from → to, why:** `at`, `from_value`, `to_value` and `reason` (required for the owner's changes to the Review dial, written by the system for its own).
+  - **Readers:** the account's **Activity** tab and the "what ran without me" digest line and Home footer read it; Accounts → Compare shows the last change per account.
 - **Why not the versioned setup:**
   - demotions are automatic and must apply at once, even while a setup experiment runs (S3c §4.4 would block them);
   - the dial changes how items are reviewed, not what is produced, so it doesn't belong in `(account_id, account_version)`;
   - it is the same kind of runtime state as the pause in `posting_state` (ADR-41).
-- **One writer (ADR-41):** `accounts/autopilot.py` (Modal-free), called by the admin routes, the review service (demotions) and the ladder (promotions on the owner's tap). Automatic writes use a new actor prefix, `system:<component>` (`system:ladder`), which S3c's actor check constraint must allow (§10.3).
+- **One writer (ADR-41):** `accounts/autopilot.py` (Modal-free), called by the admin routes, the review service (demotions) and the ladder (promotions on the owner's tap). Automatic writes use a new actor prefix, `system:<component>` (`system:promotion`, `system:demotion`, and `system:filler` for the queue filler's jobs), which S3c's actor check constraint must allow (§10.3).
 - **Traceability:** every send and review decision records the dial and windows in force in `post_events.data` (`review_dial`, `window`), so results stay attributable.
 - **Experiments:** an autopilot change during a running setup experiment is allowed; the experiment page shows it as a marker ("Produce switched on, day 3").
 - **Consequence for S3c:** the review tier (S3c's "rules" class) and the budget (its "identity" class) move out of the versioned setup into this table (§10.3).
@@ -420,10 +436,15 @@ Modal allows 5 deployed crons. Three are used: `sweeper` (every 10 min), `postin
   - a "hooks" stage in Results → Costs;
   - per-item cost in `metadata.json` (rule 7).
 - **Attention cost: none.** 👍/👎 is optional and costs about 0 minutes.
-- **Owner:**
-  - a **new hooks card**, after S3c-2 and before S6: tables `hook_patterns`, `hook_pattern_versions` (append-only), `hook_weights` (with `frozen_by_experiment`) and `hook_ratings`; `content_items.hook_pattern_id`, `hook_version` and `hook_weights jsonb`; the clips producer's variants in the captions stage (a prompt version bump, so a `STAGE_VERSION` bump); the Hooks tab and routes;
-  - S6 adds variants to the story producer;
-  - S7 adds the 3-second hold to the ranking.
+- **Owner: a separate hooks card (ruling #436),** sequenced **after S1's rollout and before S6**, so the story producer is built on it. Outline:
+  1. **Pattern versions:** tables `hook_patterns(id, account_id, blueprint_name NULL, status)` and `hook_pattern_versions(pattern_id, n, data jsonb, author, created_at)`, append-only (an edit writes v+1); drafts from + Hook idea (S3c notes); share to a blueprint; seed each clips account's library from its current hook title style.
+  2. **Item stamping:** `content_items.hook_pattern_id`, `hook_version` and `hook_weights jsonb` (the weights in force when the item was made); the stamp also lands in `metadata.json`.
+  3. **Variants in producers:** the clips producer writes 2–3 hook-title variants from approved patterns and ranks them in one Haiku call (a new prompt version, so the captions `STAGE_VERSION` bumps; about $0.0025 per item, logged as cost, rule 7); the story producer uses the same interface from its first version (S6).
+  4. **Rotation:** `hook_weights(account_id, pattern_id, weight, frozen_by_experiment NULL)`; per item, a weighted pick among approved patterns; weights freeze while the account runs a setup experiment (ADR C).
+  5. **Ranking before S7:** the owner's 👍/👎 per hook in review (`hook_ratings`), approval and reject rates per pattern with the 90% interval and S3c's 10-item floor; weak patterns become a digest line.
+  6. **Ranking after S7:** the 3-second hold and views at 24 h per pattern join the ranking, each with its maturity age; weights move only on settled results.
+  7. **Surfaces:** admin routes (`GET /accounts/{id}/hooks`, `POST /hooks`, `PUT /hooks/{id}`, `POST /hooks/{id}/approve|retire|share`, `GET /hooks/{id}/stats`) and the Hooks tab (§7.3); before S3c's workspace exists, a standalone `/hooks?account=` page.
+  8. **Tests:** pattern versions append-only; every item stamped; weights frozen during an experiment; the variants call validated with rule 5's single retry and a fallback to the plain title; cost recorded.
 
 ### 8.6 S2's card must change
 
@@ -433,7 +454,8 @@ Modal allows 5 deployed crons. Three are used: `sweeper` (every 10 min), `postin
 - the **brake's scope**: `/pause <account>` and `/pause all` as one Dict key with a scope, checked by every tick and publish, cancelling posts scheduled at Upload-Post;
 - **one-tap in Telegram only for items due within 2 h** (approve / reject) and the brake (#427); every other card carries Open → `/act`;
 - **publishing-failure rows** (`publish_failed`, `publisher_disconnected`, `strike` where Upload-Post reports it) as instant alerts and "needs me" rows;
-- the digest at 09:00 through the dispatcher (§8.1, ADR-27);
+- ADR-27's dispatcher replaces `posting_tick` and runs the 09:00 digest (§8.1);
+- the `autopilot` table with its append-only change history (§8.4);
 - **exit, restated:** realtalk auto-posts from its profile on its rung; founder.tapes and hombre.en.construccion are created and start Hands-on on S2's flow.
 
 ### 8.7 Every other gap
@@ -446,7 +468,7 @@ Modal allows 5 deployed crons. Three are used: `sweeper` (every 10 min), `postin
 | G4 | Graduation ladder: criteria on read, promote route, automatic demotion, spot-check floor | S2 |
 | G5 | Producer-version window (first 5) | S2 |
 | G6 | Dubs: translation permission check, target dial and budget, first 10 to review | S10 |
-| G7 | Batch line, per-account caps and fleet cap checked before job start; `POST /batches/preview` and `POST /batches` for clips | S3 (moved from S7) |
+| G7 | Hard caps (per account, fleet) enforced in `service.create_job` for every caller; the batch line turns an over-line batch into a "needs me" row | the first card that creates jobs automatically (S6's queue filler, or earlier); `POST /batches/preview` and `POST /batches` for clips in S3; S7 keeps the reporting |
 | G8 | Fixed subscriptions (a settings list) shown in Costs | S3 |
 | G9 | Fleet brake scope (`/pause all`) | S2 (the brake item) |
 | G10 | Attention estimates per row and per rung; measured minutes from `needs_log` after 30 days | S3 |
@@ -454,7 +476,7 @@ Modal allows 5 deployed crons. Three are used: `sweeper` (every 10 min), `postin
 | G12 | Strikes and takedowns: manual entry on the account, webhook where Upload-Post exposes it | S3 (manual), S2 (webhook) |
 | G13 | View collapse (7-day views under 30% of the 28-day median) | S7 |
 | G14 | Activity feed per account (`GET /accounts/{id}/activity`), linked to jobs and `post_events`, then to the ledger | S3, S6 (ledger links) |
-| G15 | Hook library, versions, stamps, frozen weights, ratings, the Hooks tab; clips variants | new hooks card (§8.5) |
+| G15 | Hook library, versions, stamps, frozen weights, ratings, the Hooks tab; clips variants | the hooks card (§8.5), after S1's rollout, before S6 |
 | G16 | 3-second hold and views at 24 h per hook pattern | S7 |
 | G17 | Lifecycle day N of 90 (from `accounts.created_at`) and program progress from editable thresholds | S3 (day), S7 (programs) |
 | G18 | Settings page and `settings` table | S3 |
@@ -463,7 +485,7 @@ Modal allows 5 deployed crons. Three are used: `sweeper` (every 10 min), `postin
 | G26 | Type tabs in the account workspace (§7.3 table): routes and data per type | S3 (clips), S6 (story), S8 (avatar), S9 (band), S13 (model) |
 | G21 | Review routes (copy edit, re-render, batch approve) | S2 (the review service), S3 (the page) |
 | G22 | Link-contract test (§7.10) | S3 |
-| G23 | `system:` actor prefix | S3c-1's migration 0002 (or S2's, whichever lands first) |
+| G23 | `system:` actor prefix (`system:promotion`, `system:demotion`, `system:filler`) and the append-only `autopilot_events` history | S2 (with the `autopilot` table) and S3c-1's migration 0002, whichever lands first |
 | G24 | `needs_snoozes` and `needs_log` | S3 |
 | G25 | Ops alerts with Open buttons to `/act` | S3 |
 
@@ -479,7 +501,8 @@ Decision:
 - Rails no control lifts: the policy gate; the batch line, account cap and fleet cap; new accounts start Hands-on; the review windows (format change: 10; producer version: 5, ADR B; first dubs in a pair: 10).
 - Always the owner's: spend over the line, sponsored and #ad items (first 30 days; brand deals always), new sources and new series formats.
 - A graduation ladder: the system suggests promotions on 01's criteria (Hands-on → Supervised) and on ≥ 30 days, ≥ 12 spot checks with ≤ 1 rejected, no gate failure or strike in 30 days and runway ≥ 14 days (Supervised → Autopilot); the owner taps. Demotions are automatic: one step after 2 rejects in the last 5 spot checks, to Hands-on after a strike. On `sample`, spot checks are at least 1 in 10 and at least 3 a week per account.
-- The settings are operating state in an `autopilot` table with one writer (`accounts/autopilot.py`) and an append-only event log, not part of ADR-42's versioned setup; automatic writes use the actor `system:<component>`.
+- The settings are operating state in an `autopilot` table with one writer (`accounts/autopilot.py`) and an append-only change history (who, when, from → to, why), not part of ADR-42's versioned setup; automatic changes use the actors `system:promotion` and `system:demotion`. The Activity tab and "what ran without me" read the history.
+- Hard spend caps are enforced in `service.create_job` for every caller; the dashboard only shows them.
 Consequences: owner time scales with how new each account is. ADR-29's tier becomes the Review dial and leaves S3c's "rules" class. Two new tables. Wave-2 clip accounts wait for S2 because assisted posting doesn't fit the attention budget.
 
 ### ADR B: Producer-version review window
@@ -492,7 +515,7 @@ Consequences: about 5 reviews per account per producer change (about 95 across 1
 Date: 2026-10-01 · Status: Proposed (card 009; refines ADR-42; log #426)
 Context: hooks are the lever the owner wants to improve most. Rotating hook patterns per item and ranking them by results is continuous, while ADR-42's setup experiments change one account version at a time and block other setup edits while they run.
 Decision: each account has a hook library (patterns shareable to its blueprint) in its own tables, outside the versioned setup. Patterns are immutable versions; an edit writes v+1; every item stamps `hook_pattern_id@version` and the rotation weights in force. Producers write 2–3 variants per item from approved patterns and ship the best-ranked one. While the account runs a setup experiment, its rotation weights are frozen. Hook rotation is never an S3c experiment.
-Consequences: an item's setup is `(account_id, account_version)` plus its hook stamp, so ADR-42's traceability holds. About $0.0025–0.0035 of Haiku per item. A new card builds it between S3c-2 and S6.
+Consequences: an item's setup is `(account_id, account_version)` plus its hook stamp, so ADR-42's traceability holds. About $0.0025–0.0035 of Haiku per item. A separate hooks card builds it after S1's rollout and before S6.
 
 ## 10. Proposed changes to other documents
 
@@ -505,7 +528,7 @@ Added to 08 as a new subsection, **§2c "Proposed by card 009 (pending the owner
 - **Pages:** Home with "needs me", the attention meter, the scoreboard and slots; `/act`; Review; Calendar; Produce with the batch planner and the Jobs tab; Results with Costs (Stats and Money in S7); Sources; Settings; the account workspace's Overview, Autopilot and Activity tabs (on S3c's workspace once it exists; before that, a minimal `/accounts/<id>` read view). Remove "Costs" as its own page.
 - **API:** `GET /needs`, `GET /needs/{kind}/{id}`, `POST /needs/{kind}/{id}/{action}`, `GET /fleet/scoreboard`, `GET /slots`, `GET /accounts/{id}/activity`, `POST /batches/preview`, `POST /batches`, `GET /results/costs`, `GET /settings`, `PUT /settings`.
 - **Data:** `needs_snoozes`, `needs_log`, `settings`.
-- **Budget check before job start** (moved from S7).
+- **Caps shown, not enforced:** Produce's estimate and the Autopilot tab show caps and lines; enforcement is in `create_job` (§8.2).
 - **The link-contract test** (§7.10) and ops alerts with Open buttons.
 - **Exit, restated:** the owner runs the daily check-in from the phone in under 20 minutes, and every Telegram alert opens its row in `/act`.
 
@@ -523,5 +546,5 @@ Added to 08 as a new subsection, **§2c "Proposed by card 009 (pending the owner
 - S2: §8.6's items and restated exit.
 - S3: §10.2.
 - S6: the queue filler (§8.2) and story hook variants.
-- S7: the budget check moves to S3; the dispatcher is accepted earlier, at S2 (§8.1).
-- A new hooks card between S3c-2 and S6 (§8.5).
+- S7: "budget enforcement before job start" moves to `create_job` in the first card that creates jobs automatically (S6's filler, or earlier); S7 keeps the reporting. The dispatcher is accepted earlier, at S2 (§8.1).
+- A new hooks card after S1's rollout and before S6 (§8.5).
