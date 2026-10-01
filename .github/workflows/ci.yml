@@ -6,7 +6,9 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # never on main: a newer push must not cancel a deploy that is waiting out a blackout or
+  # running (card 002 final review)
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:
@@ -40,13 +42,12 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read  # the last successful run on main (the change filter's base)
     concurrency:
       group: deploy-production
       cancel-in-progress: false
-    env:
-      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
-      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-      GIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,18 +55,23 @@ jobs:
       - name: Skip when only the dashboard or docs changed
         id: changes
         env:
-          BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+          # The base is the last successful run on main, not the previous push: a deploy that
+          # failed or was cancelled is retried by the next push, even a docs-only one.
+          BASE=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main \
+                   --event push --status success --limit 1 --json headSha --jq '.[0].headSha' \
+                 2>/dev/null || true)
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "no earlier successful run on main: deploy"
             echo "deploy=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           # anything outside web/, docs/ and top-level *.md files is a reason to deploy
-          if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qvE '^(web/|docs/|[^/]+\.md$)'; then
+          if git diff --name-only "$BASE" "$GITHUB_SHA" | grep -qvE '^(web/|docs/|[^/]+\.md$)'; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "only web/ or docs changed: no deploy"
+            echo "only web/ or docs changed since $BASE: no deploy"
           fi
       - uses: astral-sh/setup-uv@v6
         if: steps.changes.outputs.deploy == 'true'
@@ -73,8 +79,15 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
         if: steps.changes.outputs.deploy == 'true'
-      - name: Deploy blackout (runbook §1, decision log #108)
+      - name: Migrate the database (ADR-26, before the code that needs it)
+        if: steps.changes.outputs.deploy == 'true'
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+      - name: "Deploy blackout (runbook §1, decision log #108)"
         # The same rule as scripts/deploy.sh: never from a posting slot until 30 min after it.
+        # Checked last, right before the deploy (the migration takes minutes and changes
+        # nothing the running code reads: migrations are additive).
         # POSTING_SLOTS and POSTING_TIMEZONE are repository variables, identical to
         # clipforge-secrets; missing ones fail the job (no defaults). Inside a blackout it waits.
         if: steps.changes.outputs.deploy == 'true'
@@ -105,10 +118,9 @@ jobs:
               time.sleep(max(wait, 0))
           sys.exit("still in a blackout after waiting")
           PY
-      - name: Migrate the database (ADR-26, before the code that needs it)
-        if: steps.changes.outputs.deploy == 'true'
-        run: uv run alembic upgrade head
-        env:
-          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
       - run: uv run modal deploy src/clipforge/app.py
         if: steps.changes.outputs.deploy == 'true'
+        env:  # the Modal tokens only here, not in the steps before
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          GIT_SHA: ${{ github.sha }}

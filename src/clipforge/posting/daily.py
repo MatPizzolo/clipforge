@@ -13,10 +13,10 @@ import json
 import logging
 import os
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from clipforge.accounts.service import sync_schedules
 from clipforge.db.accounts import AccountsRepo
@@ -41,7 +41,13 @@ log = logging.getLogger(__name__)
 # The durable posting and source tables (spec §3); `jobs` is rebuilt from metadata.json.
 SNAPSHOT_TABLES = (accounts, posting_state, sources, source_events, content_items, assets, posts,
                    sends, post_events)  # fmt: skip
-DB_SNAPSHOT_PREFIX = "db-"  # never matches keepalive's "????-??-??.json" restore glob
+# posting_daily's whole-table reads (the snapshot, verify, backfill) outgrow the 5 s cap meant
+# for taps and ticks; one daily run gets this instead (migration review I1)
+BATCH_TIMEOUT = "1min"
+DB_SNAPSHOT_PREFIX = "db-"
+# A rebuild after a longer gap could re-queue clips whose posted/verdict keys expired (PR
+# review 3); the owner restores first (ADR-24 runbook)
+MAX_GAP_DAYS = 2  # never matches keepalive's "????-??-??.json" restore glob
 
 
 def snapshot_tables(db: Database, root: Path, now: datetime, keep: int = 14) -> tuple[Path, int]:
@@ -50,6 +56,8 @@ def snapshot_tables(db: Database, root: Path, now: datetime, keep: int = 14) -> 
     and the row count."""
     data: dict[str, list[dict[str, object]]] = {}
     with db.begin() as conn:
+        # one consistent view of every table, and no writes (it must be the first query)
+        conn.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
         for table in SNAPSHOT_TABLES:
             data[table.name] = [dict(row._mapping) for row in conn.execute(select(table))]
     folder = root / "posting" / "snapshots"
@@ -63,12 +71,25 @@ def snapshot_tables(db: Database, root: Path, now: datetime, keep: int = 14) -> 
     return path, sum(len(rows) for rows in data.values())
 
 
+def _newest_dict_snapshot(root: Path) -> date | None:
+    folder = root / "posting" / "snapshots"
+    days = []
+    for path in folder.glob("????-??-??.json"):
+        try:
+            days.append(date.fromisoformat(path.stem))
+        except ValueError:
+            continue
+    return max(days, default=None)
+
+
 def run_daily(deps: Deps, db: Database | None, account_id: str, now: datetime) -> list[str]:
     """Run every part; returns one summary line per part (for the cron log)."""
     from clipforge.service import rebuild_posting  # service imports posting code
 
     kv = deps.store.kv
     lines: list[str] = []
+    if db is not None:
+        db = db.with_timeout(BATCH_TIMEOUT)
 
     def part(name: str, run: Callable[[], str]) -> None:
         try:
@@ -80,13 +101,23 @@ def run_daily(deps: Deps, db: Database | None, account_id: str, now: datetime) -
                 deps.ops.alert(f"posting_daily: {name} failed: {redact(exc)}", "daily", name,
                                now=now)  # fmt: skip
 
+    last = _newest_dict_snapshot(deps.root)  # before today's run writes one
     part("touch", lambda: f"{keepalive.touch(kv)} keys")
     part("dict snapshot", lambda: _saved(keepalive.snapshot(kv, deps.root, now), "keys"))
     if db is not None:
         part("verify", lambda: _verify(deps, db, account_id, now))
         part("jobs backfill", lambda: _backfill(deps, db))
         part("schedules", lambda: f"{sync_schedules(AccountsRepo(db), kv)} accounts")
-    part("rebuild", lambda: f"{rebuild_posting(deps, now)} clips queued")
+    outage = last is not None and (now.astimezone(UTC).date() - last).days > MAX_GAP_DAYS
+    if outage:
+        lines.append(f"rebuild: skipped (no posting snapshot since {last})")
+        if deps.ops is not None:
+            deps.ops.alert(f"posting_daily hadn't run since {last}: Dict keys may have expired, so "
+                           "today's rebuild was skipped. /pause, restore from that snapshot "
+                           "(clipforge status --restore), check /status, POST /posting/rebuild, "
+                           "then /go (runbook).", "daily", "outage", now=now)  # fmt: skip
+    else:
+        part("rebuild", lambda: f"{rebuild_posting(deps, now)} clips queued")
     if db is not None:
         part("db snapshot", lambda: _saved(snapshot_tables(db, deps.root, now), "rows"))
     return lines

@@ -63,3 +63,9 @@ def test_unreachable_database_is_redacted() -> None:
     report = doctor.check(Database(make_engine(url)), url)
     assert report["ok"] is False and report["error"]
     assert "s3cret" not in report["error"] and "127.0.0.1" not in report["error"]
+
+
+def test_a_direct_url_in_the_secret_is_not_ok(db: Database, pg_url: str) -> None:
+    # migration review minor: the app must use Neon's pooled endpoint (PgBouncer)
+    report = doctor.check(db, pg_url, require_pooled=True)  # the test URL isn't pooled
+    assert report["ok"] is False and "pooled" in (report["error"] or "")

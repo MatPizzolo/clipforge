@@ -43,3 +43,21 @@ def test_env_requires_the_unpooled_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@ep-x-pooler.example/db")
     with pytest.raises(SystemExit, match="DATABASE_URL_UNPOOLED"):
         command.upgrade(Config(str(ALEMBIC_INI)), "head")
+
+
+def test_a_failed_migration_exits_without_the_host_or_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # security review minor 2: CI logs only mask the whole secret, not the host inside it
+    from alembic.config import Config
+
+    from alembic import command
+    from clipforge.db.migrations import ALEMBIC_INI
+
+    monkeypatch.setenv("DATABASE_URL_UNPOOLED", "postgresql://neondb_owner:s3cret@127.0.0.1:1/db")
+    with pytest.raises(SystemExit) as caught:
+        command.upgrade(Config(str(ALEMBIC_INI)), "head")
+    text = str(caught.value)
+    assert text.startswith("migration failed: ")
+    for secret in ("127.0.0.1", "neondb_owner", "s3cret"):
+        assert secret not in text, secret

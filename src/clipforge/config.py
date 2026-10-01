@@ -186,8 +186,10 @@ class Settings(BaseSettings):
         if not isinstance(value, str) or not value.strip():
             return None
         url = value.strip().rstrip("/")
-        if not url.startswith(("https://", "http://")) or any(c.isspace() for c in url):
-            log.warning("DASHBOARD_URL ignored: it must be an http(s) URL")
+        local = url.startswith(("http://localhost", "http://127.0.0.1"))
+        if not (url.startswith("https://") or local) or any(c.isspace() for c in url):
+            # links (and the login behind them) never go over plain http, except locally
+            log.warning("DASHBOARD_URL ignored: it must be an https URL (http only for localhost)")
             return None
         return url
 

@@ -60,25 +60,37 @@ class OpsAlerts:
         self, text: str, kind: str, subject: str, urgent: bool, path: str | None, now: datetime
     ) -> str:
         hour = f"{now.astimezone(UTC):%Y%m%d%H}"
-        if not self.kv.put(f"notify:{kind}:{subject}:{hour}", "1", skip_if_exists=True):
+        # Claimed set-if-absent so two containers can't both send it, and released if the send
+        # fails: the key survives only for an alert that was sent or held (coordinator's A6
+        # review), so a Telegram outage never swallows the hour's alert.
+        claim = f"notify:{kind}:{subject}:{hour}"
+        if not self.kv.put(claim, "1", skip_if_exists=True):
             return "duplicate"
         text = _cap(text)
-        if (self.quiet(now) and not urgent) or not self._take_slot(hour):
+        slot = None if (self.quiet(now) and not urgent) else self._take_slot(hour)
+        if slot is None:
             self.kv.put(f"{HELD_PREFIX}{now.astimezone(UTC).isoformat()}:{kind}:{subject}", text)
             self.kv.put(PENDING_KEY, "1")
             return "held"
         buttons = None
         if path is not None and self.dashboard_url is not None:
             buttons = [[("Open ↗", f"{self.dashboard_url}{path}")]]
-        self.sender.send_message(self.chat_id, f"⚠️ {text}", buttons=buttons)
+        try:
+            self.sender.send_message(self.chat_id, f"⚠️ {text}", buttons=buttons)
+        except Exception:
+            self.kv.delete(slot)
+            self.kv.delete(claim)
+            raise
         return "sent"
 
-    def _take_slot(self, hour: str) -> bool:
-        """One of MAX_PER_HOUR set-if-absent slots for this hour (the KV has no counter)."""
-        return any(
-            self.kv.put(f"notify:sent:{hour}:{n}", "1", skip_if_exists=True)
-            for n in range(1, MAX_PER_HOUR + 1)
-        )
+    def _take_slot(self, hour: str) -> str | None:
+        """One of MAX_PER_HOUR set-if-absent slots for this hour (the KV has no counter);
+        returns its key, or None when the hour is full."""
+        for n in range(1, MAX_PER_HOUR + 1):
+            key = f"notify:sent:{hour}:{n}"
+            if self.kv.put(key, "1", skip_if_exists=True):
+                return key
+        return None
 
     def flush(self, now: datetime | None = None) -> int:
         """Outside quiet hours, send the held alerts as one message; returns how many."""
@@ -91,18 +103,30 @@ class OpsAlerts:
     def _flush(self, now: datetime) -> int:
         if self.kv.get(PENDING_KEY) is None or self.quiet(now):
             return 0
-        self.kv.delete(PENDING_KEY)  # first: a hold after this sets it again
+        # one flush per 5-minute window, so an overlapping tick can't send the same alerts
+        utc = now.astimezone(UTC)
+        claim = f"notify:flush:{utc:%Y%m%d%H}{utc.minute // 5:02d}"
+        if not self.kv.put(claim, "1", skip_if_exists=True):
+            return 0
         keys = sorted(k for k in self.kv.keys() if k.startswith(HELD_PREFIX))  # noqa: SIM118
         texts = [text for key in keys if (text := self.kv.get(key)) is not None]
-        if not texts:
-            return 0
-        lines = [f"⚠️ {len(texts)} alerts held (quiet hours or over {MAX_PER_HOUR} an hour):"]
-        lines += [f"• {text.splitlines()[0][:200]}" for text in texts[:FOLD_LINES]]
-        if len(texts) > FOLD_LINES:
-            lines.append(f"{len(texts) - FOLD_LINES} more → dashboard")
-        self.sender.send_message(self.chat_id, "\n".join(lines))
-        for key in keys:
-            self.kv.delete(key)
+        if texts:
+            lines = [f"⚠️ {len(texts)} alerts held (quiet hours or over {MAX_PER_HOUR} an hour):"]
+            lines += [f"• {text.splitlines()[0][:200]}" for text in texts[:FOLD_LINES]]
+            if len(texts) > FOLD_LINES:
+                lines.append(f"{len(texts) - FOLD_LINES} more → dashboard")
+            try:
+                self.sender.send_message(self.chat_id, "\n".join(lines))
+            except Exception:
+                self.kv.delete(claim)  # nothing was deleted: the next tick tries again
+                raise
+            for key in keys:
+                self.kv.delete(key)
+        # Clear the flag only now, then look again: an alert held while this ran (its key is
+        # written before the flag) puts the flag back, so it is never stranded.
+        self.kv.delete(PENDING_KEY)
+        if any(k.startswith(HELD_PREFIX) for k in self.kv.keys()):  # noqa: SIM118
+            self.kv.put(PENDING_KEY, "1")
         return len(texts)
 
 

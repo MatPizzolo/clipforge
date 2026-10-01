@@ -66,7 +66,7 @@ def get_job_view(
     if job is not None and (row is None or job.updated_at > row.updated_at):
         return _live_view(store, job)
     if row is not None:
-        return _view_from_row(store, jobs_db, row, job)
+        return _view_from_row(store, root, jobs_db, row, job)
     return _view_from_metadata(root, job_id)
 
 
@@ -97,11 +97,21 @@ def _live_view(store: DictJobStore, job: Job) -> JobView:
     )
 
 
+def _metadata_stages(root: Path, metadata_path: str) -> list[StageCost]:
+    """The per-stage breakdown in a done job's metadata.json (empty if it can't be read)."""
+    try:
+        path = root / metadata_path
+        return list(JobMetadata.model_validate_json(path.read_text()).cost.stages)
+    except Exception as exc:
+        log.warning("reading %s failed: %s", metadata_path, redact(exc))
+        return []
+
+
 def _view_from_row(
-    store: DictJobStore, jobs_db: JobsRepo | None, row: JobSummary, job: Job | None
+    store: DictJobStore, root: Path, jobs_db: JobsRepo | None, row: JobSummary, job: Job | None
 ) -> JobView:
-    """Status, times and cost from the row; the stage breakdown from the `costs` rows (else the
-    Dict's); clips, error and progress only while the Dict still has them."""
+    """Status, times and cost from the row; the stage breakdown from the `costs` rows, else
+    metadata.json, else the Dict's; clips, error and progress only while the Dict has them."""
     stages: list[StageCost] = []
     if jobs_db is not None:
         try:
@@ -110,11 +120,11 @@ def _view_from_row(
             if not is_db_error(exc):
                 raise
             log.warning("reading the costs of %s failed: %s", row.job_id, redact(exc))
+    if not stages and row.metadata_path is not None:
+        stages = _metadata_stages(root, row.metadata_path)
     if not stages and job is not None:
         stages = merged_cost(store, job).stages
-    if not stages and row.cost_usd:
-        # backfilled without per-stage rows: keep the total visible
-        stages = [StageCost(stage=StageName.PACKAGE, usd_estimate=row.cost_usd)]
+    # nothing else: a made-up stage line would skew per-stage sums (the dashboard adds them up)
     done = row.status is JobStatus.DONE
     zip_path = f"{row.job_id}/job.zip" if done else None
     return JobView(
@@ -156,7 +166,8 @@ def resume_job(deps: Deps, job_id: str) -> JobView:
 
 def job_summaries(deps: Deps) -> list[JobSummary]:
     """The jobs table first (card 002 A5), plus any Dict `job:*` record the table lacks (a row
-    not written yet, or before the backfill). If the table can't be read, the Dict alone."""
+    not written yet, or before the backfill) or that is newer than its row. If the table can't
+    be read, the Dict alone."""
     found: dict[str, JobSummary] = {}
     if deps.jobs_db is not None:
         try:
@@ -166,12 +177,21 @@ def job_summaries(deps: Deps) -> list[JobSummary]:
                 raise
             log.warning("reading the jobs table failed, using the Dict: %s", redact(exc))
     for job_id in deps.store.list_job_ids():
-        if job_id in found:
-            continue
         try:
-            found[job_id] = summary_of(deps.store.get(job_id))
+            live = summary_of(deps.store.get(job_id))
         except Exception as exc:
             log.warning("skipping unreadable job %s: %s", job_id, redact(exc), exc_info=True)
+            continue
+        row = found.get(job_id)
+        if row is None:
+            found[job_id] = live
+        elif live.updated_at > row.updated_at:
+            # the same rule as get_job_view: a newer Dict record (a row write that failed after
+            # a resume or a DONE save) wins; the row keeps what only it knows
+            found[job_id] = live.model_copy(update={
+                "metadata_path": live.metadata_path or row.metadata_path,
+                "build": live.build or row.build, "cost_usd": live.cost_usd or row.cost_usd,
+            })  # fmt: skip
     return [found[job_id] for job_id in sorted(found)]
 
 

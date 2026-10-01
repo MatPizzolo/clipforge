@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -56,16 +57,24 @@ def make_engine(url: str, *, pool_size: int = 2, poolclass: type[Pool] | None = 
 
 
 class Database:
-    def __init__(self, engine: Engine) -> None:
+    def __init__(self, engine: Engine, statement_timeout: str = STATEMENT_TIMEOUT) -> None:
+        if not re.fullmatch(r"\d{1,4}(ms|s|min)", statement_timeout):
+            raise ValueError("statement_timeout must look like 5s, 500ms or 2min")
         self.engine = engine
+        self.statement_timeout = statement_timeout
+
+    def with_timeout(self, statement_timeout: str) -> Database:
+        """The same engine (and pool) with another per-statement cap, for batch work such as
+        posting_daily's whole-table reads (migration review I1)."""
+        return Database(self.engine, statement_timeout)
 
     @contextmanager
     def begin(self) -> Iterator[Connection]:
-        """One transaction. Every statement in it is capped at 5 s (SET LOCAL lasts only for the
-        transaction, so it is safe through PgBouncer's transaction mode): a slow Neon never holds
-        a tap or a tick for long (card 002 A4). Migrations don't use this."""
+        """One transaction. Every statement in it is capped (5 s by default; SET LOCAL lasts
+        only for the transaction, so it is safe through PgBouncer's transaction mode): a slow
+        Neon never holds a tap or a tick for long (card 002 A4). Migrations don't use this."""
         with self.engine.begin() as conn:
-            conn.execute(text(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'"))
+            conn.execute(text(f"SET LOCAL statement_timeout = '{self.statement_timeout}'"))
             yield conn
 
     def dispose(self) -> None:

@@ -16,6 +16,7 @@ from clipforge.models import (
     PostSend,
     PostStatus,
     PostVerdict,
+    StageCost,
     StageName,
 )
 from clipforge.pipeline.deps import MemoryKV, SpawnCall
@@ -238,3 +239,39 @@ def test_overview_state_waiting_off_and_problem(harness: Harness) -> None:
     assert posting_overview(harness.deps, make_settings(harness.root), at).state == "off"
     broken = make_settings(harness.root, posting_chat_id=ALLOWED_USER, posting_slots="9am")
     assert posting_overview(harness.deps, broken, at).state == "problem"
+
+
+def test_job_summaries_take_a_newer_dict_record_over_its_row(tmp_path: Path, db: Database) -> None:
+    # migration review I3 / PR review 9: the same "newer wins" rule as get_job_view
+    stages = FakeStages(transient=Counter({"highlights": 99}))
+    harness = Harness.build(tmp_path, stages)
+    harness.deps.jobs_db = JobsRepo(db)
+    job_id = harness.submit()
+    harness.run()  # failed, and its row says so
+    harness.deps.jobs_db = None
+    resume(harness.deps, job_id)  # the resume's row write is lost
+    harness.deps.jobs_db = JobsRepo(db)
+    [summary] = job_summaries(harness.deps)
+    assert summary.status is JobStatus.RUNNING
+
+
+def test_a_row_without_cost_rows_takes_the_breakdown_from_metadata(
+    tmp_path: Path, db: Database
+) -> None:
+    # pipeline review I1: never a made-up PACKAGE line (the dashboard sums costs per stage)
+    harness = Harness.build(tmp_path)
+    harness.deps.jobs_db = JobsRepo(db)
+    job_id = channel_job(harness)
+    JobsRepo(db).replace_costs(job_id, [])  # a backfill that wrote no per-stage rows
+    _expire(harness, job_id)
+    row = JobsRepo(db).get(job_id)
+    assert row is not None and row.metadata_path is not None
+    path = tmp_path / row.metadata_path
+    meta = JobMetadata.model_validate_json(path.read_text())
+    stages = [StageCost(stage=StageName.TRANSCRIBE, gpu_s=9.0, usd_estimate=0.002),
+              StageCost(stage=StageName.HIGHLIGHTS, usd_estimate=0.0015)]  # fmt: skip
+    meta = meta.model_copy(update={"cost": meta.cost.model_copy(update={"stages": stages})})
+    path.write_text(meta.model_dump_json())  # the real pipeline writes a full breakdown
+    view = get_job_view(harness.store, harness.root, job_id, harness.deps.jobs_db)
+    assert view.cost.stages == stages
+    assert all(c.stage is not StageName.PACKAGE for c in view.cost.stages)

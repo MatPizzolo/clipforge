@@ -321,7 +321,7 @@ def db_doctor() -> dict[str, object]:
     database = database_from_settings(settings)
     report: dict[str, object] = {}
     try:
-        report.update(doctor.check(database, url))
+        report.update(doctor.check(database, url, require_pooled=True))
         if database is not None and report["ok"]:
             try:
                 drift = schedule_drift(AccountsRepo(database), runtime.DictKV(job_state))

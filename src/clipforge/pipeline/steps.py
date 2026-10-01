@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
+from clipforge.db.engine import is_db_error
 from clipforge.jobs import DictJobStore, JobContext, load_ref, merged_cost, utcnow
 from clipforge.models import (
     ClipSpec,
@@ -238,9 +239,12 @@ def fail_job(deps: Deps, job_id: str, stage: StageName, error_type: str, message
             # channel and CLI jobs have no Telegram notifier: without this the failure is silent
             recorded = job.error
             where = recorded.stage if recorded else stage
-            what = recorded.message if recorded else message
+            what = recorded.message if recorded else sanitize(message)
+            # the `failed` claim makes this once per failure; the subject carries the failure's
+            # time so a resumed job that fails again within the hour still alerts
+            subject = f"{job_id}@{job.updated_at:%H%M%S%f}"
             deps.ops.alert(f"Job {job_id} failed at {where}: {what}\n/resume {job_id}",
-                           "job_failed", job_id, path=f"/jobs/{job_id}")  # fmt: skip
+                           "job_failed", subject, path=f"/jobs/{job_id}")  # fmt: skip
     return first
 
 
@@ -290,7 +294,10 @@ def _guarded(
             raise
         log.exception("%s step failed for %s after %d attempts", step, job_id, attempt)
         name = type(exc).__name__
-        _handle_failure(deps, step, job_id, name, f"{name}: {exc}", clip_id)
+        # clean() keeps hosts and user names, which a driver error carries: redact those
+        # (the job error is shown by the API, the bot and the ops alert)
+        message = redact(exc) if is_db_error(exc) else f"{name}: {exc}"
+        _handle_failure(deps, step, job_id, name, message, clip_id)
 
 
 def _handle_failure(

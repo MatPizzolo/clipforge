@@ -6,6 +6,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from clipforge.accounts.service import read_schedules
 from clipforge.db.engine import Database
 from clipforge.db.jobs import JobsRepo
@@ -69,3 +71,45 @@ def test_db_snapshots_keep_fourteen_and_never_match_the_restore_glob(
     folder = tmp_path / "posting" / "snapshots"
     assert len(list(folder.glob("db-*.json"))) == 14
     assert list(folder.glob("????-??-??.json")) == []  # keepalive.restore reads only those
+
+
+def test_the_daily_run_gets_a_longer_statement_timeout_and_one_snapshot_view(
+    tmp_path: Path, db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # migration review I1: whole-table reads must not hit the 5 s cap meant for taps and ticks
+    from sqlalchemy import text
+
+    import clipforge.posting.daily as daily
+
+    seen: list[tuple[str, str]] = []
+    real = daily.snapshot_tables
+
+    def spy(database: Database, root: Path, now: datetime, keep: int = 14) -> tuple[Path, int]:
+        with database.begin() as conn:
+            seen.append((conn.execute(text("SHOW statement_timeout")).scalar_one(), ""))
+        return real(database, root, now, keep)
+
+    monkeypatch.setattr(daily, "snapshot_tables", spy)
+    harness = Harness.build(tmp_path)
+    run_daily(harness.deps, db, "realtalk-clips-en", NOON)
+    assert seen == [(daily.BATCH_TIMEOUT, "")]
+    with db.begin() as conn:  # the shared Database keeps its 5 s
+        assert conn.execute(text("SHOW statement_timeout")).scalar_one() == "5s"
+
+
+def test_rebuild_waits_for_a_restore_after_a_long_outage(tmp_path: Path) -> None:
+    # PR review 3: after days without posting_daily, expired posted/verdict keys would make a
+    # rebuild re-queue clips already posted or rejected; restore first (runbook), then rebuild
+    harness = Harness.build(tmp_path)
+    run_channel_job(harness)
+    alerts = FakeSender()
+    harness.deps.ops = OpsAlerts(harness.store.kv, alerts, ALLOWED_USER, "America/New_York")
+    folder = tmp_path / "posting" / "snapshots"
+    folder.mkdir(parents=True)
+    (folder / "2026-09-25.json").write_text("{}")  # the last run was 5 days ago
+    lines = run_daily(harness.deps, None, "realtalk-clips-en", NOON)
+    assert "rebuild: skipped (no posting snapshot since 2026-09-25)" in lines
+    assert any("restore" in t for _, t, _ in alerts.messages)
+    # today's run wrote a fresh snapshot, so tomorrow's rebuild runs again
+    lines = run_daily(harness.deps, None, "realtalk-clips-en", NOON + timedelta(days=1))
+    assert "rebuild: 0 clips queued" in lines

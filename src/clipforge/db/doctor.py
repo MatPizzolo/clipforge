@@ -39,7 +39,8 @@ def is_pooled(url: str) -> bool:
     return "-pooler" in host
 
 
-def check(db: Database | None, url: str | None) -> DbReport:
+def check(db: Database | None, url: str | None, *, require_pooled: bool = False) -> DbReport:
+    """`require_pooled`: the app's DATABASE_URL must be Neon's pooled endpoint (db_doctor)."""
     report: DbReport = {
         "configured": db is not None,
         "pooled": None if url is None else is_pooled(url),
@@ -71,4 +72,7 @@ def check(db: Database | None, url: str | None) -> DbReport:
     report["ok"] = report["revision"] == EXPECTED_HEAD
     if not report["ok"]:
         report["error"] = f"alembic_version is {report['revision']!r}, expected {EXPECTED_HEAD!r}"
+    elif require_pooled and not report["pooled"]:
+        report["ok"] = False
+        report["error"] = "DATABASE_URL is the direct endpoint: use Neon's pooled URL (-pooler)"
     return report
