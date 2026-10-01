@@ -72,12 +72,12 @@ class AssetSource(Contract):        # one per asset in a Timeline: licensing is 
     kind: Literal["source_video","generated","stock","commons","promo","music_generated"]
     license: str; attribution: str | None; url: str | None; model: str | None
 
-class Timeline(Contract):           # what plays when; the one input to render
-    duration: float; size: tuple[int,int] = (1080,1920)
-    visual: list[VisualSegment]     # crop-of-source | still (+ken burns) | video clip | talking head
-    audio: list[AudioTrack]         # source | narration | music bed; loudness target
-    captions: CaptionFiles; title_card: TitleCard | None
-    assets: list[AssetSource]
+class Timeline(Contract):           # what plays when; the one input to render (S4 spec 2026-10-01)
+    width: int = 1080; height: int = 1920; fps: int; duration_s: float
+    visual: list[VisualSegment]     # VideoSegment (source | broll | talking_head; crop | cover | blur) | StillSegment (+ken burns)
+    audio: list[AudioTrack]         # source | narration | music (ducked); two-pass loudness to -14 LUFS (ADR-47)
+    overlay: Subtitles | None       # one ASS file: captions and the hook title card (no separate title_card)
+    assets: list[AssetSource]       # licensing data for the policy gate; not part of the render cache key
 
 class ContentItem(Contract):        # what distribution consumes (replaces clip-bound PostItem)
     id: str; account_id: str; producer: str; producer_version: str
@@ -220,7 +220,7 @@ src/clipforge/
   research/            # trend jobs: xAI X Search, YouTube mostPopular/comments
   producers/           # registry.py + clips/ story/ band/ avatar/ dub/ persona/
   media/               # protocols (SpeechSynth, ImageGen, TalkingHead, MusicGen, Aligner) + registry.toml
-  timeline/            # Timeline building helpers + render (generalized stages/render.py)
+  stages/timeline.py   # Timeline builders (clips first); render stays stages/render.py (S4 spec §3)
   policy/              # gate, claim checks, disclosure mapping
   publish/             # Publisher protocol, upload_post.py, assisted.py (Telegram)
   analytics/           # pulls, winners, programs
