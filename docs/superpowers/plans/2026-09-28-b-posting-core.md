@@ -1,3 +1,5 @@
+> **Historical (posting assistant, plans A, B and C, ADR-22–24, live since 2026-09-29):** built and deployed; the "not deployed" status below is from before that. docs/ARCHITECTURE.md and the code are current.
+
 # Plan B: Posting queue core — Implementation Plan
 
 > **Status (2026-09-29): done.** All 5 tasks plus the final-review fix pass (4 Important findings fixed; the Critical one, Dict expiry, became ADR-24 and plan C Task 6; 7 minors deferred). Ledger: `.superpowers/sdd/2026-09-28-b-posting-core/progress.md`. Not deployed yet.

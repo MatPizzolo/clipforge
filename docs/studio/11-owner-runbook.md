@@ -2,7 +2,7 @@
 
 Every step **you** do, in order, with the exact command. Sessions write code; you hold the keys, create the accounts, approve deploys, and do git. Each step says where its values go.
 
-Last updated: 2026-09-29. Status: ✅ done · ⏳ now · ⬜ later.
+Last updated: 2026-10-01. Status: ✅ done · ⏳ now · ⬜ later.
 
 Commands run from the project root (`~/code/clipForge`) unless they start with `cd web`.
 
@@ -14,7 +14,7 @@ Commands run from the project root (`~/code/clipForge`) unless they start with `
 | Root **`.env`** | The same values, for local CLI runs and tests | Edit the file. It's gitignored. Sessions never read or print it |
 | **`web/.env.local`** | Dashboard values for local runs | Edit the file. It's gitignored and kept out of Vercel uploads by `web/.vercelignore` |
 | **Vercel env** (project `clipforge-web`) | Dashboard values for preview and production | `cd web && vercel env add <NAME> <environment>`. It prompts for the value, so the value isn't echoed or saved in shell history |
-| **GitHub Actions secrets** | CI deploy values, once the repo exists | GitHub → repo → Settings → Secrets and variables → Actions |
+| **GitHub Actions secrets** | CI deploy values (repo `MatPizzolo/clipforge`, §8) | GitHub → repo → Settings → Secrets and variables → Actions |
 
 Rule: you type secret values yourself. Never paste them into a session.
 
@@ -39,10 +39,11 @@ For the record, and for a re-deploy:
    uv run clipforge clip
    ```
 
-**Stopping and starting the app.** You stopped the `clipforge` app on the night of 2026-09-29. S1 redeployed it on 2026-09-30 with your OK: once to restart it, and once for the PyAV pin (log #70). **It's running now**, Dict-only (`STATE_READS=dict`, no database connected). While the app is stopped, the posting slots, button taps, `/status`, the daily keep-alive and the API the dashboard reads are all off.
+**Stopping and starting the app.** You stopped the `clipforge` app on the night of 2026-09-29. S1 redeployed it on 2026-09-30 with your OK: once to restart it, and once for the PyAV pin (log #70). **It's running now**, Dict-only (`STATE_READS=dict`, no database connected). While the app is stopped, the posting slots, button taps, `/status`, the daily reconcile (`posting_daily`) and the API the dashboard reads are all off.
 - Check the state with `uv run modal app list`.
 - Start it with `scripts/deploy.sh --reason "restart"` on `main` (run `--dry-run` first), but only when the session that owns `src/` (S1) says the code is at a clean checkpoint. A deploy ships whatever is in `src/` right now.
 - More than 7 days stopped means Dict entries can expire. Then run `uv run clipforge status --restore` after the deploy.
+- After more than 2 days stopped, the next `posting_daily` run sets the outage flag and posting stops until you clear it (§2, "Posting after an outage").
 
 **`.env` must match the secret for three keys.** `scripts/deploy.sh` reads `POSTING_SLOTS`, `POSTING_TIMEZONE` and `STATE_READS` from `.env` only, and refuses if any is missing (never config.py's defaults). Keep them identical to `clipforge-secrets` (Modal dashboard → Secrets → `clipforge-secrets` shows the key names; you type the values). Today that's:
 ```
@@ -54,7 +55,7 @@ Add `STATE_READS=dict` to `clipforge-secrets` too (dashboard edit), so both plac
 
 **Deploy blackout** (decision log #108), until S1's slot guard is verified in production: **don't deploy from each posting slot until 30 minutes after it.** `scripts/deploy.sh` enforces it from `POSTING_SLOTS` and `POSTING_TIMEZONE` in `.env`, and has no override. With the default slots (New York time) that means no deploys during 08:00–08:30, 10:30–11:00, 13:00–13:30, 16:00–16:30, 19:00–19:30 and 21:30–22:00. If you changed `POSTING_SLOTS`, use your own times. Reason: a claim-key change can send the same slot twice (#77).
 
-⏳ **Still open:** the phone test that the S0 session asked for: `/status`, `/next`, ✅ on and off, ⏭ Skip, 🗑 Reject with a reason, `/pause`, `/go`. Report the result to the S0 session. It then checks the next scheduled slot and the 07:00 UTC keep-alive run after the 2026-09-30 redeploy.
+⏳ **Still open:** the phone test that the S0 session asked for: `/status`, `/next`, ✅ on and off, ⏭ Skip, 🗑 Reject with a reason, `/pause`, `/go`. Report the result to the S0 session. It then checks the next scheduled slot and the 07:00 UTC daily run after the 2026-09-30 redeploy. That deploy still runs the cron under its old name, `posting_keepalive`; from the next deploy it is `posting_daily` (ADR-46, same slot), which also runs the rebuild every day (log #211).
 
 ## 2. Every day (until S2 publishes automatically)
 
@@ -70,7 +71,18 @@ Add `STATE_READS=dict` to `clipforge-secrets` too (dashboard edit), so both plac
 | Check one job | `uv run clipforge status <job_id>` |
 | Continue a failed job | `uv run clipforge resume <job_id>` |
 | Queue finished jobs again | `uv run clipforge status --rebuild` (safe to repeat) |
-| Recover posting state after an outage | `uv run clipforge status --restore` (newest snapshot) or `--restore YYYY-MM-DD`, then check `/status`. Restore never brings back a pause |
+| Recover posting state after an outage | `uv run clipforge status --restore` (newest snapshot) or `--restore YYYY-MM-DD`, then check `/status`. Restore never brings back a pause. It also clears the outage flag (below) |
+
+**Posting after an outage** (the `posting:outage` flag, log #217). If the newest posting snapshot is more than 2 days old when `posting_daily` runs (07:00 UTC), it sets the flag to that snapshot's date. Expired Dict keys could then make a clip go out twice, so while the flag is set:
+- the slots send nothing, for every account, and `posting_daily` skips its rebuild;
+- `/status` starts with an "⚠️ Outage" line with the date, and an ops alert tells you which date to restore;
+- `/next` still works.
+
+To clear it: restore from the date in the alert, check `/status`, then `/go`:
+```
+uv run clipforge status --restore <date from the alert>
+```
+`/go`, `POST /posting/restore` and `clipforge status --restore` each clear the flag. `/go` clears it even when you name one account, and a restore clears it even if nothing was missing, so check `/status` before `/go`.
 
 **After S1 is deployed**, `channels.toml` is no longer read. Sources are managed with `clipforge source` (§4), and `videos/<source-id>/` is the only local mapping.
 
@@ -82,14 +94,14 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 
 1. `STATUS.md`: where every workstream stands, the addendum tracker, the owner's open steps, and the next cards.
 2. `docs/cards/README.md` and the cards it lists; `docs/templates/` (card, report, stop card, checkpoint).
-3. `CLAUDE.md` (project rules 1–9), `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (accepted ADRs are binding; ADR-43–46 accepted on 2026-09-30).
+3. `CLAUDE.md` (project rules 1–9), `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (accepted ADRs are binding; ADR-41 to ADR-46 accepted on 2026-09-30).
 4. `docs/studio/10-decision-log.md` (every owner decision and the Open table), `docs/studio/04-roadmap.md` (the Phase 6 source of truth), `docs/studio/08-dashboard-and-operations.md` §2 and §2b, `docs/studio/09-account-registry.md`, `docs/ops/secrets.md`.
 5. The rest of this runbook: the owner's steps and commands.
 
 **Rules that stay in force:**
 - The coordinator asks, reviews, fixes docs and writes cards. It doesn't write code or build features.
 - It never runs git write commands, `gh` write commands, deploys, or Modal stop commands. The owner runs them; the coordinator writes the exact commands.
-- Read-only git (`status`, `diff`, `log`, `ls-files`, `show`) only if the owner has allowed it. On 2026-09-30 the owner hadn't answered yet: ask.
+- Read-only git (`status`, `diff`, `log`, `ls-files`, `show`) is allowed without asking (log #388, `.claude/settings.json`).
 - Every piece of work is a card in `docs/cards/` (template `docs/templates/card.md`). The owner starts a session with `Run card docs/cards/NNN-….md`. Sessions report into `docs/reports/`, never only in chat.
 - Sessions don't commit. The owner commits at checkpoints, pushes, opens a PR, and merges when CI is green (`docs/templates/checkpoint.md`).
 - Deploys: only with the owner's OK, from `main`, outside the blackout (§1). From card 001 on, only through `scripts/deploy.sh`.
@@ -126,7 +138,7 @@ git worktree remove ../clipForge-x0     # after its branch is merged
 
 - `docs/studio/10`: append only, in the branch's range; re-read before editing; superseded rows get `superseded by N`.
 - `docs/studio/04` is the Phase 6 source of truth; `ROADMAP.md` mirrors it and is ticked in the same change.
-- ADRs: accepted ones only in `docs/DECISIONS.md`. 05 holds drafts, the reserved numbers (41 S1, 42 S3c) and the next free number (47).
+- ADRs: accepted ones only in `docs/DECISIONS.md`. 05 holds the drafts and the next free number (ADR-47). ADR-41 (S1) and ADR-42 (S3c) are accepted and live in `docs/DECISIONS.md`.
 - `STATUS.md`: the coordinator's; sessions don't edit it except S1's plan-status line if its card says so.
 - Specs and plans are marked historical after their build (`docs/superpowers/README.md`).
 
@@ -151,18 +163,22 @@ git worktree remove ../clipForge-x0     # after its branch is merged
 4. **Decisions to have ready** (10 → Open): the final handles for founder.tapes and hombre.en.construccion (O3), and Billy Garton Jr.'s permission facts (O5): when it was granted, by whom, a link to where the agreement is stored, whether monetization and translations are allowed, and any expiry.
 
 ### 4b. During the build
-Approve each checkpoint the S1 session reports. With no git repo, a checkpoint just means the files are saved.
+Approve each checkpoint the S1 session reports. A checkpoint is a commit on the card's branch, reviewed in its PR (§3.2).
 
 ### 4c. Rollout ⬜ (after the build; each deploy only with your OK; the session runs these with you)
 1. Migrate the database:
    ```
    uv run alembic upgrade head
    ```
-2. Deploy. The Dict stays the primary, and Postgres gets a copy of every write. First set `DEPLOY_DB_CHECK=on` in `.env`: from now on `scripts/deploy.sh` refuses when the database is behind the code's newest migration (it reads `alembic_version` through `DATABASE_URL_UNPOOLED`, read-only; card 008):
+2. Deploy. The Dict stays the primary, and Postgres gets a copy of every write:
    ```
-   scripts/deploy.sh --dry-run          # "database at the migration head: database and code at 0001"
    scripts/deploy.sh --reason "S1 rollout 4c.2: dual write"
    ```
+   Put `DATABASE_URL` (the pooled string) back in `clipforge-secrets` first (dashboard edit, #107): without it the app stays Dict-only.
+
+   Also first, set `DEPLOY_DB_CHECK=on` in `.env` (card 008, log #391). From this deploy on, `scripts/deploy.sh` refuses when the database is behind the code's newest migration; it reads `alembic_version` read-only through `DATABASE_URL_UNPOOLED`. Before deploying, `scripts/deploy.sh --dry-run` should show `ok   database at the migration head: database and code at 0001`.
+
+   **From this deploy until step 5's import, expect ops alerts.** The Dict still writes everything, and each write is copied to Postgres, which has no account or source rows yet, so the copies fail. You get "Posting mirror write (…) failed" alerts (at most one per write kind an hour) and a `posting verify` alert from the daily run. They stop after step 5. Run steps 3–6 in one sitting to keep the window short.
 3. Create the three accounts:
    ```
    uv run clipforge account create --blueprint realtalk-clips --lang en --handle realtalk.clipsdaily --posting-from-env
@@ -187,14 +203,22 @@ Approve each checkpoint the S1 session reports. With no git repo, a checkpoint j
    ```
    uv run clipforge posting verify
    ```
+6b. Rewrite the schedule copies and check them (the S1 plan's step 7b, log #213). In postgres mode the tick finds each account only through its Dict copy `posting:schedule:<account>`. Run the daily reconcile once (it rewrites every copy and repeats the verify), then the read-only database check:
+   ```
+   uv run modal run src/clipforge/app.py::posting_daily
+   uv run modal run src/clipforge/app.py::db_doctor
+   ```
+   `db_doctor` must print `ok: True` and `schedule_drift: []`. If it names an account, run any `uv run clipforge account edit` on it, or `posting_daily` again, then check again. Don't go on to step 7 until it's empty.
 7. Switch reads to Postgres: set `STATE_READS=postgres` in `clipforge-secrets` and `.env`, then:
    ```
    scripts/deploy.sh --reason "S1 rollout 4c.7: reads from Postgres" --rollout-step 4c.7
    ```
-   Watch one day of slots and taps. The verify also runs daily inside the 07:00 UTC keep-alive.
-8. After **7 days** with a clean verify every day: a later session removes the Dict copy and the keep-alive (ADR-24 retires).
+   Watch one day of slots and taps. The verify also runs daily inside `posting_daily` (07:00 UTC): its log line is `posting_daily: verify: …`.
+8. After **7 days** with a clean verify every day: a later session removes the Dict copy of the queue and `posting_daily`'s Dict parts (the touch, the Dict snapshot and the verify), and ADR-24 retires. `posting_daily` itself stays (ADR-46), with the jobs backfill, the schedule copies, the rebuild and the table snapshot (log #218).
 
 **Rollback** at any point: set `STATE_READS=dict` and redeploy. The Dict has stayed current for realtalk, and the other accounts pause until you switch back. Run `clipforge posting verify` before switching to Postgres again.
+
+`STATE_READS=dict` moves only the posting queue back. Job pages (`GET /jobs/{id}`, `clipforge status <job_id>`) and the overview read the `jobs` table whenever a database is connected, whatever `STATE_READS` says. To take the database out completely, also delete `DATABASE_URL` from `clipforge-secrets` (dashboard edit) and redeploy: everything then runs Dict-only, as before S1.
 
 The exact flags are fixed by the S1 build. If one differs, the session's final report and `CLAUDE.md` have the real command.
 
@@ -257,11 +281,7 @@ uv run python scripts/export_openapi.py --check
 
 ## 7. Spikes
 
-- **X1 voice** ✅ (2026-09-30): Qwen3-TTS primary, Kokoro fallback (log #69, report `docs/studio/spikes/x1-voice.md`). Left for you:
-  ```
-  rm -rf scratch          # only x1 is in it; every result is in docs/studio/03, 04, spikes/ and the log
-  ```
-  Keep the `clipforge-models` Modal Volume: it holds the Qwen and Kokoro weights and the v2 reference voice (`refs/x1/`) that S5 needs.
+- **X1 voice** ✅ (2026-09-30): Qwen3-TTS primary, Kokoro fallback (log #69, report `docs/studio/spikes/x1-voice.md`). ✅ `scratch/` is removed; every result is in docs/studio/03, 04, spikes/ and the log. Keep the `clipforge-models` Modal Volume: it holds the Qwen and Kokoro weights and the v2 reference voice (`refs/x1/`) that S5 needs.
 - **X2 talking head** ⏸ (stopped at ~25% on 2026-09-30): licenses checked, no clips yet. Before it resumes, rule on O7 (WenetSpeech, log). Its ~227 GB of weights stay on `clipforge-models` under `x2/`; if X2 won't resume soon, remove them with `uv run modal volume rm -r clipforge-models x2`. Report and resume recipe: `docs/studio/spikes/x2-talking-head.md`.
 - For later spikes: if a model is gated, create a free Hugging Face token (read-only) and add `HF_TOKEN` to `.env` (and to the spike's Modal secret, if the session asks).
 - **X5 Judge** ⬜: join the TypeSafe Jev waitlist now. The key (`TYPESAFE_API_KEY`) goes in `.env` when it arrives.
@@ -348,16 +368,20 @@ No redeploy is needed: the deployed app doesn't use the database yet.
 **Protect `main`** (after card 001 is merged, so the checks exist): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check` and `scope` to pass (not `web`: it runs only when `web/`, `src/` or the contract changes, and a required check that never runs blocks the merge), block force pushes. On a free personal account, protection on a private repo may need GitHub Pro; without it, keep the PR flow by convention and CI still runs on every PR.
 
 **Still left, and when:**
-- Turning on CI deploys (the repository variable `DEPLOY_ENABLED=true`) needs, first: the Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variables `POSTING_SLOTS` and `POSTING_TIMEZONE` (identical to `clipforge-secrets`; the deploy job fails without them). `ci.yml` already runs `alembic upgrade head` before `modal deploy`, skips web- and docs-only pushes and waits out the blackout. Until you turn it on, you deploy with `scripts/deploy.sh` from `main` (§1); it refuses inside the blackout.
+- The Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variable `DEPLOY_ENABLED=true`. `ci.yml` runs `alembic upgrade head` before deploying and skips web- and docs-only pushes (S1 Task 21b, log #212), but that isn't everything `DEPLOY_ENABLED` needs. Before you set it, all of these must be in place:
+  - the Actions secrets `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` (the deploy) and `DATABASE_URL_UNPOOLED` (the migration);
+  - the repository variables `POSTING_SLOTS` and `POSTING_TIMEZONE`, identical to `clipforge-secrets`: the job's blackout step fails without them, and it has no defaults;
+  - card 008's `tag` job on `main`: after each CI deploy it pushes the `deploy-YYYYMMDD-HHMM` tag and writes the deploy line into the run summary (log #392).
+
   ```
   gh secret set MODAL_TOKEN_ID
   gh secret set MODAL_TOKEN_SECRET
   gh secret set DATABASE_URL_UNPOOLED
   gh variable set POSTING_SLOTS --body "<the value in clipforge-secrets>"
   gh variable set POSTING_TIMEZONE --body "<the value in clipforge-secrets>"
-  gh variable set DEPLOY_ENABLED --body true
+  gh variable set DEPLOY_ENABLED --body true      # last
   ```
-  CI deploys are recorded by their `deploy-YYYYMMDD-HHMM` tag (`git tag -l 'deploy-*'`) and a line in the run summary, not in `docs/ops/deploys.md` (card 008).
+  CI deploys are recorded by their tag (`git fetch --tags && git tag -l 'deploy-*'`), not in `docs/ops/deploys.md`. The step itself is still yours. Until you do it, you deploy with `scripts/deploy.sh` from `main` (§1); it refuses inside the blackout.
 - In Vercel, connect the repo with Root Directory `web` when you do the Vercel steps (§5b).
 - From the pause on, every parallel session gets its own git worktree (§3).
 

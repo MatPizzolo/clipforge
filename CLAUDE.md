@@ -39,7 +39,7 @@ uv run clipforge run --input <url>               # submit a job to the deployed 
 uv run clipforge clip [videos/<channel>/<file>] [--fetch]   # videos/ inbox → jobs (ADR-22); --fetch downloads the clips
 uv run clipforge status [<id>] [--rebuild|--restore [DATE]] / resume <id>     # read or continue a job; no id: the posting overview
 uv run clipforge set-webhook                     # point Telegram at the deployed API
-uv run clipforge eval --set evals/v1     # highlight eval (see docs/EVALS.md)
+# uv run clipforge eval --set evals/v1   # planned, not built (ROADMAP Phase 5, docs/EVALS.md)
 uv run alembic upgrade head                      # migrate Neon (DATABASE_URL_UNPOOLED only; CI runs it before deploy)
 uv run modal run src/clipforge/app.py::db_doctor # read-only: revision, pooled host, schedule copies (rollout only)
 uv run clipforge account create|edit|list        # studio accounts (blueprints/)
@@ -62,7 +62,7 @@ src/clipforge/
   links.py          # signed, expiring zip links (ADR-13)
   runtime.py        # Modal adapters (DictKV, ModalVolume, FunctionSpawner) + build_deps
   smoke.py          # checks for the Modal smoke job (app.py::smoke)
-  cli.py            # `clipforge run|clip|status|resume|set-webhook` (thin API client)
+  cli.py            # `clipforge run|clip|status|resume|set-webhook|posting|jobs|account|source` (thin API client)
   inbox.py          # videos/ inbox for `clipforge clip`: channels.toml, channel folders, ledger, Volume paths
   api/main.py       # FastAPI job API + Telegram webhook route
   bot/              # Telegram: telegram.py (PTB sync bridge), messages, notifier, commands, webhook, context, posting (ADR-23), deeplinks (DASHBOARD_URL)
@@ -71,7 +71,7 @@ src/clipforge/
   models.py         # pydantic contracts shared by stages
   jobs.py           # DictJobStore, JobContext, cached_stage (ADR-14)
   pipeline/         # step chain (Modal-free): deps.py interfaces, steps.py, selection.py, errors.py
-  posting/          # posting queue (ADR-23/41): repo (PostingRepo: Dict/Sql/Dual), backend, actions (shared taps/commands, actors), queue rules, enqueue, slots, keepalive (ADR-24), daily (ADR-46), migrate (import/backfill/verify)
+  posting/          # posting queue (ADR-23/41): repo (PostingRepo: Dict/Sql/Dual), backend, actions (shared taps/commands, actors), queue rules, enqueue, slots, captions (per-platform copy), keepalive (ADR-24), daily (ADR-46), migrate (import/backfill/verify)
   service.py        # job service: create_job, get_job_view, resume_job (API, bot and CLI use it)
   config.py         # settings from env
   db/               # Postgres (ADR-26/41): engine (Database, 5 s statement timeout), tables, migrations, doctor, accounts/sources/jobs/posting repos
@@ -85,8 +85,12 @@ assets/             # fonts/ (Anton, OFL) and models/ (YuNet face model, MIT)
 alembic/            # migrations (0001 is frozen; new tables and columns go in 0002+)
 blueprints/         # account blueprints (ADR-35), mounted into the images
 tests/              # mirrors src/ layout; fixtures in tests/fixtures/
-evals/              # eval sets and results
+web/                # Next.js dashboard (S3a): a client of the job API
+scripts/            # check.sh (the gate), deploy.sh, worktree.sh, scopes.toml
+docs/               # architecture, ADRs, studio plan, cards, reports, templates
 ```
+
+`evals/` (eval sets and results) is planned, not built (ROADMAP Phase 5).
 
 ## Rules
 
@@ -121,6 +125,6 @@ evals/              # eval sets and results
 ## Working style
 
 - Before a non-trivial change, state a short plan and which files you'll touch.
-- Keep PRs to one roadmap item. Tick the checkbox in ROADMAP.md when done.
+- Keep PRs to one roadmap item. Tick the checkbox in ROADMAP.md when done (for Phase 6, in docs/studio/04-roadmap.md too).
 - If you make an architectural choice, add an ADR to docs/DECISIONS.md.
 - Prefer boring, explicit code over clever abstractions. Type hints everywhere.

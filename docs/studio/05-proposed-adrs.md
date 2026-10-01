@@ -1,6 +1,6 @@
 # 05: Proposed ADRs
 
-Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39 (now in `docs/DECISIONS.md`, which is binding). **Taken:** ADR-43 (derived producer version), ADR-44 (one home per task), ADR-45 (notification budget and ops alerts) and ADR-46 (daily reconcile) were accepted on 2026-09-30 and live only in `docs/DECISIONS.md`. The next free number is ADR-47. Reserved numbers: **ADR-41** is S1's ("reads come from `STATE_READS`, one writer per column group"; the code cites it already; S1 writes it into `docs/DECISIONS.md` in its Task 21). **ADR-42** (the S3 workspaces decision) was accepted on 2026-09-30 and lives only in `docs/DECISIONS.md`. The rest are drafts. To accept one, copy it into `docs/DECISIONS.md` with `Status: Accepted` and the acceptance date. ADR-24 is already taken by the Dict keep-alive (plan C Task 6).
+Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39. Accepted later: ADR-41 (S1, written into `docs/DECISIONS.md` by card 002 on 2026-09-30) and ADR-42 to ADR-46 (2026-09-30). Accepted ADRs live only in `docs/DECISIONS.md`, which is binding; this file keeps one-line pointers to them, except ADR-43 to ADR-46. The drafts left are ADR-27, 33, 36, 37 and 40 (proposed) and ADR-32 (deferred). The next free number is ADR-47. To accept a draft, copy it into `docs/DECISIONS.md` with `Status: Accepted` and the acceptance date. ADR-24 is already taken by the Dict keep-alive (plan C Task 6).
 
 ---
 
@@ -71,5 +71,7 @@ Date: 2026-09-29 · Status: Proposed (build in S14)
 Context: Affiliate commissions cap the upside. Channels such as profe.ia.ingles, ai.tools.lab and realtalk.clipsdaily could feed their own course or community.
 Decision: Plan a funnel module (bio pages, email capture, sequences, sales import) and use the studio's producers to make lesson videos. Build it after the channels show traction. Guardrails: no invented testimonials or statistics, no fake scarcity, guarantees only after legal review, no spam link-dropping.
 Consequences: The architecture reserves `funnel/` and the dashboard reserves a Funnel page. No work until S14.
+
+**ADR-41: Moving to Postgres by writing to both stores, and posting per account**: accepted with S1, written into DECISIONS.md by card 002 on 2026-09-30; the text is only in [DECISIONS.md](../DECISIONS.md#adr-41-moving-to-postgres-by-writing-to-both-stores-and-posting-per-account).
 
 **ADR-42: Versioned categories, blueprints and accounts in the database**: accepted 2026-09-30; the text is only in [DECISIONS.md](../DECISIONS.md#adr-42-versioned-categories-blueprints-and-accounts-in-the-database).

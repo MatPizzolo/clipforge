@@ -14,8 +14,11 @@ Where each key lives. Values are typed by the owner only; sessions never read or
 | `DOWNLOAD_SIGNING_KEY` | ✅ | ✅ | | | | |
 | `POSTING_TIMEZONE`, `POSTING_SLOTS` | ✅ | ✅ **required**, identical to the secret | | | | `scripts/deploy.sh` computes the blackout from `.env` and refuses when either is missing (it never uses config.py's defaults). Change both places together |
 | `POSTING_CHAT_ID`, `POSTING_HASHTAGS` | ✅ | ❌ not in `.env` | | | | only in the Modal secret: so the secret can't be rebuilt from `.env` (use the dashboard edit) |
+| `DASHBOARD_URL` | optional | optional | | | | the dashboard's https address; bot messages get buttons to its pages (ADR-44). Unset = no buttons. Not secret |
+| `OWNER_TIMEZONE` | optional | optional | | | | quiet hours for ops alerts (ADR-45); unset = `POSTING_TIMEZONE`. Not secret |
+| `POSTING_ACCOUNT_ID` | optional | optional | | | | in `STATE_READS=dict` mode, the account the `POSTING_*` settings describe; default `realtalk-clips-en`. Not secret |
 | `DATABASE_URL` | ❌ until rollout step 4c.2 (#107) | ✅ | | | | pooled Neon URL |
-| `DATABASE_URL_UNPOOLED` | | ✅ | | | later, for `ci.yml`'s migration step | direct Neon URL, for migrations |
+| `DATABASE_URL_UNPOOLED` | | ✅ | | | later, with `DEPLOY_ENABLED` (`ci.yml`'s migration step already reads it) | direct Neon URL, for migrations |
 | `NEON_BRANCH` | | ✅ | | | | written by `neon link` |
 | `STATE_READS` | add now (`dict`), flip at 4c.7 | ✅ **required**, identical to the secret | | | | `scripts/deploy.sh` refuses when it's missing from `.env`, and when it isn't `dict` without `--rollout-step 4c.7`. Change both places together |
 | `YOUTUBE_PROXY_URL` | | ✅ | | | | unused (ADR-17 deferred); its password was pasted in chat once: rotate or delete it |
@@ -24,8 +27,8 @@ Where each key lives. Values are typed by the owner only; sessions never read or
 | `OWNER_EMAIL` | | | ✅ | production | | the dashboard allowlist |
 | `MOCK_API` | | | local only | preview (`1`) | | never production |
 | `AUTH_DISABLED` | | | local only | never | | refused on every Vercel environment |
-| `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | | | | | later, with `DEPLOY_ENABLED` | only after `ci.yml` runs the migrations |
+| `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | | | | | later, with `DEPLOY_ENABLED` | read by `ci.yml`'s deploy job and by `manual.yml` (GPU and smoke tests, run by hand) |
 | `DEPLOY_ENABLED` (a repository variable, not a secret) | | | | | later | turns the CI deploy job on |
 | `TYPESAFE_API_KEY`, `HF_TOKEN` | | when a spike needs them | | | | spikes only |
 
-Non-secret defaults (`HIGHLIGHT_MODEL`, `WHISPER_MODEL`, `DEFAULT_*`, `MODAL_APP_NAME`, `JOBS_ROOT` and others) are listed with comments in `.env.example`.
+Non-secret defaults (`HIGHLIGHT_MODEL`, `WHISPER_MODEL`, `DEFAULT_*`, `MODAL_APP_NAME`, `JOBS_ROOT` and others) are listed with comments in `.env.example`. Two more are set by the app itself, not by you: `BLUEPRINTS_DIR` (the blueprints mount, set in `app.py`) and `GIT_SHA` (the build, set by `scripts/deploy.sh` and the CI deploy).

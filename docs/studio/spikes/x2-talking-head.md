@@ -2,7 +2,7 @@
 
 **Status:** stopped at about 25%, at step 5 (making the test inputs), by the 2026-09-30 pause. **No talking-head clip was generated**, so there are no quality, lip-sync or cost numbers yet. The probe code lived in `scratch/x2/` and was deleted with `scratch/`. What remains: the weights on the Modal Volume (below) and the license findings in this file. Written by the coordinator from the X1/X2 session's hand-off report.
 
-**Question (card X2 in 06):** which open model makes a convincing 9:16 presenter? Candidates: InfiniteTalk, LongCat-Video-Avatar 1.5, EchoMimicV3.
+**Question (card X2 in 06; resumed by card 005):** which open model makes a convincing 9:16 presenter? Candidates: InfiniteTalk, LongCat-Video-Avatar 1.5, EchoMimicV3.
 
 Spend so far: about $0.40 of the $30 limit (image builds, downloads, and the portrait and audio calls that were cut off).
 
@@ -46,4 +46,4 @@ Spend so far: about $0.40 of the $30 limit (image builds, downloads, and the por
 
 1. The owner rules on WenetSpeech (O7).
 2. Rebuild the probe from §1–§3 (the weights are already on the Volume).
-3. Continue the X2 card from step 5 in 06, with the remaining budget of about $29.60.
+3. Continue X2 from step 5 (the test inputs). Steps 2 and 3 are [card 005](../../cards/005-x2-resume.md), with the remaining budget of about $29.60.

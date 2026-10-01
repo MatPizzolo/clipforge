@@ -8,7 +8,7 @@ Each phase ends with something usable. Tick items as they land; one item ≈ one
 - [x] Modal app skeleton with secrets, a Volume for job files, a Dict for job state
 - [x] `models.py` with contracts: `Job`, `Transcript`, `Word`, `ClipCandidate`, `ClipSpec`, `RenderedClip`
 - [x] Test fixtures: 10-second talking-head clip, sample transcript JSON
-- [x] CI: lint + fast tests on push, deploy on main (ADR-16)
+- [x] CI: lint + fast tests on push, deploy on main (ADR-16; the deploy job is off until the repository variable `DEPLOY_ENABLED` is set)
 
 ## Phase 1 — MVP: link in, clips out (fully serverless, ADR-9)
 - [x] `ingest`: accept a direct media URL or a Telegram upload (≤ 20 MB); normalize to mp4 + 16 kHz mono wav (ADR-10)
@@ -28,13 +28,13 @@ Each phase ends with something usable. Tick items as they land; one item ≈ one
 - [ ] Job progress via `ctx.report`; bot edits one status message
 - [ ] Send each clip as soon as it's rendered (per-clip fan-out lands in Phase 1 with the step chain; this item covers polish such as ordering and retries on send)
 - [ ] 👍 / 👎 / ✂️ buttons; store ratings with clip features
-- [ ] Command options: `n`, `len`, `style`, `lang`
+- [ ] Command options: `n`, `len` and `lang` are built (bot options, plus `score`, `perm` and `credit`); `style` is open
 - [x] Channel folders + `channels.toml` (credit, permission), batch submit, `--fetch` (ADR-22)
 - [x] Posting queue on Modal: enqueue on package, derived per-platform status, `GET /posting`, `clipforge status` (ADR-23)
 - [x] Telegram posting assistant: slot cron, clip + captions + ✅/⏭/🗑 buttons, pause rule, /status /next /pause /go (ADR-23)
 - [x] Posting state kept alive against Modal Dict's 7-day expiry: daily per-key read + JSON snapshot on the Volume (ADR-24)
-- [ ] Cache by source hash: re-cuts reuse transcript + highlight scores
-- [ ] Cost summary in the final bot message
+- [x] Cache by source hash: re-cuts reuse transcript + highlight scores
+- [x] Cost summary in the final bot message
 
 ## Phase 3 — Clip quality
 - [x] Scene detection (ffmpeg scene score, ADR-19)
@@ -62,13 +62,14 @@ Each phase ends with something usable. Tick items as they land; one item ≈ one
 - [ ] Ranker trained on 👍/👎 and, later, platform retention data
 
 ## Phase 6 — Studio (multi-account)
-Full list with exit criteria, dependencies and action cards: [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md) (cards in [06](docs/studio/06-session-prompts.md)). Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28–31, 34, 35, 38, 39; on 2026-09-30: ADR-43–46. **docs/studio/04 is the source of truth for Phase 6**; this list mirrors it.
-- [ ] S0: finish plan C (Tasks 4–6), deploy plans A+B+C (S1 starts once this code is finished; the 7-day check runs in the background)
-- [ ] S1: Neon Postgres, accounts, content items, blueprints; queue and job records move off the Dict
+Full list with exit criteria, dependencies and action cards: [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md) (cards in [06](docs/studio/06-session-prompts.md)). Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28–31, 34, 35, 38, 39; on 2026-09-30: ADR-41–46. **docs/studio/04 is the source of truth for Phase 6**; this list mirrors it.
+- [ ] S0: plan C finished and plans A+B+C deployed (2026-09-29); only the 7-day background check is open
+- [ ] S1: Neon Postgres, accounts, content items, blueprints; queue and job records move off the Dict (code built, card 002; ticked at the rollout)
 - [ ] S2: publishing through Upload-Post, review tiers, pure policy gate, tracking links
-- [ ] S3a: dashboard shell (`web/`, login, Vercel, Home over today's API; starts now)
+- [ ] S3a: dashboard shell (`web/`, login, Home over today's API): the shell is built; the Vercel deploy is card 004
 - [ ] S3: Next.js dashboard v1 (separate `admin` Modal endpoint; after S1, alongside S2)
 - [ ] S3b: Notion one-way mirror (connector, no code)
+- [ ] S3c: account workspaces: versioned categories, blueprints and accounts, experiments, notes (ADR-42; after S1 and S3's `admin` endpoint)
 - [ ] S4: Timeline renderer (runs alongside S1–S3)
 - [ ] S5: media servers and producer registry
 - [ ] S6: story producer, plus the Judge, decision ledger and lanes (wave 2)
@@ -81,7 +82,7 @@ Full list with exit criteria, dependencies and action cards: [docs/studio/04-roa
 - [ ] S13: AI model / influencer producer (wave 6)
 - [ ] S14: funnel and own products
 - [x] Spike X1: voice (2026-09-30: Qwen3-TTS primary, Kokoro fallback; see docs/studio/03)
-- [ ] Spikes X2–X6: talking head, persona, visuals and music, Judge, hero shots
+- [ ] Spikes X2–X6: talking head (X2 resumes in card 005), persona, visuals and music, Judge, hero shots
 
 ## Later / ideas
 - YouTube links (from the bot and the CLI): designed and spiked on 2026-09-28, then deferred because of proxy cost. See ADR-17 and `docs/superpowers/specs/2026-09-28-youtube-ingest-design.md` §9. The next attempt should download audio first plus per-clip 1080p ranges (about $0.50 per 30 minutes of video), or use a flat-price ISP proxy.
@@ -91,10 +92,5 @@ Full list with exit criteria, dependencies and action cards: [docs/studio/04-roa
 - Translated caption variants
 - Publishing APIs (YouTube Data API, Instagram Graph API, TikTok Content Posting API). Option looked at on 2026-09-29: Postiz cloud (from $29/mo, official APIs, public `POST /public/v1/upload` + `/posts`) as a publisher behind the same posting queue, once posting 6 clips a day by hand gets tedious. Self-hosted Postiz doesn't fit ADR-9 (needs Postgres, Redis and Temporal on a server).
 
-## Owner to-do: create the git repo (later)
-Exact commands: [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md) §8. Every other owner step is in the same runbook.
-- [ ] `git init` in the project root. `.gitignore` already keeps out `.env`, `videos/*`, `jobs/` and `.superpowers/`.
-- [ ] First commit: everything through plan C plus the studio kickoff docs.
-- [ ] A private GitHub repo; push `main`.
-- [ ] GitHub Actions secrets `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. From then on, CI deploys every push to `main` (ADR-16). Add `DATABASE_URL` when S1's migrations run in the deploy job.
-- [ ] Until the repo exists: deploys are manual (`uv run modal deploy src/clipforge/app.py`), and parallel sessions share one folder with separate file ownership. After it: one git worktree per session.
+## Owner to-do: the git repo
+The repo exists (private remote `MatPizzolo/clipforge`, 2026-09-30). What's still left (the Actions secrets and `DEPLOY_ENABLED`, the Vercel connection) is listed under "Still left, and when" in [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md) §8.

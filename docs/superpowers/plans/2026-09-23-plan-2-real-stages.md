@@ -1,3 +1,5 @@
+> **Historical (Phase 1, ADR-9–16, deployed 2026-09-23):** built and deployed; docs/ARCHITECTURE.md and the code are current.
+
 # Plan 2 of 3: Real stages — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

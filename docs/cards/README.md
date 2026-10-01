@@ -20,5 +20,5 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [004](004-s3a-deploy.md) | S3a local login and Vercel deploy | proposed | 001 merged, the owner's Vercel steps, merge after 002 |
 | [005](005-x2-resume.md) | X2 talking-head spike, resume | proposed | 001 merged, O7 ruled |
 | [006](006-s4-timeline.md) | S4 Timeline renderer | proposed | 002 merged |
-| [007](007-cleanup-docs.md) | Docs: audit and refresh every Markdown file to match main; propose removing unused files | sent 2026-10-01 | 002 merged |
+| [007](007-cleanup-docs.md) | Docs: audit and refresh every Markdown file to match main; propose removing unused files | done 2026-10-01 (PR #11) | 002 merged |
 | [008](008-x0-followups.md) | X0: `deploy.py` checks the migration head, CI deploys tagged, Stop hook on main/coord | proposed | 002 merged |

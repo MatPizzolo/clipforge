@@ -1,6 +1,6 @@
 # 02: Target architecture
 
-This file extends the existing design (`docs/ARCHITECTURE.md`, ADR-1…23) and doesn't replace it. The rules in CLAUDE.md all still hold:
+This file extends the existing design (`docs/ARCHITECTURE.md`, ADR-1…46) and doesn't replace it. The rules in CLAUDE.md all still hold:
 - stages are pure and resumable
 - contracts live in `models.py`
 - prompts are versioned files
@@ -31,7 +31,7 @@ This file extends the existing design (`docs/ARCHITECTURE.md`, ADR-1…23) and d
                              │           │
                              │           ▼
                              └── DISTRIBUTION: review tiers (Telegram) → Publisher (Upload-Post API)
-                                         media via R2 public URLs; webhooks → posts table
+                                         media via signed Volume links; webhooks → posts table
                  dispatcher cron (1 cron): sweeper · posting slots · analytics pull · digests · budgets
 ```
 
@@ -39,7 +39,7 @@ The design rests on four separations:
 1. **Producers vs distribution.** Every producer ends in a `ContentItem`. Distribution never knows how a video was made.
 2. **Timeline vs renderer.** Every producer describes its video as a `Timeline`, and one renderer turns any Timeline into an mp4.
 3. **Stage logic vs Modal.** Stages stay Modal-free. Modal code lives only in the Modal layer (today `app.py`; proposed later as a `modal_app/` package).
-4. **Hot state vs durable state.** Modal Dict holds only short-lived step state. Postgres holds everything durable. **Dict entries expire after 7 days of inactivity.** ADR-24 (a keep-alive read plus a Volume snapshot) is the stopgap for the ADR-23 queue. Postgres replaces it in S1, for the queue **and** for the `job:*` records that `rebuild` and the overview scan (a `jobs` table written by `package_step` and backfilled from each job's `metadata.json`). ADR-24 retires only after both have moved.
+4. **Hot state vs durable state.** Modal Dict holds only short-lived step state. Postgres holds everything durable. **Dict entries expire after 7 days of inactivity.** ADR-24 (a keep-alive read plus a Volume snapshot) is the stopgap for the ADR-23 queue. Postgres replaces it in S1, for the queue **and** for the `job:*` records that `rebuild` and the overview scan (a `jobs` table written by `package_step` and backfilled from each job's `metadata.json`). The cron doesn't retire: it became `posting_daily` (ADR-46), and only its Dict touch goes once both have moved.
 
 ## 2. Core contracts (new, in `models.py`)
 
@@ -48,7 +48,7 @@ These are sketches. The spec for each sub-project fixes the fields.
 ```python
 class Account(Contract):            # one brand, e.g. realtalk.clipsdaily
     id: str; handle: str; blueprint: str; blueprint_version: int
-    kind: Literal["clips","story","band","avatar"]            # = blueprint.category
+    kind: Literal["clips","story","band","avatar","model"]    # = blueprint.category (ADR-39)
     language: Literal["en","es"]; niche: str
     platforms: dict[Platform, PlatformProfile]   # enabled, length rules, cadence, caption template, link
     review_tier: Literal["review","sample","auto"]
@@ -57,8 +57,8 @@ class Account(Contract):            # one brand, e.g. realtalk.clipsdaily
     monthly_budget_usd: float
     paired_account_id: str | None                 # EN<->ES partner for translated winners
 
-class Blueprint(Contract):          # versioned file blueprints/<name>.toml (see 07)
-    name: str; version: int; category: Literal["clips","story","band","avatar"]
+class Blueprint(Contract):          # blueprints/<name>.toml until S3c, then database versions (ADR-42; see 07)
+    name: str; version: int; category: Literal["clips","story","band","avatar","model"]
     niche: str; pillars: list[str]; series: list[SeriesFormat]   # recurring formats to rotate
     voice_brief: str; visual_style: str; platform_defaults: dict[Platform, PlatformProfile]
     money: list[str]; compliance: ComplianceProfile               # required tags, banned claims, sources needed
@@ -161,7 +161,7 @@ Every call is written to the **decision ledger**, and lanes, fail-closed rules a
   - It maps `ai_disclosure` to TikTok `is_aigc`, YouTube `containsSyntheticMedia`, Instagram `is_ai_generated` and Facebook `facebook_is_ai_generated`.
   - Signed webhooks from Upload-Post update the `posts` rows.
   - Official APIs (YouTube Data, Instagram Graph) can be added later as more publishers behind the same protocol.
-- **Media hosting:** rendered mp4s are copied to **Cloudflare R2** under long, unguessable keys (free egress). The posting API and the dashboard fetch from there. The Volume stays the working store.
+- **Media hosting (ADR-28):** the posting API and the dashboard fetch rendered mp4s through signed, expiring links to the Volume (ADR-13's mechanism). Cloudflare R2 (long, unguessable keys, free egress) comes in only if those links prove unreliable.
 - **Policy gate:** a pure function, `gate(item, account) -> list[Violation]`, plus one cheap LLM check for banned claims. It runs before publish in every tier.
 
 ## 6. Measurement
@@ -196,7 +196,7 @@ Every call is written to the **decision ledger**, and lanes, fail-closed rules a
   - queue and calendar across accounts
   - review inbox
   - submit (clip a video, story brief, band, avatar offer)
-  - item preview (from R2)
+  - item preview (from a signed Volume link)
   - stats
   - money (programs' progress, clicks, sales)
   - costs and budgets
@@ -206,13 +206,13 @@ Every call is written to the **decision ledger**, and lanes, fail-closed rules a
 
 `clipforge fetch <url> --channel <c>` runs yt-dlp on the owner's machine and saves into `videos/<channel>/`. It needs Deno (yt-dlp's JS runtime) and the bgutil PO-token plugin. The existing `clipforge clip` flow (ADR-22) then submits the files. yoinks is fine for manual one-off downloads, but it has no scriptable mode yet. Only permitted sources are downloaded (docs/SOURCING.md).
 
-## 10. Repo layout (proposed)
+## 10. Repo layout (proposed; `db/`, `accounts/` and `alembic/` are built in S1, `web/` has the S3a shell)
 
 ```
 src/clipforge/
   models.py            # + Account, Persona, AssetSource, Timeline, ContentItem, ...
-  db/                  # SQLAlchemy models, session, repositories; alembic/ at repo root
-  accounts/            # profiles, brand kits, review tiers, budgets, blueprint loading
+  db/                  # built (S1): engine, tables, repositories; alembic/ at repo root
+  accounts/            # built (S1): blueprint loading, account service; later profiles, brand kits, budgets
   judge/               # Judge protocol + jev.py + claude.py + ledger (decisions table, lanes, audit)
   desk/                # inbound triage (after S7): sources, questions, guards, draft queue
   funnel/              # later: bio pages data, email capture, sequences, sales import
@@ -228,7 +228,7 @@ src/clipforge/
   stages/, pipeline/, posting/, bot/, api/  # existing; posting/ migrates to db + publish/
   app.py -> modal_app/ # Modal layer only (functions, Cls media servers, dispatcher cron, web)
 web/                   # Next.js dashboard (own package.json, deployed to Vercel)
-blueprints/            # <name>.toml per channel concept (07), versioned like prompts
+blueprints/            # <name>.toml per channel concept (07); database versions from S3c (ADR-42)
 ```
 
 New accounts are created from blueprints:
@@ -237,4 +237,4 @@ New accounts are created from blueprints:
 clipforge account create --blueprint <name> --lang en|es --handle <h>
 ```
 
-This creates the account rows and spawns the persona job. See 07.
+Today (S1) this creates the account row only. Spawning the persona job is the target (S8). See 07.
