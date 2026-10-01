@@ -4,6 +4,7 @@ one call into the Modal-free code.
 
     uv run modal run src/clipforge/app.py::doctor    # local + GPU environment checks
     uv run modal run src/clipforge/app.py::smoke     # one real job on the 10 s fixture (~$0.01)
+    uv run modal run src/clipforge/app.py::db_doctor # read-only database check (rollout)
     uv run modal deploy src/clipforge/app.py         # deploy the API, webhook and pipeline
 """
 
@@ -41,11 +42,13 @@ REPO_ROOT = _repo_root(Path(__file__).resolve())  # only meaningful locally (ima
 PROMPTS_MOUNT = "/app/prompts"
 FONTS_MOUNT = "/app/assets/fonts"
 MODELS_MOUNT = "/app/assets/models"  # YuNet face model (ADR-19)
+BLUEPRINTS_MOUNT = "/app/blueprints"  # account blueprints (ADR-35)
 CONTAINER_ENV = {
     "JOBS_ROOT": JOBS_ROOT,
     "PROMPTS_DIR": PROMPTS_MOUNT,
     "FONTS_DIR": FONTS_MOUNT,
     "MODELS_DIR": MODELS_MOUNT,
+    "BLUEPRINTS_DIR": BLUEPRINTS_MOUNT,
     "GIT_SHA": os.environ.get("GIT_SHA", ""),  # set by the CI deploy; empty means unknown
 }
 
@@ -66,6 +69,7 @@ def _with_app_files(image: modal.Image) -> modal.Image:
         .add_local_dir(REPO_ROOT / "prompts", PROMPTS_MOUNT)
         .add_local_dir(REPO_ROOT / "assets" / "fonts", FONTS_MOUNT)
         .add_local_dir(REPO_ROOT / "assets" / "models", MODELS_MOUNT)
+        .add_local_dir(REPO_ROOT / "blueprints", BLUEPRINTS_MOUNT)
         .add_local_python_source("clipforge")
     )
 
@@ -278,6 +282,26 @@ def web() -> FastAPI:
     settings = get_settings()
     sender = runtime.telegram_sender(settings)
     return create_app(ApiContext(settings=settings, deps=_service_deps, sender=lambda: sender))
+
+
+@app.function(image=base_image, cpu=0.25, timeout=60, secrets=[secrets])
+def db_doctor() -> dict[str, object]:
+    """Read-only database check: connect ms, alembic_version vs the code's head, pooled host.
+    Never writes and never prints the URL (rollout, runbook §4c)."""
+    from clipforge.db import doctor
+    from clipforge.db.engine import database_from_settings
+
+    settings = get_settings()
+    url = None if settings.database_url is None else settings.database_url.get_secret_value()
+    database = database_from_settings(settings)
+    try:
+        report = doctor.check(database, url)
+    finally:
+        if database is not None:
+            database.dispose()
+    for key, value in report.items():
+        print(f"db_doctor: {key}: {value}")
+    return dict(report)
 
 
 @app.function(image=whisper_image, gpu=GPU, timeout=600)

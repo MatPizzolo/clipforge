@@ -30,6 +30,8 @@ Last updated: 2026-09-30.
 | 14 | 2026-09-29 | One dispatcher cron, but only when a 5th cron is needed (S7), with markers in the Dict so Neon can scale to zero | current (proposed ADR) | ADR-27 draft in 05 |
 | 15 | 2026-09-29 | LLM router over free tiers for bulk text | deferred (savings under $5/month) | ADR-32 draft in 05 |
 | 16 | 2026-09-29 | Postgres driver: psycopg 3 (LGPL-3.0, used unmodified) is allowed; libraries used unmodified under LGPL are fine | current | S1 spec, 03 |
+| 200 | 2026-09-30 | Alembic migrations use only `DATABASE_URL_UNPOOLED` (Neon's direct endpoint); `alembic/env.py` exits with the fix when it's unset and never falls back to the pooled `DATABASE_URL`. Tests pass the URL in `config.attributes["url"]` | current | card 002 A2, `alembic/env.py`, `tests/db/test_migrations.py` |
+| 201 | 2026-09-30 | The code carries the expected Alembic head as `clipforge.db.doctor.EXPECTED_HEAD` (the Modal image has no `alembic/`), pinned to the scripts' head by a test, so every new revision must bump it. `app.py::db_doctor` is read-only (a `READ ONLY` transaction): connect ms, `alembic_version` vs that head, pooled host yes/no, errors through `redact`; it is run only at the rollout, with the owner | current | card 002 A2, `db/doctor.py`, `app.py` |
 
 ## Distribution and posting
 

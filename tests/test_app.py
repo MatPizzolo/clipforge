@@ -36,6 +36,7 @@ def test_step_functions_and_endpoints_exist() -> None:
         "sweeper",
         "posting_tick",
         "posting_keepalive",
+        "db_doctor",
         "web",
         "smoke",
         "doctor",
@@ -92,3 +93,8 @@ def test_posting_tick_outlasts_one_telegram_upload() -> None:
     from clipforge.bot.telegram import UPLOAD_TIMEOUT_S
 
     assert app.POSTING_TICK_TIMEOUT_S >= 2 * UPLOAD_TIMEOUT_S
+
+
+def test_blueprints_are_mounted() -> None:
+    assert app.CONTAINER_ENV["BLUEPRINTS_DIR"] == app.BLUEPRINTS_MOUNT
+    assert (app.REPO_ROOT / "blueprints" / "realtalk-clips.toml").is_file()
