@@ -1009,7 +1009,7 @@ class Timeline(Contract):
 
 
 class Loudness(Contract):
-    """What the loudness passes measured and did (proposed ADR-47)."""
+    """What the loudness passes measured and did (ADR-47)."""
 
     input_i: float | None = None
     input_tp: float | None = None

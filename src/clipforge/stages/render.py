@@ -1,6 +1,6 @@
 """Render (ADR-31): one ffmpeg encode per Timeline. Inputs seeked accurately, visual
 segments framed to 1080x1920 and joined, the ASS overlay burned in, audio tracks mixed
-(music ducked under the voice) and normalized in two passes (proposed ADR-47), then
+(music ducked under the voice) and normalized in two passes (ADR-47), then
 libx264 + AAC with a bitrate cap that keeps every video under Telegram's 50 MB (ADR-13).
 CPU only (ADR-10)."""
 

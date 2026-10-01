@@ -10,6 +10,7 @@
 | `llm_invalid_schema.json` | Parses as JSON but fails validation (end < start, score > 1). |
 | `llm_out_of_range.json` | Valid schema, but the clip ends after the transcript. |
 | `llm_empty.json` | `{"clips": []}`. |
+| `api_contract_2026-09-29.json` | Frozen JSON schemas of `JobView`, `PostingOverview` and `ChannelProgress` as the S3a dashboard was generated from them on 2026-09-29. `tests/test_api_contract.py` checks that responses only grow (no field or enum member removed, renamed or retyped). Never edit it. |
 
 Synthetic video/audio is generated at test time by the `media` fixture in `tests/conftest.py` (ffmpeg `testsrc2` + `sine`); the talking-head clip is the only committed media file.
 

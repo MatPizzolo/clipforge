@@ -16,7 +16,7 @@ Review PR #$ARGUMENTS for the owner. You don't merge, push or comment on GitHub:
    - anything the owner must decide.
    If fixes are needed, write them as a short numbered list the owner can paste into the card's session.
 5. **After the owner merges** (on a `coord/` branch):
-   - update `STATUS.md`: the workstream row, the next-cards table, the addendum tracker and "Last updated";
+   - update `STATUS.md`: the PR's row in "Open PRs" (under "Now"; remove it once merged), "Waiting on the owner", the "Next cards" table, the workstream row in "Workstreams", "Open follow-ups" (add the review's follow-ups, remove the ones this PR closed) and "Last updated";
    - update the card's Status line (`done YYYY-MM-DD (report: docs/reports/…)` at the last checkpoint);
    - update its row in `docs/cards/README.md`;
    - record the review's lasting rulings with `log-append`, in `coord/`'s range.

@@ -125,7 +125,7 @@ Decision:
 Consequences: Worst-case cost per job is about $0.50. A user can get "4 of 5 clips" instead of nothing.
 
 ## ADR-16: CI checks on every push, auto-deploy on main
-Date: 2026-09-23 · Status: Accepted
+Date: 2026-09-23 · Status: Accepted (CI runs scripts/check.sh; the deploy job is off behind DEPLOY_ENABLED, log #109, #212)
 Context: With serverless, deploying is releasing.
 Decision: `.github/workflows/ci.yml` runs ruff, a format check, mypy and the fast tests on every push and PR. On `main`, after the checks pass, it runs `modal deploy` using the GitHub secrets `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. GPU and smoke tests run only from a manual `workflow_dispatch` workflow.
 Consequences: Merged to `main` means live. CI never spends Modal money automatically. A bad deploy is rolled back by reverting on `main` (or with `modal app rollback`).
@@ -156,7 +156,7 @@ Decision: Per clip, detect camera cuts with ffmpeg's scene score, then frame eac
 Consequences: A few seconds of CPU per clip, and no API cost. Smoothed tracking and active-speaker choice stay open in the roadmap. Design: docs/superpowers/specs/2026-09-28-face-reframe-design.md.
 
 ## ADR-20: Retention polish (loudness, hook title, caption pop, bitrate by source)
-Date: 2026-09-28 · Status: Accepted
+Date: 2026-09-28 · Status: Accepted; "single-pass `loudnorm`" updated by ADR-47 (2026-10-01; the targets are unchanged)
 Context: The owner posts clips to grow their own channels, so retention and a recognizable style matter most. Clips had uneven loudness, no on-screen hook, static captions, and 8 Mb/s video even for 360 p sources, which made 30 clips about 1.2 GB on a slow downlink.
 Decision: The render encode normalizes audio to -14 LUFS (single-pass `loudnorm`). The video bitrate is capped by the source's short side (3/5/8 Mb/s at ≤480/≤720/above, so vertical phone videos count by their width). The captions `.ass` gains a hook title card: the highlights `title`, top-center, first 3 s, one yellow key word chosen by the same per-clip LLM call as the caption key words (`prompts/keywords_v2.md`). Every caption line pops in, from 110% to 100% over 100 ms.
 Consequences: No new API calls, since the title word shares the keywords call. Clips from low-res sources are much smaller. The captions and render cache versions move to 3, so re-cuts re-render.
@@ -168,7 +168,7 @@ Decision: Visual first. In a shot with two or more seats (faces seen in at least
 Consequences: A few CPU seconds per clip and no new dependencies. A listener laughing hard can steal a turn shorter than the hold. Diarization stays open in the roadmap for footage where this is wrong. Design: docs/superpowers/specs/2026-09-28-speaker-framing-design.md.
 
 ## ADR-22: Channel folders and batch submit
-Date: 2026-09-28 · Status: Accepted
+Date: 2026-09-28 · Status: Accepted (database sources replace channels.toml at the S1 rollout, ADR-25, ADR-41)
 Context: The owner clips whole podcast channels, starting with 11 episodes of Billy Garton Jr. (creator agreement), with more channels in the same niche later. Every clip needs the right credit, and the posting assistant (ADR-23) needs to know each job's channel. Waiting for each video in turn took hours.
 Decision: Videos go in `videos/<channel>/`. `videos/channels.toml` gives each channel a credit name, an optional url and a permission. `clipforge clip` submits every new video with `JobInput.channel`, `source_credit`, `permission` and `source_label`, then exits. `--fetch` waits for all submitted jobs together and downloads each into `videos/out/<channel>/<episode>/`. The inbox ledger keeps `{job_id, status}` per video; the old format loads as fetched. Spec: docs/superpowers/specs/2026-09-28-posting-assistant-design.md §3.
 Consequences: Credit and permission are set once per channel. A video moved into a channel folder counts as new and is submitted again; this is cheap because the transcript and highlights are cached by source hash, and posting skips overlapping moments.
@@ -180,7 +180,7 @@ Decision: When a channel job (ADR-22) finishes, `package_step` queues its clips 
 Consequences: The laptop is needed only to add videos. Reads scan all `post:*` keys (`KV.items()`), which is fine for thousands of clips; move to an index or SQLite if it grows past that. Reject reasons feed the Phase 5 ranker. API publishing (step B) would replace the ✅ taps and gets its own ADR.
 
 ## ADR-24: Keep the posting state alive against Modal Dict expiry
-Date: 2026-09-29 · Status: Accepted (implementation: plan C Task 6)
+Date: 2026-09-29 · Status: Accepted (implementation: plan C Task 6; refined by ADR-46)
 Context: The Plan B review found that Modal Dict entries expire after 7 days without reads or writes (modal 1.5.5 `Dict` docs; our Dict was created in 2026, so the new rule applies). The posting queue (ADR-23) lives in the job Dict and lasts weeks (11 episodes at 6 clips a day is about 55 days). If a posted clip's `posted:*` keys expire, the clip reads as unposted and the bot sends it again. Expired verdicts would bring rejected clips back, and expired items and `job:*` records would silently shrink the queue and hide jobs from `rebuild`. Whether a streaming `items()` read resets the timer is undocumented. Options: a keep-alive read, a Volume snapshot, or making the Volume the record and the Dict a cache (a redesign).
 Decision: A daily Modal cron, `posting_keepalive`, reads every `post:*` and `job:*` key (and `posting:paused`) one by one with `get`, which the docs count as activity. It then writes every `post:*` key and value to `/jobs/posting/snapshots/<date>.json` on the Volume, keeping the last 14. A restore, `POST /posting/restore` (bearer token), with `clipforge status --restore`, puts back keys from the newest snapshot only where they are missing (set-if-absent), so it never overwrites newer state. Short-lived claims (`posting:slot:*`, `posting:reminded:*`, `tg:update:*`) are left to expire.
 Consequences: A few seconds to about a minute of CPU a day. A week-long cron outage is recoverable from the snapshot. The Volume-as-record redesign stays open if the Dict grows past tens of thousands of keys.
@@ -196,7 +196,7 @@ Decision:
 Consequences: New content types are new producers only. The clip producer gains a small wrapper step. The ADR-23 `PostItem` is replaced by `ContentItem` + `posts` rows.
 
 ## ADR-26: Postgres (Neon) for durable state; Dict only for hot step state
-Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S1; supersedes ADR-5; retires ADR-24 once migrated)
+Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S1; supersedes ADR-5; retires ADR-24 once migrated; refined by ADR-46)
 Context: Modal Dict entries expire after 7 days of inactivity, and ADR-24 works around that with keep-alives. The dashboard needs queries across accounts, dates and platforms (calendar, stats, money) that a key-value scan can't serve. Modal Volumes aren't safe for a database with many writers.
 Decision: Neon Postgres, reached through the pooled endpoint with SQLAlchemy 2 + psycopg 3, holds everything durable. Migrations use Alembic. The Dict keeps only in-flight job and step keys and claims (ADR-14); `job:*` summaries move to a `jobs` table too, so nothing durable depends on a Dict entry surviving 7 idle days. The dashboard reaches the data only through the FastAPI API (ADR-2).
 Consequences: One new managed dependency, free until it's outgrown. Tests need a local Postgres, and CI a Postgres service. Alembic runs in the deploy job before `modal deploy`. During the switch a setting points reads back at the Dict for rollback. The ADR-24 keep-alive and snapshot are removed a week after the migration is verified.
@@ -328,3 +328,9 @@ Consequences: Failures become visible without new services, and the bot stays qu
 Date: 2026-09-30 · Status: Accepted (2026-09-30; refines ADR-26's "the keep-alive and snapshot are removed")
 Decision: `posting_keepalive` becomes `posting_daily`, in the same cron slot (07:00 UTC). While the Dict and Postgres are both written, it runs the Dict touch, the snapshot and `posting verify`. Always, it backfills missing `jobs` rows, runs `rebuild` (both idempotent), and writes a JSON snapshot of the posting and source tables to `/jobs/posting/snapshots/`, keeping 14. The Dict touch goes when ADR-24 retires.
 Consequences: A self-healing queue and a cheap backup; the number of crons doesn't change.
+
+## ADR-47: Two-pass loudness normalization for every render
+Date: 2026-10-01 · Status: Accepted (2026-10-01, the owner's review of the S4 spec; built in S4, card 006; updates ADR-20's "single-pass `loudnorm`")
+Context: ADR-20 normalizes every clip with a single-pass `loudnorm` (I=-14, TP=-1.5, LRA=11), which estimates loudness on the fly and applies dynamic gain. ADR-31 makes one Timeline renderer serve every producer, and from S6 on many Timelines mix narration over a ducked music bed, where a dynamic gain can work against the ducking. Measured on 2026-10-01 (S4 spec §6): single pass lands at -14.5 to -14.2 LUFS on five real clips and -14.1/-13.8 on two synthetic mixes; two passes land at -14.2 to -14.0. On the real clips, ffmpeg falls back to dynamic mode in pass 2 because the sources already peak near the true-peak limit; linear mode applies to the mixes.
+Decision: Every render measures first (pass 1: the audio graph only, `loudnorm` with `print_format=json`) and normalizes in the encode with the measured values and `linear=true`; ffmpeg itself falls back to dynamic gain when linear gain would break the true-peak limit. Silence or an unparseable measurement falls back to the single-pass filter, and loudness never fails a render. The targets stay ADR-20's. The mode and the measured input values are recorded in `RenderedVideo.loudness`. One code path for clips and mixes; no per-producer switch.
+Consequences: Mixed Timelines get one constant gain that keeps the ducking intact. Clips change by 0.1–0.3 LU (not audible) and cost about 2 s more CPU each. True peak after the AAC encode stays -0.9 to -1.3 dBTP, as today; if a platform ever flags clipping, TP=-2.0 is the knob.

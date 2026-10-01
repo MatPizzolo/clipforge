@@ -8,7 +8,9 @@
 #   scripts/check.sh --scope      scripts/check_scope.py against origin/main
 #
 # Flags combine. Fails fast; prints one summary line per step. A green full run writes
-# .superpowers/check-ok (the working tree's hash), which the Stop hook reads.
+# .superpowers/check-ok (the working tree's hash), which the Stop hook reads. A failing step
+# prints its last 60 lines and keeps its full output in .superpowers/check-last-fail.log
+# (card 008: a flaky test must stay identifiable after the terminal has scrolled).
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -32,6 +34,7 @@ fi
 
 summary=()
 started=$SECONDS
+FAIL_LOG=".superpowers/check-last-fail.log"
 
 step() {
   # step <name> <command...>: run it, keep its output only on failure, stop on the first failure.
@@ -44,9 +47,17 @@ step() {
     summary+=("ok   $name ($((SECONDS - t0))s)${last:+: $last}")
     rm -f "$log"
   else
-    summary+=("FAIL $name ($((SECONDS - t0))s)")
+    summary+=("FAIL $name ($((SECONDS - t0))s): full output in $FAIL_LOG")
     echo "---- $name failed: $* ----" >&2
     tail -n 60 "$log" >&2
+    mkdir -p "$(dirname "$FAIL_LOG")"
+    {
+      echo "# scripts/check.sh: $name failed at $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      echo "# on $(git branch --show-current 2>/dev/null || echo '?') $(git rev-parse --short HEAD 2>/dev/null || echo '?')"
+      echo "# command: $*"
+      cat "$log"
+    } >"$FAIL_LOG"
+    echo "---- full output of $name: $ROOT/$FAIL_LOG ----" >&2
     rm -f "$log"
     print_summary
     exit 1

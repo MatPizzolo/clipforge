@@ -113,7 +113,7 @@ Implementation notes:
 
 - **Quiet hours:** 23:00–08:00; only brake-worthy events (publishing broken across accounts, spend over 2× the daily budget) break through.
 - **Rate limits:** one alert per (kind, subject) per hour, deduped by a Dict claim `notify:<kind>:<subject>:<hour>`; at most 20 instant messages an hour, the rest folded into "N more → dashboard".
-- **Ops alerts:** silent failures (channel jobs, enqueue, tick, keep-alive, mirror, verify differences) go through `ops_alert()`; an alert failure never fails a step.
+- **Ops alerts:** silent failures (channel jobs, enqueue, tick, `posting_daily`, mirror, verify differences) go through `OpsAlerts.alert()` in `ops.py` (built by `ops_alerts()`); an alert failure never fails a step.
 
 **Deep links.** Telegram messages carry URL buttons built from `DASHBOARD_URL`: `/jobs/<id>`, `/accounts/<id>`, `/sources/<id>`, `/experiments/<id>`, `/experiments?needs=decision`, `/review?account=<id>`. Login keeps the target (`callbackUrl`, relative paths only, log #99).
 

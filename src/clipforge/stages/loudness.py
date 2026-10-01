@@ -1,4 +1,4 @@
-"""Two-pass loudness normalization (ADR-20 targets; proposed ADR-47, log #341).
+"""Two-pass loudness normalization (ADR-20 targets; ADR-47, log #341).
 
 Pass 1 measures the audio graph with loudnorm's JSON report; pass 2 applies the measured
 values with linear=true. ffmpeg itself uses linear gain only when that keeps the true peak

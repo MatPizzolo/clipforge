@@ -1,3 +1,5 @@
+> **Deferred (ADR-17).** Not built: the spike worked but the proxy costs too much for now (section 9). ADR-10 stays in force, and ROADMAP "Later / ideas" says how to revisit it.
+
 # YouTube ingest through a residential proxy
 
 Date: 2026-09-28 · Status: Approved, then **deferred** after the spike (see section 9 and ADR-17) · ADR: 17

@@ -1,3 +1,5 @@
+> **Historical (ADR-19, 2026-09-28):** built and deployed; docs/ARCHITECTURE.md and the code are current.
+
 # Face-centered reframing per shot
 
 Date: 2026-09-28 · Status: Accepted, implemented and deployed · ADR: 19 · Roadmap: Phase 3 "Scene detection" + "Face tracking" (the smoothed tracking part is out of scope)

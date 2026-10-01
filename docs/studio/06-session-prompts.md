@@ -200,6 +200,7 @@ Paste the card under prompt B or C. For each card:
 - **Cost** is the maximum Modal/API spend the session may make without asking.
 
 ### S0: Finish plan C and go live
+Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background check in 04 is open. Kept as the record.
 - **Depends:** nothing. **Owner:** approve the deploy.
 - **Read:** docs/superpowers/plans/2026-09-28-c-telegram-assistant.md and its ledger in `.superpowers/sdd/…/progress.md`.
 - **Actions:**
@@ -212,24 +213,25 @@ Paste the card under prompt B or C. For each card:
 - **Cost:** $2.
 
 ### S1: Foundations (accounts, database, content items, blueprints)
-- **Depends:** S0's code finished (plan C Tasks 4–6 done; no week of posting needed; merged, once the git repo exists), and ADR-25, ADR-26 and ADR-35 accepted.
+→ card 002 (S1 finish, stop before the rollout; PR #5). The rollout is runbook §4.
+- **Depends:** S0's code finished (plan C Tasks 4–6 done; no week of posting needed; merged), and ADR-25, ADR-26 and ADR-35 accepted.
 - **Owner:**
   - create a Neon project;
-  - put the pooled `DATABASE_URL` in the `clipforge-secrets` Modal secret and in `.env`;
+  - put the pooled `DATABASE_URL` in `.env` only; it goes into the `clipforge-secrets` Modal secret at rollout step 4c.2 (log #107, runbook §4);
   - decide the handles for founder.tapes and hombre.en.construccion.
 - **Read:** 02 §2, §5, §7 and §10, 07 (the blueprint model), posting/* (including `keepalive.py`), bot/posting.py, inbox.py, the `channels.toml` format, and the deferred items listed under S1 in 04.
 - **Actions:**
   1. Add SQLAlchemy 2, psycopg 3 and Alembic with `uv add`. Set up `db/` (engine, session, repositories) and the first migration.
   2. Add the contracts `Account`, `PlatformProfile`, `BrandKit`, `Persona`, `Blueprint`, `SeriesFormat`, `ComplianceProfile`, `AssetSource` and `ContentItem` (media_kind) to models.py.
   3. Create the tables: accounts, personas, sources, content_items, assets, posts, post_events, costs, budgets, and a task-markers table for the dispatcher.
-  4. Migrate the posting queue from Dict `post:*` keys to `posts` rows, keeping the ADR-23 status rules. Add a one-off import command with a dry-run, and verify the counts. Keys missing from the Dict are taken from the newest keep-alive snapshot (`/jobs/posting/snapshots/`, ADR-24). Backfill the `jobs` table from each job's `metadata.json`. Add a setting that switches reads between the Dict and Postgres for rollback.
+  4. Migrate the posting queue from Dict `post:*` keys to `posts` rows, keeping the ADR-23 status rules. Add a one-off import command with a dry-run, and verify the counts. Keys missing from the Dict are taken from the newest daily snapshot (`/jobs/posting/snapshots/`, ADR-24, ADR-46). Backfill the `jobs` table from each job's `metadata.json`. Add a setting that switches reads between the Dict and Postgres for rollback.
   4b. Fix the two taps deferred from S0's final review: a tap reads only its clip's rows, and a tap on an older message of a re-sent clip redraws every message of that clip.
   5. Wrap the clip producer's output into ContentItems. realtalk.clipsdaily becomes account #1.
   6. Add `blueprints/*.toml` plus a loader, and write the three clip blueprints from 07. Add `clipforge account create --blueprint --lang --handle`.
   7. Add campaign sources: rules, required tags and links, deadline.
-  8. Keep the existing crons (sweeper, posting_tick; posting_keepalive until step 9). The dispatcher comes in S7 (ADR-27).
-  9. Retire the ADR-24 keep-alive once the migration is verified.
-  10. Tests: repositories against a local Postgres (pytest-postgresql or docker), a migration round-trip, and the queue rules preserved.
+  8. Keep the existing crons (sweeper, posting_tick, and posting_keepalive, which becomes `posting_daily`, ADR-46). The dispatcher comes in S7 (ADR-27).
+  9. Once the migration is verified, retire only the Dict touch in `posting_daily`; the rest of the cron stays (ADR-46).
+  10. Tests: repositories against a local Postgres (`TEST_DATABASE_URL`, or Docker through testcontainers), a migration round-trip, and the queue rules preserved.
 - **Done when:**
   - the existing posting works the same, with state in Postgres;
   - 3 accounts are defined from blueprints;
@@ -242,21 +244,21 @@ Paste the card under prompt B or C. For each card:
   - Upload-Post Professional plan; connect realtalk.clipsdaily, founder.tapes and hombre.en.construccion on TikTok, IG, YT and FB;
   - `UPLOAD_POST_API_KEY` and the webhook secret;
   - a Whop account for campaigns.
-- **Read:** 02 §5, §5b and §6, 08 §1, 03 (Upload-Post, R2).
+- **Read:** 02 §5, §5b and §6, 08 §1, 03 (Upload-Post, media hosting).
 - **Actions:**
   1. The `Publisher` protocol, with `UploadPostPublisher` and `AssistedPublisher` (today's Telegram flow).
   2. Signed, expiring per-file media links from the Volume for Upload-Post (R2 only if these prove unreliable).
   3. The signed webhook route, which updates `posts` and `post_events`.
   4. Map AI disclosure per platform (`is_aigc`, `containsSyntheticMedia`, `is_ai_generated`, `facebook_is_ai_generated`).
-  7. Policy gate v1:
+  5. Policy gate v1:
      - disclosure
      - #ad
      - credits
      - license manifest
      - cross-account duplicates
-  8. Review tiers (review / sample / auto): Telegram approve, fix copy, reject with reason, and a daily digest.
-  9. Tracking links: `GET /go/<slug>`, click logging, sub-ids.
-  10. Tests: fake Publisher and golden cases for the gate. (Judge, ledger, lanes and the morning message move to S6.)
+  6. Review tiers (review / sample / auto): Telegram approve, fix copy, reject with reason, and a daily digest.
+  7. Tracking links: `GET /go/<slug>`, click logging, sub-ids.
+  8. Tests: fake Publisher and golden cases for the gate. (Judge, ledger, lanes and the morning message move to S6.)
 - **Done when:**
   - the 3 wave-1 accounts auto-post to 4 platforms from their profiles;
   - a gate failure lands in review;
@@ -274,7 +276,7 @@ Paste the card under prompt B or C. For each card:
 - **Actions:**
   1. API: endpoints for accounts, personas, items, posts, calendar, review actions, decisions and costs, with pagination and auth. Export OpenAPI to a file in CI (the docs routes stay off).
   2. `web/`: Next.js App Router, TypeScript, Auth.js with a single owner, a TanStack Query client generated by hey-api, and a UI kit chosen in the design step.
-  3. Pages: Home, Review inbox (R2 video, gate answers, approve/edit/reject; **until S2 it is a queue manager, D8**: skip, reject with a reason, reorder the queue, and correct a posted mark, each through `posting/actions.py` with actor `web:<login>` (S1 builds `skip`, `reject`, `set_reason` and `set_posted`; S3 adds the reorder action there); it never sends, so it isn't a second posting flow), Calendar, Sources (permission records, expiry, history, add/edit), Produce (submit a clip job from a source, batch planner), Costs. (Decisions comes in S6.) **Accounts is not built here:** the studio map and account workspaces are S3c (owner decision, 2026-09-30); keep S1's `/accounts` routes as they are.
+  3. Pages: Home, Review inbox (video from a signed Volume link, gate answers, approve/edit/reject; **until S2 it is a queue manager, D8**: skip, reject with a reason, reorder the queue, and correct a posted mark, each through `posting/actions.py` with actor `web:<login>` (S1 builds `skip`, `reject`, `set_reason` and `set_posted`; S3 adds the reorder action there); it never sends, so it isn't a second posting flow), Calendar, Sources (permission records, expiry, history, add/edit), Produce (submit a clip job from a source, batch planner), Costs. (Decisions comes in S6.) **Accounts is not built here:** the studio map and account workspaces are S3c (owner decision, 2026-09-30); keep S1's `/accounts` routes as they are.
   4. Vercel server route handlers call a separate `admin` Modal endpoint with proxy auth and the bearer token; the public `web` endpoint keeps the webhooks, download links and `/go`. No direct database access. S3c builds its routes on this `admin` endpoint, so keep it generic (a router per area). **D9:** `admin` is a second `@modal.asgi_app(requires_proxy_auth=True)` function in `app.py` that reuses `create_app` with an admin router added, and checks its own bearer token, `ADMIN_API_TOKEN` (a new key in `clipforge-secrets`; a missing token answers 503, never runs open). The route handlers send `X-Clipforge-Actor: web:<login>`.
   5. Phone and laptop layouts for every page (08 §2), using S3a's responsive shell.
   6. Tests: API tests in pytest; one Playwright smoke test for login, inbox and approve.
@@ -283,9 +285,10 @@ Paste the card under prompt B or C. For each card:
 - **Cost:** $2.
 
 ### S3c: Account workspaces (versioned categories, blueprints and accounts; experiments; notes)
+→ card 003 (the design revision, done 2026-09-30, PR #6). No build card yet.
 - **Depends:** S1 finished (all tasks; 0001 frozen) and S3's `admin` endpoint (S3 action 4). ADR-42 accepted. S3c-2 needs S1 Tasks 14, 15, 17 and 21 live. Soft: land S3c-2 before S6, so the story producer reads `EffectiveSetup` from its first version.
 - **Owner:** none beyond S1 and S3 (Neon and Vercel already set up). Edit the drafted category playbooks in the dashboard after S3c-1.
-- **Read:** the S3c spec (docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md, revised by card 003), ADR-42 in 05, 08 §2 and §2b, the S1 spec §6, card 002's `posting/actions.py`, S1's final `models.py` (`Account`, `Blueprint`, `ContentItem`), `db/tables.py`, `accounts/`, `hashing.py`, `stages/highlights.py` and `captions.py`.
+- **Read:** the S3c spec (docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md, revised by card 003), ADR-42 in docs/DECISIONS.md, 08 §2 and §2b, the S1 spec §6, card 002's `posting/actions.py`, S1's final `models.py` (`Account`, `Blueprint`, `ContentItem`), `db/tables.py`, `accounts/`, `hashing.py`, `stages/highlights.py` and `captions.py`.
 - **Actions:**
   1. Plan first (superpowers:writing-plans) on S1's final schema; confirm the open points in spec §7.
   2. **S3c-1:** migration 0002 (with `post_events.actor`, backfilled from `data.actor`; spec §5.3); the resolver (`accounts/setup.py`) and the field registry with change classes; the versions service (append-only `*_versions`, `accounts` as a projection, `expected_version` → 409); `clipforge setup import [--dry-run]` and `setup verify` (0 differences); `POST /setup/preview`, the one dry run every save, restore and apply calls (spec §3.4); admin routes for categories, blueprints, account setup, versions, diff, restore and notes; the Accounts page and the category, blueprint and account workspaces at the spec §2.9 paths (phone and laptop). `SETUP_SOURCE=off`.
@@ -295,8 +298,9 @@ Paste the card under prompt B or C. For each card:
 - **Done when:** the owner changes realtalk's max clip length through an experiment, sees before and during for reject rate and posted rate, chooses Keep, and the learning shows in the clips playbook, all from the dashboard on phone and laptop.
 - **Cost:** ~$1 (tests and one smoke run). A backlog re-cut, if ticked, is priced in the form before it runs.
 
-### S3a: Dashboard shell (starts now, alongside S0)
-- **Depends:** nothing. Until the git repo exists, it shares the project folder with other sessions: it owns only `web/` and `scripts/export_openapi.py`, and never deploys `app.py`. After the repo exists, use its own worktree.
+### S3a: Dashboard shell
+→ card 004 (local login and the Vercel deploy; the shell itself is built).
+- **Depends:** nothing. It runs in its own worktree (`../clipForge-web`, branch `s3a/deploy`, from `scripts/worktree.sh`), owns only `web/` and `scripts/export_openapi.py`, and never deploys `app.py`.
 - **Owner:**
   - Vercel Pro;
   - a GitHub OAuth app for Auth.js (callback `https://<vercel-domain>/api/auth/callback/github`);
@@ -323,6 +327,7 @@ Paste the card under prompt B or C. For each card:
 - **Cost:** $0.
 
 ### S4: Timeline renderer
+→ card 006.
 - **Depends:** S0, and ADR-31 accepted (it doesn't need the database, so it runs alongside S1–S3). **Read:** stages/render.py, captions.py, reframe.py, ADR-18/19/20/21.
 - **Actions:**
   1. Add the `Timeline` contract: visual segments (source crop, still with Ken Burns, video, talking head), audio tracks (source, narration, music with ducking), captions, title card and asset sources.
@@ -460,6 +465,7 @@ Paste the card under prompt B or C. For each card:
 - **Cost:** $10.
 
 ### X2: Talking-head bake-off
+→ card 005 (resume from step 5, after the owner rules on O7). Partial results: [spikes/x2-talking-head.md](spikes/x2-talking-head.md).
 - **Question:** Which open model makes a convincing presenter in 9:16?
 - **Candidates:** InfiniteTalk (480p, 4–8-step LoRA), LongCat-Video-Avatar 1.5, EchoMimicV3.
 - **Test set:** 3 synthetic portraits × a 20 s EN clip plus a 20 s ES clip.
@@ -615,7 +621,7 @@ Don't change anything.
 
 ## Session close-out checklist (every session ends with this)
 
-1. **Evidence:** fast tests, ruff and mypy output (or "no code changed").
+1. **Evidence:** the `scripts/check.sh` summary (log #380).
 2. **Docs updated:** roadmap ticks, ARCHITECTURE, CLAUDE.md commands/layout, 03 numbers, ADRs, a row in docs/studio/10-decision-log.md for every decision made or changed, docs/studio/09-account-registry.md for any account change, and docs/studio/11-owner-runbook.md for any owner step or command that changed. Add to docs/studio/10 only by appending rows (re-read it first; never rewrite it).
 3. **Owner actions:** what you must do next (keys, sign-ups, deploy, a commit checkpoint with a suggested message).
 4. **Memory:** save non-obvious decisions and preferences from the session.

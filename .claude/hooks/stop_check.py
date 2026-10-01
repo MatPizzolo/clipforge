@@ -6,6 +6,9 @@ scripts/check.sh writes .superpowers/check-ok (the working tree's hash, from
 scripts/tree_hash.sh) after a green full run. Nothing changed against HEAD, or a tree equal to
 the marker, lets the session stop. `stop_hook_active` (a stop already blocked once) always lets
 it stop, so this never loops. Any error lets it stop.
+
+On `main` and `coord/` branches (the coordinator, who has no card report) it asks only for the
+green check, not for a report (card 008).
 """
 
 from __future__ import annotations
@@ -17,11 +20,17 @@ import sys
 from pathlib import Path
 
 MARKER = Path(".superpowers") / "check-ok"
-REASON = (
-    "Files changed since the last green scripts/check.sh. Run scripts/check.sh until it's "
-    "green and write or update your report in docs/reports/ (docs/templates/handoff-report.md). "
-    "If you're mid-task and not at a checkpoint, say so in one line and stop."
-)
+CHECK = "Files changed since the last green scripts/check.sh. Run scripts/check.sh until it's green"
+REPORT = " and write or update your report in docs/reports/ (docs/templates/handoff-report.md)"
+MID_TASK = ". If you're mid-task and not at a checkpoint, say so in one line and stop."
+COORDINATOR_PREFIX = "coord/"
+
+
+def reason(branch: str) -> str:
+    """The coordinator (on `main` or `coord/`) has no card report to write."""
+    if branch == "main" or branch.startswith(COORDINATOR_PREFIX):
+        return CHECK + MID_TASK
+    return CHECK + REPORT + MID_TASK
 
 
 def should_block(root: Path, stop_hook_active: bool) -> bool:
@@ -55,10 +64,14 @@ def main() -> int:
         if not (root / "scripts" / "tree_hash.sh").is_file():
             return 0
         block = should_block(root, bool(event.get("stop_hook_active")))
+        if block:
+            branch = subprocess.run(
+                ["git", "branch", "--show-current"], cwd=root, capture_output=True, text=True
+            ).stdout.strip()
     except Exception:
         return 0
     if block:
-        print(json.dumps({"decision": "block", "reason": REASON}))
+        print(json.dumps({"decision": "block", "reason": reason(branch)}))
     return 0
 
 

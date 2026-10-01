@@ -1,3 +1,5 @@
+> **Historical (posting assistant, plans A, B and C, ADR-22–24, live since 2026-09-29):** built and deployed; the "not deployed" status below is from before that. docs/ARCHITECTURE.md and the code are current.
+
 # Posting assistant design (phone-first queue on Modal)
 
 Date: 2026-09-28 · Status: Accepted · ADR-22 (channels), ADR-23 (posting assistant), ADR-24 (Dict expiry)
