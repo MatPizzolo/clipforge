@@ -62,7 +62,7 @@ Each phase ends with something usable. Tick items as they land; one item ≈ one
 - [ ] Ranker trained on 👍/👎 and, later, platform retention data
 
 ## Phase 6 — Studio (multi-account)
-Full list with exit criteria, dependencies and action cards: [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md) (cards in [06](docs/studio/06-session-prompts.md)). Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28–31, 34, 35, 38, 39; on 2026-09-30: ADR-41–46. **docs/studio/04 is the source of truth for Phase 6**; this list mirrors it.
+Full list with exit criteria, dependencies and action cards: [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md) (cards in [06](docs/studio/06-session-prompts.md)). Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28–31, 34, 35, 38, 39; on 2026-09-30: ADR-41–46; on 2026-10-01: ADR-47. **docs/studio/04 is the source of truth for Phase 6**; this list mirrors it.
 - [ ] S0: plan C finished and plans A+B+C deployed (2026-09-29); only the 7-day background check is open
 - [ ] S1: Neon Postgres, accounts, content items, blueprints; queue and job records move off the Dict (code built, card 002; ticked at the rollout)
 - [ ] S2: publishing through Upload-Post, review tiers, pure policy gate, tracking links
@@ -70,7 +70,7 @@ Full list with exit criteria, dependencies and action cards: [docs/studio/04-roa
 - [ ] S3: Next.js dashboard v1 (separate `admin` Modal endpoint; after S1, alongside S2)
 - [ ] S3b: Notion one-way mirror (connector, no code)
 - [ ] S3c: account workspaces: versioned categories, blueprints and accounts, experiments, notes (ADR-42; after S1 and S3's `admin` endpoint)
-- [ ] S4: Timeline renderer (runs alongside S1–S3)
+- [ ] S4: Timeline renderer (card 006: spec approved 2026-10-01, two-pass loudness ADR-47; plan next)
 - [ ] S5: media servers and producer registry
 - [ ] S6: story producer, plus the Judge, decision ledger and lanes (wave 2)
 - [ ] S7: analytics, money, budgets, dispatcher cron
@@ -91,6 +91,3 @@ Full list with exit criteria, dependencies and action cards: [docs/studio/04-roa
 - Emphasis zoom-ins
 - Translated caption variants
 - Publishing APIs (YouTube Data API, Instagram Graph API, TikTok Content Posting API). Option looked at on 2026-09-29: Postiz cloud (from $29/mo, official APIs, public `POST /public/v1/upload` + `/posts`) as a publisher behind the same posting queue, once posting 6 clips a day by hand gets tedious. Self-hosted Postiz doesn't fit ADR-9 (needs Postgres, Redis and Temporal on a server).
-
-## Owner to-do: the git repo
-The repo exists (private remote `MatPizzolo/clipforge`, 2026-09-30). What's still left (the Actions secrets and `DEPLOY_ENABLED`, the Vercel connection) is listed under "Still left, and when" in [docs/studio/11-owner-runbook.md](docs/studio/11-owner-runbook.md) §8.
