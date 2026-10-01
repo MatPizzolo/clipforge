@@ -1,5 +1,7 @@
 # Architecture
 
+ClipForge is a studio that runs many short-video channels: each account has a type, and every account runs the same loop, produce → review → publish → measure → scale (see the [README](../README.md)). **This document describes what is built today:** the `clips` producer (the step chain below), the posting assistant, and the S1 data layer (Postgres, accounts, sources). The full studio design, with the other producers, review tiers, publishing and measurement, is [studio/02-target-architecture.md](studio/02-target-architecture.md).
+
 Everything runs serverless on Modal (ADR-9). Nothing runs on a local machine except development: tests, and deploys through `scripts/deploy.sh` (owner only).
 
 ## Overview
