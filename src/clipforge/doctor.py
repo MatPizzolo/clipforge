@@ -51,12 +51,23 @@ def local_checks() -> list[Check]:
     encoders = _run(["ffmpeg", "-hide_banner", "-encoders"]).stdout
     has_ass = any(line.split()[1:2] == ["ass"] for line in filters.splitlines() if line.strip())
     nvenc_ok, nvenc_detail = _nvenc_works() if "h264_nvenc" in encoders else (False, "absent")
+    # What render needs for Timelines (ADR-31): mixing, ducking, Ken Burns, two-pass loudness.
+    names = {line.split()[1] for line in filters.splitlines() if len(line.split()) > 2}
+    needed = ("loudnorm", "amix", "sidechaincompress", "zoompan", "anullsrc", "apad")
+    missing = [name for name in needed if name not in names]
+    if "normalize" not in _run(["ffmpeg", "-hide_banner", "-h", "filter=amix"]).stdout:
+        missing.append("amix normalize (ffmpeg >= 4.4)")
 
     return [
         Check("ffmpeg", True, version),
         Check("libass (ass filter)", has_ass, "present" if has_ass else "missing: no captions"),
         Check("libx264", "libx264" in encoders, "present" if "libx264" in encoders else "missing"),
         Check("h264_nvenc", nvenc_ok, nvenc_detail, required=False),
+        Check(
+            "timeline filters",
+            not missing,
+            "present" if not missing else "missing: " + ", ".join(missing),
+        ),
     ]
 
 

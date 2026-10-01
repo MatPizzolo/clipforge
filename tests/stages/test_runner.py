@@ -15,7 +15,8 @@ def _settings(tmp_path: Path, **overrides: str) -> Settings:
 
 def test_producer_version_is_pinned(tmp_path: Path) -> None:
     # bump deliberately: changes when a stage version, prompt or model changes
-    assert producer_version(_settings(tmp_path)) == "clips:14fcf790"
+    # (clips:14fcf790 -> clips:4c44b731 at render STAGE_VERSION 4, card 006, spec §7)
+    assert producer_version(_settings(tmp_path)) == "clips:4c44b731"
 
 
 def test_producer_version_shape(tmp_path: Path) -> None:

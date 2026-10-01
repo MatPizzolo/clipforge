@@ -34,6 +34,7 @@ from clipforge.stages import (
     package,
     reframe,
     render,
+    timeline,
     transcribe,
 )
 
@@ -117,9 +118,23 @@ class PipelineStages:
         deps = captions.CaptionsDeps(
             llm=self.llm, prompt=self.keywords_prompt, settings=self.settings
         )
-        caps = captions.run(ctx, spec, transcript, deps)
+        caps = captions.run(ctx, spec, transcript, deps).value
         ctx.report(StageName.RENDER, 30, "rendering")
-        return render.run(ctx, spec, track, caps.value, self.settings)
+        job_input = ctx.job().input
+        tl = timeline.for_clip(spec, track, caps, job_input.permission, job_input.source_credit)
+        stored = render.run(ctx, tl, self.settings, clip_id=spec.clip_id)
+        video = stored.value
+        clip = RenderedClip(
+            clip_id=spec.clip_id,
+            spec=spec,
+            video_path=video.video_path,
+            srt_path=caps.srt_path,
+            encoder=video.encoder,
+            probe=video.probe,
+        )
+        # `ref` is the render cache's result.json, which holds a RenderedVideo, not this
+        # RenderedClip: clip_step writes its own <job>/clips/<clip>.rendered.json (CP3 #2).
+        return Stored(clip, stored.ref)
 
     def package(
         self,

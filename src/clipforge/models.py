@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Literal, Self
+from pathlib import PurePosixPath
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     AnyHttpUrl,
@@ -854,6 +855,175 @@ class RenderedClip(Contract):
     srt_path: str
     encoder: Literal["h264_nvenc", "libx264"]
     probe: ProbeInfo
+
+
+# ---- timeline (S4, ADR-31): the only input to render ------------------------------------
+
+TIMELINE_EPS = 1e-3  # seconds; segments closer than this count as touching
+
+
+def _jobs_path(path: str) -> str:
+    """Timeline paths are relative to JOBS_ROOT and never leave it (ADR-13)."""
+    parts = PurePosixPath(path).parts
+    if not path or PurePosixPath(path).is_absolute() or ".." in parts:
+        raise ValueError(f"path must be relative to JOBS_ROOT: {path!r}")
+    return path
+
+
+class KenBurns(Contract):
+    """A slow zoom/pan over a still: linear from `*_from` to `*_to` over the segment.
+    Focus points are fractions of the image (0..1), the point kept centered."""
+
+    zoom_from: float = Field(1.0, ge=1.0)
+    zoom_to: float = Field(1.15, ge=1.0)
+    focus_from: tuple[float, float] = (0.5, 0.5)
+    focus_to: tuple[float, float] = (0.5, 0.5)
+
+    @model_validator(mode="after")
+    def _check(self) -> KenBurns:
+        if not all(0.0 <= v <= 1.0 for v in (*self.focus_from, *self.focus_to)):
+            raise ValueError("focus points are fractions of the image (0..1)")
+        return self
+
+
+class VideoSegment(Contract):
+    """A piece of a video file, shown at timeline [start, end) from media time `in_s`.
+    Segments that reuse one file must use it in media order: render opens each file once and
+    splits it, so going backwards in a file would buffer decoded frames (review CP2 #4)."""
+
+    type: Literal["video"] = "video"
+    kind: Literal["source", "broll", "talking_head"]
+    path: str
+    media_hash: str | None = None  # content hash when known (clips: source_hash); in the key
+    width: int = Field(gt=0)  # display size after rotation
+    height: int = Field(gt=0)
+    in_s: float = Field(ge=0)
+    start: float = Field(ge=0)
+    end: float
+    fit: Literal["crop", "cover", "blur"]
+    box: CropBox | None = None  # set iff fit == "crop"
+
+    @model_validator(mode="after")
+    def _check(self) -> VideoSegment:
+        _jobs_path(self.path)
+        if self.end <= self.start:
+            raise ValueError("segment end must be after its start")
+        if (self.fit == "crop") != (self.box is not None):
+            raise ValueError("box is required for 'crop' and must be None otherwise")
+        return self
+
+
+class StillSegment(Contract):
+    """An image held on screen for [start, end), optionally with a Ken Burns move."""
+
+    type: Literal["still"] = "still"
+    path: str
+    media_hash: str | None = None
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    start: float = Field(ge=0)
+    end: float
+    fit: Literal["cover", "blur"] = "cover"
+    ken_burns: KenBurns | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> StillSegment:
+        _jobs_path(self.path)
+        if self.end <= self.start:
+            raise ValueError("segment end must be after its start")
+        if self.ken_burns is not None and self.fit != "cover":
+            raise ValueError("ken_burns needs fit 'cover'")
+        return self
+
+
+VisualSegment = Annotated[VideoSegment | StillSegment, Field(discriminator="type")]
+
+
+class AudioTrack(Contract):
+    """Media [in_s, in_s + end - start) played at timeline [start, end)."""
+
+    kind: Literal["source", "narration", "music"]
+    path: str
+    media_hash: str | None = None
+    in_s: float = Field(0.0, ge=0)
+    start: float = Field(ge=0)
+    end: float
+    gain_db: float = 0.0
+    duck: bool = False  # music only: ducked under the source and narration tracks
+
+    @model_validator(mode="after")
+    def _check(self) -> AudioTrack:
+        _jobs_path(self.path)
+        if self.end <= self.start:
+            raise ValueError("track end must be after its start")
+        if self.duck and self.kind != "music":
+            raise ValueError("only music can be ducked")
+        return self
+
+
+class Subtitles(Contract):
+    """Captions and the hook title card: one ASS file (captions.build_ass, log #340)."""
+
+    ass_path: str
+    srt_path: str | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> Subtitles:
+        _jobs_path(self.ass_path)
+        if self.srt_path is not None:
+            _jobs_path(self.srt_path)
+        return self
+
+
+class Timeline(Contract):
+    """What plays when: the one input to render (ADR-31). No ids, so renders are shared
+    across jobs; `assets` is for the policy gate and stays out of the cache key (#342)."""
+
+    width: int = 1080
+    height: int = 1920
+    fps: int = Field(ge=1, le=60)
+    duration_s: float = Field(gt=0)
+    visual: list[VisualSegment]
+    audio: list[AudioTrack] = Field(default_factory=list)
+    overlay: Subtitles | None = None
+    loudness_lufs: float = -14.0
+    assets: list[AssetSource] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check(self) -> Timeline:
+        if min(self.width, self.height) <= 0 or self.width % 2 or self.height % 2:
+            raise ValueError("width and height must be positive and even (yuv420p)")
+        if not self.visual:
+            raise ValueError("a timeline needs at least one visual segment")
+        if abs(self.visual[0].start) > TIMELINE_EPS:
+            raise ValueError("visual segments must start at 0")
+        for before, after in zip(self.visual, self.visual[1:], strict=False):
+            if abs(after.start - before.end) > TIMELINE_EPS:
+                raise ValueError("visual segments must be contiguous")
+        if abs(self.visual[-1].end - self.duration_s) > TIMELINE_EPS:
+            raise ValueError("visual segments must end at duration_s")
+        for track in self.audio:
+            if track.end > self.duration_s + TIMELINE_EPS:
+                raise ValueError("audio tracks must end inside the timeline")
+        return self
+
+
+class Loudness(Contract):
+    """What the loudness passes measured and did (ADR-47)."""
+
+    input_i: float | None = None
+    input_tp: float | None = None
+    input_lra: float | None = None
+    mode: Literal["linear", "dynamic", "single_pass", "silent"]
+
+
+class RenderedVideo(Contract):
+    """Render's output for any producer; clips wrap it into RenderedClip."""
+
+    video_path: str
+    encoder: Literal["h264_nvenc", "libx264"]
+    probe: ProbeInfo
+    loudness: Loudness
 
 
 class PackagedClip(Contract):
