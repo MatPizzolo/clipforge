@@ -98,6 +98,9 @@ evals/              # eval sets and results
 - Write the report in `docs/reports/NNN-<stream>-<YYYY-MM-DD>.md` (`docs/templates/handoff-report.md`), then stop with a suggested commit message.
 - Never commit, push, tag, deploy or stop the Modal app: the owner does, from the commands you give.
 - Stay in scope. `docs/studio/10-decision-log.md` is append-only, in your range. Anything else is a question for the owner.
+- Skills: `run-card` starts a card; `checkpoint` closes each checkpoint (it uses `write-report` and `log-append`). The coordinator uses `write-card` and `review-pr`.
+- Agents: `pr-reviewer` before every merge; add `security-reviewer`, `migration-reviewer` or `pipeline-reviewer` for their areas; `docs-auditor` at each pause.
+- Guardrails (`.claude/settings.json`) enforce this: hooks block git writes, deploys, app stops, secret changes and printing secrets; they deny out-of-scope edits and overwriting the decision log; they restore the card context at start, resume and after compaction; and they ask for `scripts/check.sh` before a session stops with unchecked changes. Per-user overrides go in the gitignored `.claude/settings.local.json`.
 
 ## Working style
 

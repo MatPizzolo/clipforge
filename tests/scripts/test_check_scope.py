@@ -213,3 +213,14 @@ def test_s1_other_web_files_still_fail(repo: Path) -> None:
         "web/lib/callback.ts: outside s1/'s scope",
         "web/package.json: outside s1/'s scope",
     ]
+
+
+def test_coord_may_edit_scopes_toml_but_no_other_script(repo: Path) -> None:
+    git(repo, "checkout", "-q", "-b", "coord/card-007", "origin/main")
+    with (repo / "scripts" / "scopes.toml").open("a") as toml:
+        toml.write('\n[prefix."s5/"]\nstream = "s5"\nlog = [400, 419]\nallow = ["src/**"]\n')
+    problems, _ = run(repo, "coord/card-007")
+    assert problems == []
+    (repo / "scripts" / "check.sh").write_text("#!/bin/sh\n")
+    problems, _ = run(repo, "coord/card-007")
+    assert problems == ["scripts/check.sh: outside coord/'s scope"]

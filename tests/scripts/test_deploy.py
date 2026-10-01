@@ -6,6 +6,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -123,3 +124,59 @@ def test_log_line_keeps_the_table_intact() -> None:
 def test_reason_is_required_to_deploy() -> None:
     with pytest.raises(SystemExit):
         deploy.main([])
+
+
+FULL_ENV = "POSTING_SLOTS=8:00,21:30\nPOSTING_TIMEZONE=America/New_York\nSTATE_READS=dict\n"
+
+
+def test_env_settings_read_from_the_file(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text("API_TOKEN=secret\n" + FULL_ENV)
+    env = deploy.read_env_settings(tmp_path / ".env")
+    assert env.problems == ()
+    assert env.slots == ["08:00", "21:30"]
+    assert env.timezone == "America/New_York"
+    assert env.state_reads == "dict"
+
+
+@pytest.mark.parametrize("key", ["POSTING_SLOTS", "POSTING_TIMEZONE", "STATE_READS"])
+def test_a_missing_env_key_refuses_and_names_the_line(
+    tmp_path: Path, key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(key, "set-in-the-shell-but-ignored")  # only .env counts
+    lines = [line for line in FULL_ENV.splitlines() if not line.startswith(f"{key}=")]
+    (tmp_path / ".env").write_text("\n".join(lines) + f"\n{key}=\n")
+    env = deploy.read_env_settings(tmp_path / ".env")
+    assert env.problems == (
+        f"{key}= is missing from .env (copy it from clipforge-secrets, identical)",
+    )
+    facts = replace(
+        GOOD,
+        slots=env.slots,
+        timezone=env.timezone,
+        state_reads=env.state_reads,
+        env_problems=env.problems,
+    )
+    checks = {c.name: c for c in deploy.evaluate(facts, None)}
+    assert not checks[".env settings"].ok
+    assert f"{key}= is missing" in checks[".env settings"].detail
+    blocked = "STATE_READS" if key == "STATE_READS" else "outside the blackout"
+    assert not checks[blocked].ok
+    assert "unknown" in checks[blocked].detail
+
+
+def test_no_env_file_refuses_every_key(tmp_path: Path) -> None:
+    env = deploy.read_env_settings(tmp_path / ".env")
+    assert len(env.problems) == 3
+    assert env.slots is None and env.state_reads is None
+
+
+def test_invalid_env_values_refuse(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text(
+        "POSTING_SLOTS=25:00\nPOSTING_TIMEZONE=America/New_York\nSTATE_READS=sql\n"
+    )
+    env = deploy.read_env_settings(tmp_path / ".env")
+    assert env.slots is None
+    assert env.problems == (
+        "POSTING_SLOTS in .env: slots must be HH:MM, e.g. 08:00",
+        "STATE_READS in .env must be dict or postgres, not 'sql'",
+    )

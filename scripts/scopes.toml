@@ -107,4 +107,6 @@ allow = [
     "README.md",
     "CLAUDE.md",
     ".gitignore",
+    # a card's scope lands in the same coord/ PR as the card (this file only, not scripts/**)
+    "scripts/scopes.toml",
 ]

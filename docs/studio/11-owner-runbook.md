@@ -44,7 +44,15 @@ For the record, and for a re-deploy:
 - Start it with `scripts/deploy.sh --reason "restart"` on `main` (run `--dry-run` first), but only when the session that owns `src/` (S1) says the code is at a clean checkpoint. A deploy ships whatever is in `src/` right now.
 - More than 7 days stopped means Dict entries can expire. Then run `uv run clipforge status --restore` after the deploy.
 
-**Deploy blackout** (decision log #108), until S1's slot guard is verified in production: **don't deploy from each posting slot until 30 minutes after it.** `scripts/deploy.sh` enforces it from `POSTING_SLOTS` and `POSTING_TIMEZONE` in `.env` (the defaults when unset), and has no override. With the default slots (New York time) that means no deploys during 08:00–08:30, 10:30–11:00, 13:00–13:30, 16:00–16:30, 19:00–19:30 and 21:30–22:00. If you changed `POSTING_SLOTS`, use your own times. Reason: a claim-key change can send the same slot twice (#77).
+**`.env` must match the secret for three keys.** `scripts/deploy.sh` reads `POSTING_SLOTS`, `POSTING_TIMEZONE` and `STATE_READS` from `.env` only, and refuses if any is missing (never config.py's defaults). Keep them identical to `clipforge-secrets` (Modal dashboard → Secrets → `clipforge-secrets` shows the key names; you type the values). Today that's:
+```
+POSTING_TIMEZONE=America/New_York
+POSTING_SLOTS=08:00,10:30,13:00,16:00,19:00,21:30
+STATE_READS=dict
+```
+Add `STATE_READS=dict` to `clipforge-secrets` too (dashboard edit), so both places say the same. When you change one of these in the secret, change `.env` in the same sitting.
+
+**Deploy blackout** (decision log #108), until S1's slot guard is verified in production: **don't deploy from each posting slot until 30 minutes after it.** `scripts/deploy.sh` enforces it from `POSTING_SLOTS` and `POSTING_TIMEZONE` in `.env`, and has no override. With the default slots (New York time) that means no deploys during 08:00–08:30, 10:30–11:00, 13:00–13:30, 16:00–16:30, 19:00–19:30 and 21:30–22:00. If you changed `POSTING_SLOTS`, use your own times. Reason: a claim-key change can send the same slot twice (#77).
 
 ⏳ **Still open:** the phone test that the S0 session asked for: `/status`, `/next`, ✅ on and off, ⏭ Skip, 🗑 Reject with a reason, `/pause`, `/go`. Report the result to the S0 session. It then checks the next scheduled slot and the 07:00 UTC keep-alive run after the 2026-09-30 redeploy.
 
@@ -91,9 +99,9 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 
 1. The coordinator writes `docs/cards/NNN-<stream>-<topic>.md` in a `coord/<topic>` branch; the owner merges it.
 2. The owner creates the worktree: `scripts/worktree.sh <branch>` (after card 001; before it, the manual commands in 3.3), opens a session there, and pastes `Run card docs/cards/NNN-….md`.
-3. At each checkpoint the session runs `scripts/check.sh`, writes its report, and stops. The owner commits, pushes and opens or updates the PR.
+3. At each checkpoint the session runs `scripts/check.sh`, writes its report, and stops (the `checkpoint` skill). The first time you open a session in a new worktree, Claude Code asks you to trust the folder: accept, so the project hooks in `.claude/settings.json` run. The owner commits, pushes and opens or updates the PR.
 4. CI runs `scripts/check.sh` and the scope check (`scripts/scopes.toml`) on the PR. The owner squash-merges when it's green, with the card number in the title.
-5. The coordinator reads the PR diff and the report, updates `STATUS.md` and the card's status line, and writes the next card.
+5. The coordinator reviews the PR with the `review-pr` skill (`gh pr view`/`gh pr diff`, the card and report, then the `pr-reviewer` agent), gives a verdict, and after the merge updates `STATUS.md` and the card's status line. It writes the next card with the `write-card` skill.
 
 Decision-log number ranges per branch prefix are in each card and in `scripts/scopes.toml` (`coord/` #1–199, S1 #200–249, S3c #250–299, S3a #300–319, X2 #320–339, S4 #340–379, X0 #380–399). A conflict in `docs/studio/10` is two blocks added at the end: keep both, in number order; gaps are fine.
 
