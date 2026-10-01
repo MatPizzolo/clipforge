@@ -1,6 +1,6 @@
 # Card 002: S1 — finish the foundations (stop before the rollout)
 
-Status: proposed (after card 001 is merged)
+Status: sent 2026-09-30 (PR #5)
 Stream: S1 · Branch: `s1/finish` · Worktree: `../clipForge-s1`
 Decision-log range: #200–#249
 Model: mid-tier for implementing the plan; most capable for the final whole-branch review
@@ -39,6 +39,7 @@ S1 stopped cleanly at the 2026-09-30 pause (tag `pause-2026-09-30`), with 736 fa
    - An actor on every write: `telegram:<user id>`, or `web:<login>` from `X-Clipforge-Actor`.
    - On a database error, answer "store unavailable, nothing changed".
    - `SET LOCAL statement_timeout = '5s'` in `Database.begin`.
+   - The actor goes into `post_events.data.actor` (omitted for system writes such as the tick's sends), with a test that reads it back: 0001 is frozen, and S3c's migration 0002 copies that key into a `post_events.actor` column (#251).
    - An optional `DASHBOARD_URL` setting, and URL buttons on bot messages with the link formats in 08 §2b. No button when the setting is unset.
 4. **A5:**
    - The job view and the overview read the `jobs` table first.
