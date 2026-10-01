@@ -244,7 +244,7 @@ Decision: `clipforge fetch` runs yt-dlp locally, with Deno and the bgutil PO-tok
 Consequences: The laptop is needed only to fetch sources. Everything else stays serverless.
 
 ## ADR-35: Channels as blueprint instances
-Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S1)
+Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S1); "blueprints are files" superseded by ADR-42 (2026-09-30)
 Context: The portfolio (07) has 15 concepts in 5 categories, about 19 accounts with Spanish pairs, and it has to grow further. Designing each channel by hand doesn't scale, and YouTube's inauthentic-content rule penalizes templated sameness.
 Decision:
 - Each channel concept is a versioned blueprint (`blueprints/<name>.toml`): niche, pillars, rotating series formats, voice and visual briefs, platform defaults, money sources, a compliance profile, and prompt names.
@@ -270,6 +270,21 @@ Decision:
 - Sponsored posts are disclosed. No sexual content.
 - `ContentItem` gains media kinds `carousel` and `image`.
 Consequences: Platform-compliant accounts that can take brand deals openly. Some "indistinguishable from real" growth tactics are deliberately off the table.
+
+## ADR-42: Versioned categories, blueprints and accounts in the database
+Date: 2026-09-30 · Status: Accepted (2026-09-30, the owner's review after card 003; built in S3c; supersedes ADR-35's "blueprints are files" part)
+Context: Each account type is very different, and the owner wants to improve every category and every account from the dashboard: edit the setup, keep notes, run experiments and see results. ADR-35 keeps blueprints as files (`blueprints/<name>.toml`), and S1 copies blueprint values into each account row and updates accounts in place, so there is no history, no way to tie a video to the setup that made it, and no dashboard editing. Spec: docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md.
+Decision:
+- The database is the source of truth for three versioned levels: **category** (the 5 fixed codes: playbook, rules = compliance profile, production defaults), **blueprint** (pillars, series formats, briefs, money, prompts) and **account** (overrides plus identity fields). Effective setup = category, overridden by blueprint, overridden by account; the dashboard shows each value's origin.
+- Every save writes a full, validated snapshot with an author and a note, in append-only `*_versions` tables. Restore saves an old version as a new one; history is never rewritten.
+- **Accounts pin their parent versions:** an account version records the category and blueprint versions it builds on. Parent saves reach accounts through an explicit "Apply to accounts". `(account_id, version)` fully determines the setup; there is no separate setup id. The pair is stamped on every content item (`content_items.setup_version`) and on every send (`post_events.data.setup_version`).
+- The setup is frozen per job at `create_job`, feeds only existing cache-key inputs (ADR-8) and is never part of a cache key. Prompts stay versioned files (CLAUDE.md rule 4); the setup only picks a released version.
+- Every field has a change class (live, recut, format, rules, identity). Format changes send the first 10 items to `review` (ADR-29, enforced by S2); rules are never experimented on.
+- One dry run, `POST /setup/preview`, returns the diff, the stages a new job re-runs, the affected accounts and items, and the estimated cost. A save, a restore, "Apply to accounts" and an experiment start all show it first and recompute it inside their write, so the preview and the write can't disagree.
+- Experiments (change → metric over a window → keep or revert, one running per account) and notes (idea, learning, question) live in the same database. Keep and revert are decided only on the experiment's dashboard page.
+- Every write records an actor (`telegram:<id>`, `web:<login>`, `session:<name>`, or S1's `cli:<os user>`): version authors, notes, and a new `post_events.actor` column written by `posting/actions.py`.
+- S1's `blueprints/*.toml` and account rows are imported once as version 1 (`clipforge setup import`, `setup verify` at 0 differences), like `channels.toml` became sources. After that the files are no longer read; they stay in the repo until the move has been verified for 7 days.
+Consequences: Every video can be traced to the exact setup that made it, and experiments can isolate their accounts. The accounts table becomes a projection of the current version with one writer (ADR-41). Blueprint changes are reviewed as version diffs in the dashboard instead of file diffs. A `SETUP_SOURCE=db|off` switch lets producers fall back to today's constants. Updates ADR-35: channels are still blueprint instances, but blueprints live in the database. `setup_version` (which setup) stays separate from `producer_version` (which code, derived per ADR-43); per ADR-44, setup edits and experiment decisions are dashboard tasks, and Telegram only deep-links to them (the 08 §2b formats, plus `/categories/<code>` and `/blueprints/<name>`); per ADR-45, "experiments need a decision" is a digest line, never an instant alert. ADR-46's daily reconcile is unchanged.
 
 ## ADR-43: Producer version is derived; the build SHA is separate
 Date: 2026-09-30 · Status: Accepted (2026-09-30; refines ADR-29; replaces the rule in decision-log #85)
