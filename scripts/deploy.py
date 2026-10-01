@@ -7,7 +7,11 @@ It refuses, with every reason, unless all of these hold:
 - POSTING_SLOTS, POSTING_TIMEZONE and STATE_READS are set explicitly in `.env` (kept identical to
   the `clipforge-secrets` values; config.py's defaults are never used for these checks);
 - now is outside the blackout: each posting slot until 30 minutes after it (decision log #108);
-- STATE_READS is `dict`, unless the operator passes `--rollout-step 4c.7`.
+- STATE_READS is `dict`, unless the operator passes `--rollout-step 4c.7`;
+- with `DEPLOY_DB_CHECK=on` in `.env` (from rollout step 4c.2, when production uses the
+  database), the database's `alembic_version` equals the newest revision in `alembic/versions/`,
+  read in a READ ONLY transaction through `DATABASE_URL_UNPOOLED` (card 008). Off, the default,
+  it passes with that reason.
 Then: `modal deploy` with GIT_SHA, a `deploy-YYYYMMDD-HHMM` tag (UTC) pushed to origin, and a line
 in docs/ops/deploys.md. `--dry-run` prints every check and deploys nothing.
 """
@@ -29,6 +33,9 @@ DEPLOY_LOG = "docs/ops/deploys.md"
 BLACKOUT = timedelta(minutes=30)
 CI_WORKFLOW = "ci.yml"
 ENV_KEYS = ("POSTING_SLOTS", "POSTING_TIMEZONE", "STATE_READS")
+DB_CHECK_KEY = "DEPLOY_DB_CHECK"
+DB_URL_KEY = "DATABASE_URL_UNPOOLED"
+MIGRATE = "run `uv run alembic upgrade head` first (runbook 4c.1)"
 
 
 def _slots_on(day: date, slots: Sequence[str], zone: ZoneInfo) -> list[datetime]:
@@ -58,6 +65,24 @@ class Check:
 
 
 @dataclass(frozen=True)
+class MigrationHead:
+    """The database's revision against the code's, or why it wasn't compared."""
+
+    enabled: bool
+    code: str | None = None  # None: no single head in alembic/versions/ (see problem)
+    database: str | None = None  # None: no alembic_version row
+    problem: str | None = None  # a reason the check can't pass (flag, URL, connection, heads)
+    skipped: str = ""  # why it passes without looking (enabled=False)
+
+
+DB_CHECK_OFF = MigrationHead(
+    enabled=False,
+    skipped=f"skipped: {DB_CHECK_KEY} is off in .env "
+    "(production doesn't use the database until rollout step 4c.2)",
+)
+
+
+@dataclass(frozen=True)
 class Facts:
     """What the checks look at; gathered by `gather`, faked in tests."""
 
@@ -71,6 +96,7 @@ class Facts:
     state_reads: str | None
     now: datetime
     env_problems: tuple[str, ...] = ()
+    migration: MigrationHead = DB_CHECK_OFF
 
 
 @dataclass(frozen=True)
@@ -114,6 +140,85 @@ def read_env_settings(path: Path) -> EnvSettings:
                 f"STATE_READS in .env must be dict or postgres, not {raw['STATE_READS']!r}"
             )
     return EnvSettings(slots, timezone, state_reads, tuple(problems))
+
+
+def code_heads(root: Path = ROOT) -> list[str]:
+    """The head revisions in alembic/versions/ (one, unless a merge revision is missing)."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    return list(ScriptDirectory.from_config(Config(str(root / "alembic.ini"))).get_heads())
+
+
+def database_revision(url: str) -> tuple[str | None, str | None]:
+    """(revision, error): `alembic_version` read in a READ ONLY transaction, like db_doctor.
+    The error is redacted: it never carries the URL or host."""
+    from sqlalchemy import pool, text
+
+    from clipforge.db.engine import is_db_error, make_engine
+    from clipforge.sanitize import redact
+
+    engine = make_engine(url, poolclass=pool.NullPool)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SET TRANSACTION READ ONLY"))
+            revision = None
+            if conn.execute(text("SELECT to_regclass('alembic_version')")).scalar() is not None:
+                revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+            conn.rollback()
+    except Exception as exc:
+        if not is_db_error(exc):
+            raise
+        return None, f"can't read the database: {redact(exc)}"
+    finally:
+        engine.dispose()
+    return revision, None
+
+
+def read_migration_head(
+    path: Path,
+    heads: Callable[[], list[str]] = code_heads,
+    revision: Callable[[str], tuple[str | None, str | None]] = database_revision,
+) -> MigrationHead:
+    """`DEPLOY_DB_CHECK` and `DATABASE_URL_UNPOOLED` from `.env` itself, then the comparison.
+    The database is read only when the flag is on and the URL is set."""
+    from dotenv import dotenv_values
+
+    values = dotenv_values(path) if path.is_file() else {}
+    flag = (values.get(DB_CHECK_KEY) or "off").strip().lower()
+    if flag == "off":
+        return DB_CHECK_OFF
+    if flag != "on":
+        return MigrationHead(
+            True, problem=f"{DB_CHECK_KEY} in .env must be on or off, not {flag!r}"
+        )
+    url = (values.get(DB_URL_KEY) or "").strip()
+    if not url:
+        return MigrationHead(
+            True, problem=f"{DB_CHECK_KEY}=on but {DB_URL_KEY}= is missing from .env"
+        )
+    found = heads()
+    if len(found) != 1:
+        return MigrationHead(
+            True, problem=f"alembic/versions/ has {len(found)} heads ({', '.join(found)}), not one"
+        )
+    database, error = revision(url)
+    return MigrationHead(True, code=found[0], database=database, problem=error)
+
+
+def migration_check(head: MigrationHead) -> Check:
+    name = "database at the migration head"
+    if not head.enabled:
+        return Check(name, True, head.skipped)
+    if head.problem is not None:
+        return Check(name, False, head.problem)
+    if head.database is None:
+        return Check(
+            name, False, f"no alembic_version in the database, code at {head.code}: {MIGRATE}"
+        )
+    if head.database != head.code:
+        return Check(name, False, f"database at {head.database}, code at {head.code}: {MIGRATE}")
+    return Check(name, True, f"database and code at {head.code}")
 
 
 def evaluate(facts: Facts, rollout_step: str | None) -> list[Check]:
@@ -163,6 +268,7 @@ def evaluate(facts: Facts, rollout_step: str | None) -> list[Check]:
                 f"{facts.state_reads} (only `dict` without --rollout-step 4c.7)",
             )
         )
+    checks.append(migration_check(facts.migration))
     return checks
 
 
@@ -213,6 +319,7 @@ def gather(run: Runner = _run) -> Facts:
         state_reads=env.state_reads,
         now=datetime.now(UTC),
         env_problems=env.problems,
+        migration=read_migration_head(ROOT / ".env"),
     )
 
 

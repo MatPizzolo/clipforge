@@ -343,6 +343,24 @@ def test_stop_blocks_once_when_files_changed_without_a_green_check(repo: Path) -
     assert stop(repo, active=True) is None  # never loops
 
 
+@pytest.mark.parametrize(
+    ("branch", "asks_for_report"),
+    [("x0/tooling", True), ("main", False), ("coord/card-008", False)],
+)
+def test_stop_asks_for_a_report_only_on_card_branches(
+    repo: Path, branch: str, asks_for_report: bool
+) -> None:
+    """Card 008: the coordinator (main, coord/) has no card report, but still runs check.sh."""
+    if branch != "x0/tooling":
+        git(repo, "checkout", "-q", "-B", branch)
+    (repo / "scripts" / "new.sh").write_text("echo\n")
+    out = stop(repo)
+    assert out is not None
+    assert out["decision"] == "block"
+    assert "Run scripts/check.sh until it's green" in out["reason"]
+    assert ("docs/reports/" in out["reason"]) is asks_for_report
+
+
 def test_stop_allows_after_a_green_check_until_the_next_change(repo: Path) -> None:
     (repo / "STATUS.md").write_text("changed\n")
     marker = repo / ".superpowers" / "check-ok"

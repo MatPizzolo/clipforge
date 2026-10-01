@@ -180,3 +180,108 @@ def test_invalid_env_values_refuse(tmp_path: Path) -> None:
         "POSTING_SLOTS in .env: slots must be HH:MM, e.g. 08:00",
         "STATE_READS in .env must be dict or postgres, not 'sql'",
     )
+
+
+# --- the migration head (card 008, action 1) ---------------------------------------------
+
+HEAD = "database at the migration head"
+
+
+def migration(facts: object) -> object:
+    return next(c for c in deploy.evaluate(facts, None) if c.name == HEAD)
+
+
+def test_migration_check_is_off_by_default_and_says_why() -> None:
+    check = migration(GOOD)
+    assert check.ok
+    assert "DEPLOY_DB_CHECK is off" in check.detail
+    assert "4c.2" in check.detail
+
+
+def test_migration_check_passes_at_head() -> None:
+    facts = replace(GOOD, migration=deploy.MigrationHead(True, code="0002", database="0002"))
+    assert failed(facts) == []
+    assert migration(facts).detail == "database and code at 0002"
+
+
+@pytest.mark.parametrize(
+    ("head", "words"),
+    [
+        (
+            deploy.MigrationHead(True, code="0002", database="0001"),
+            "database at 0001, code at 0002",
+        ),
+        (deploy.MigrationHead(True, code="0002", database=None), "no alembic_version"),
+        (deploy.MigrationHead(True, problem="can't read the database: x"), "can't read"),
+    ],
+)
+def test_migration_check_refuses_behind_or_unreadable(head: object, words: str) -> None:
+    facts = replace(GOOD, migration=head)
+    assert failed(facts) == [HEAD]
+    assert words in migration(facts).detail
+
+
+def no_heads() -> list[str]:
+    raise AssertionError("must not look at alembic/versions/")
+
+
+def no_database(url: str) -> tuple[str | None, str | None]:
+    raise AssertionError("must not connect")
+
+
+def test_env_flag_off_or_missing_never_connects(tmp_path: Path) -> None:
+    env = tmp_path / ".env"
+    assert deploy.read_migration_head(env, no_heads, no_database) == deploy.DB_CHECK_OFF
+    env.write_text("DATABASE_URL_UNPOOLED=postgresql://u:p@h/db\nDEPLOY_DB_CHECK=off\n")
+    assert deploy.read_migration_head(env, no_heads, no_database) == deploy.DB_CHECK_OFF
+
+
+def test_env_flag_on_without_a_url_refuses(tmp_path: Path) -> None:
+    env = tmp_path / ".env"
+    env.write_text("DEPLOY_DB_CHECK=on\n")
+    head = deploy.read_migration_head(env, no_heads, no_database)
+    assert head.problem == "DEPLOY_DB_CHECK=on but DATABASE_URL_UNPOOLED= is missing from .env"
+
+
+def test_env_flag_must_be_on_or_off(tmp_path: Path) -> None:
+    env = tmp_path / ".env"
+    env.write_text("DEPLOY_DB_CHECK=yes\n")
+    head = deploy.read_migration_head(env, no_heads, no_database)
+    assert head.problem == "DEPLOY_DB_CHECK in .env must be on or off, not 'yes'"
+
+
+def test_env_flag_on_compares_the_database_with_the_code(tmp_path: Path) -> None:
+    env = tmp_path / ".env"
+    env.write_text("DEPLOY_DB_CHECK=on\nDATABASE_URL_UNPOOLED=postgresql://u:p@h/db\n")
+    seen: list[str] = []
+
+    def revision(url: str) -> tuple[str | None, str | None]:
+        seen.append(url)
+        return "0001", None
+
+    head = deploy.read_migration_head(env, lambda: ["0002"], revision)
+    assert seen == ["postgresql://u:p@h/db"]
+    assert head == deploy.MigrationHead(True, code="0002", database="0001")
+    assert not deploy.migration_check(head).ok
+
+
+def test_two_code_heads_refuse(tmp_path: Path) -> None:
+    env = tmp_path / ".env"
+    env.write_text("DEPLOY_DB_CHECK=on\nDATABASE_URL_UNPOOLED=postgresql://u:p@h/db\n")
+    head = deploy.read_migration_head(env, lambda: ["0002", "0003"], no_database)
+    assert head.problem is not None and "2 heads" in head.problem
+
+
+def test_code_heads_reads_alembic_versions() -> None:
+    files = sorted((Path(deploy.ROOT) / "alembic" / "versions").glob("*.py"))
+    heads = deploy.code_heads()
+    assert len(heads) == 1
+    assert any(f.name.startswith(heads[0]) for f in files)
+
+
+def test_an_unreachable_database_is_refused_without_the_url() -> None:
+    url = "postgresql://user:hunter2@127.0.0.1:1/clipforge"
+    revision, error = deploy.database_revision(url)
+    assert revision is None
+    assert error is not None and error.startswith("can't read the database")
+    assert "hunter2" not in error and "127.0.0.1" not in error

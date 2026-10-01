@@ -158,8 +158,9 @@ Approve each checkpoint the S1 session reports. With no git repo, a checkpoint j
    ```
    uv run alembic upgrade head
    ```
-2. Deploy. The Dict stays the primary, and Postgres gets a copy of every write:
+2. Deploy. The Dict stays the primary, and Postgres gets a copy of every write. First set `DEPLOY_DB_CHECK=on` in `.env`: from now on `scripts/deploy.sh` refuses when the database is behind the code's newest migration (it reads `alembic_version` through `DATABASE_URL_UNPOOLED`, read-only; card 008):
    ```
+   scripts/deploy.sh --dry-run          # "database at the migration head: database and code at 0001"
    scripts/deploy.sh --reason "S1 rollout 4c.2: dual write"
    ```
 3. Create the three accounts:
@@ -347,7 +348,16 @@ No redeploy is needed: the deployed app doesn't use the database yet.
 **Protect `main`** (after card 001 is merged, so the checks exist): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check` and `scope` to pass (not `web`: it runs only when `web/`, `src/` or the contract changes, and a required check that never runs blocks the merge), block force pushes. On a free personal account, protection on a private repo may need GitHub Pro; without it, keep the PR flow by convention and CI still runs on every PR.
 
 **Still left, and when:**
-- The Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variable `DEPLOY_ENABLED=true`: only after `ci.yml` runs `alembic upgrade head` before `modal deploy` and skips web-only pushes (S1 Task 21b). Until then you deploy with `scripts/deploy.sh` from `main` (§1); it refuses inside the blackout.
+- Turning on CI deploys (the repository variable `DEPLOY_ENABLED=true`) needs, first: the Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variables `POSTING_SLOTS` and `POSTING_TIMEZONE` (identical to `clipforge-secrets`; the deploy job fails without them). `ci.yml` already runs `alembic upgrade head` before `modal deploy`, skips web- and docs-only pushes and waits out the blackout. Until you turn it on, you deploy with `scripts/deploy.sh` from `main` (§1); it refuses inside the blackout.
+  ```
+  gh secret set MODAL_TOKEN_ID
+  gh secret set MODAL_TOKEN_SECRET
+  gh secret set DATABASE_URL_UNPOOLED
+  gh variable set POSTING_SLOTS --body "<the value in clipforge-secrets>"
+  gh variable set POSTING_TIMEZONE --body "<the value in clipforge-secrets>"
+  gh variable set DEPLOY_ENABLED --body true
+  ```
+  CI deploys are recorded by their `deploy-YYYYMMDD-HHMM` tag (`git tag -l 'deploy-*'`) and a line in the run summary, not in `docs/ops/deploys.md` (card 008).
 - In Vercel, connect the repo with Root Directory `web` when you do the Vercel steps (§5b).
 - From the pause on, every parallel session gets its own git worktree (§3).
 
