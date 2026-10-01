@@ -32,3 +32,5 @@ scratch/
 htmlcov/
 node_modules/
 .claude/settings.local.json
+# graphify skill output
+graphify-out/
