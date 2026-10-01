@@ -174,6 +174,9 @@ Borders are 1px hairlines. The 9:16 video frame is the only fixed silhouette.
 - **Video placeholder:** 9:16, `lg` radius, dark blue-grey gradient. It shows the product's own caption look (heavy uppercase, black halo, key word `#ffd400`, title top, captions above the bottom 20%). It is shown at about 42vh on Act.
 - **Skeleton:** `muted` blocks in the final layout. They pulse at 1.4s, and the pulse stops under `prefers-reduced-motion`.
 - **Empty state:** centered, a 1rem/600 sentence ("Nothing needs you."), one quiet line saying what fills the page or what unlocks it, and at most one button.
+- **Type tabs (account workspace):** the shared core tabs plus each type's own, in one underline row that wraps to two rows below 1024px; a type tab never renames a core tab. In the mockups the top bar's Type select switches types (`[data-type]` blocks; mockup only, like `data-when`); the build reads the account's `kind`.
+- **Persona card:** a 4:5 face thumb, name, role and niche, a status chip, a short key–value list (voices, consistency, looks), the served accounts as chips, and the unrelated-niche warning as a notice inside the card.
+- **Step list (creation flows):** numbered circles (done ✓, current inverted to ink), each step with its cost in tabular figures; sticky on a laptop, a compact numbered row on a phone; the running cost sits in the footer next to Back and the next step's verb.
 - **StaleNote:** S3a's component, one quiet 0.75rem line at the top of `main` with `role="status"`: "Updated 6 min ago · retrying every 15 s. Actions still work; each one is re-checked when you tap it."
 
 ### States
@@ -211,7 +214,7 @@ The sidebar foot pins a quiet status line ("Brake: all accounts running"), a def
   - Table, Skeleton, Alert for notices
   - Progress or a small custom meter keeping `role="meter"`
   - Tooltip only outside charts
-- **Do not ship:** the mockup bar, `[data-when]` switching, and `shell.js`.
+- **Do not ship:** the mockup bar, `[data-when]` and `[data-type]` switching, and `shell.js`.
 
 ## Do's and Don'ts
 

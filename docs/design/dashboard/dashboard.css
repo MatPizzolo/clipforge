@@ -299,3 +299,6 @@ details.table-view summary { cursor: pointer; font-size: 0.75rem; color: var(--m
 
 /* Stale: the StaleNote line alone signals it; nothing dims, so enabled actions keep full contrast. */
 body[data-state="stale"] .fresh { display: none; }
+
+/* Account type switch (mockup only): [data-type] blocks show only for the current type. */
+[data-type]:not(.type-on) { display: none !important; }

@@ -2,7 +2,7 @@
 
 Date: 2026-10-01 · Card: [009](../../cards/009-s3-dashboard-design.md) · Status:
 - §1 routine, §2 autopilot model, §3 jobs mapped to the loop, §4 Telegram and the dashboard, §5 staged availability, §6 information architecture: **approved by the owner at checkpoint A (2026-10-01)**, after two rounds of the coordinator's review. Decision log #420–#430.
-- §7 pages, §8 gaps (with the coordinator's six additions: crons, the queue filler, the "needs me" API, where autopilot settings live, the hook-variant cost, S2's card), §9 proposed ADRs (A, B, C), §10 proposed changes to other documents: **written at checkpoint B (2026-10-01), for the owner's review.** Mockups and `DESIGN.md` in `docs/design/dashboard/` (impeccable finish review: 8 material fixes in 2 correction rounds; 7 resolved at the final verdict, the last one fixed after it and confirmed by a computed-style check). 08 §2c carries the proposed 08 edits.
+- §7 pages (revised after the owner's review: §7.3 type tabs, §7.8 Personas, log #431–#432), §8 gaps (with the coordinator's six additions: crons, the queue filler, the "needs me" API, where autopilot settings live, the hook-variant cost, S2's card), §9 proposed ADRs (A, B, C), §10 proposed changes to other documents: **written at checkpoint B (2026-10-01), for the owner's review.** Mockups and `DESIGN.md` in `docs/design/dashboard/` (impeccable finish review: 8 material fixes in 2 correction rounds; 7 resolved at the final verdict, the last one fixed after it and confirmed by a computed-style check). 08 §2c carries the proposed 08 edits.
 
 Builds on, and doesn't reopen: ADR-29 (review tiers, policy gate), ADR-38 (the dashboard over the API only), ADR-39 (disclosed synthetic personas), ADR-42 and the [S3c spec](2026-09-30-studio-s3-workspaces-design.md) (versioned setup, experiments, notes), ADR-43 (derived producer version), ADR-44 (one home per task), ADR-45 (notification budget), D8 (Review is a queue manager until S2), D9 (the `admin` endpoint and its token). Facts: [01](../../studio/01-vision-and-strategy.md) (money, review policy), [03](../../studio/03-tools-and-models.md) (cost model), [07](../../studio/07-channel-portfolio.md) and [09](../../studio/09-account-registry.md) (portfolio, accounts, pairs), [08 §2](../../studio/08-dashboard-and-operations.md#2-dashboard-information-architecture-nextjs) (page list).
 
@@ -233,16 +233,32 @@ Mockups: `docs/design/dashboard/` (open `index.html`; resize below 1024 px for t
 
 ### 7.3 Account workspace (`/accounts/<id>`) · mockup `account.html`
 
-S3c §2.5's workspace with four new tabs. S3c's tabs (Setup & History, Results, Experiments, Notes, Sources) are unchanged.
+S3c §2.5's workspace, as a **shared core plus tabs by type** (owner ruling, #431). The core is the same for every type: Overview (its panels change per type), Autopilot, Style, Hooks, Activity, and S3c's tabs (Setup & History, Results, Experiments, Notes, Sources) under More. Each type adds its own tabs after Overview:
+
+| Type | Its own tabs | What they hold | API (proposed) | When |
+|---|---|---|---|---|
+| `clips` | **Sources & episodes** | Sources with their permission record (monetize, translate, expiry), episodes clipped, clipping and imported but not clipped, clips per source hour; "fetch more" points to the local `clipforge fetch` until S11 | `GET /accounts/{id}/sources`, `GET /accounts/{id}/episodes` | S3 (from S1 sources and `jobs`) |
+| | **Framing & captions** | Reframe mode, the no-face fallback, length and minimum score, caption preset, hook title card, the credit line (rules), loudness (fixed, ADR-47), with a preview frame | S3c's setup routes | S3c-2 |
+| `story` | **Series & topics** | Series formats with their beats and rotation share (new ones are the owner's to approve), the topic queue with pillar, series and research status, "suggest topics" with its cost | `GET/POST /accounts/{id}/topics`, S3c's setup routes for series | S6 |
+| | **Research** | Fact sources per item and their check status; an item with a weak or missing source is held, with "find another source" or "drop the claim" | `GET /items/{id}/sources` | S6 |
+| `band` | **Bands & licenses** | The band pipeline (submitted, researching, licensing, featured) and the license of every asset (Commons CC-BY/BY-SA with attribution, band permission, generated art without people) | `GET /accounts/{id}/bands`, `GET /assets?account=` | S9 |
+| | **Sounds** | The suggested sound per item (masters are music-free) and whether it was added in each app | `GET /accounts/{id}/sounds` | S9 |
+| `avatar` | **Offers & links** | Approved offers with program, commission, tracking link, clicks and sales; a new offer is the owner's to approve | `GET/POST /accounts/{id}/offers` | S8 (links S2) |
+| | **Claims** | The claim check per item (first-person use, health, finance, earnings, unsourced comparisons) with a suggested fix | `GET /items/{id}/claims` | S6 Judge, S8 |
+| `avatar`, `model` | **Persona & looks** | The persona it uses (consistency, the voice for this account's language) and the looks this account may use; edits happen on the persona page | `GET /accounts/{id}/persona` | S8 |
+| `model` | **Carousels** | Carousel, image and reel items with their look and consistency per slide | `GET /items?account=&kind=carousel` | S13 |
+| | **Brand deals** | The deal pipeline (lead, negotiating, signed, posted), fee, deliverables and disclosure | `GET/POST /accounts/{id}/deals` | S13 (or S7's money) |
+
+A type tab appears only when its producer exists; before that the account shows the core tabs. The mockup switches types from its top bar (`account.html?type=clips|story|band|avatar|model`); the build reads `kind` from the account.
 
 - **Header:** handle, id, type, language, pair, blueprint and account versions, rung, "day N of 90", open review windows; + Note; Pause this account (the brake, account scope).
-- **Overview (new content):** the loop at a glance, one panel per step, each with its control's position, one number and one link (Produce: runway, in production; Review: waiting, approval rate; Publish: posts this week, next slot; Measure: views or cost per item; Scale: winners, pair). **Next rung** (the ladder criteria with progress, §2.4) and **Day N of 90** (payout-program progress from the editable thresholds; "months 1–2 usually earn nothing").
+- **Overview (new content, per type):** the loop at a glance, one panel per step, with numbers that fit the type (clips: episodes unclipped and spot checks; story: runway and sources; band: licenses waiting; avatar: offers, clicks and sales; model: looks, reach and deals), each with its control's position, one number and one link (Produce: runway, in production; Review: waiting, approval rate; Publish: posts this week, next slot; Measure: views or cost per item; Scale: winners, pair). **Next rung** (the ladder criteria with progress, §2.4) and **Day N of 90** (payout-program progress from the editable thresholds; "months 1–2 usually earn nothing").
 - **Autopilot (new):** the three presets with their minutes a day; the four controls with what each is waiting on; spend (month so far against the cap, the batch line, the cap); the rails in force with their windows; a preview of a change ("+$4.20 a month, about −1 min a day") before Apply. Turning the Review dial **up** needs a note. API: `GET /accounts/{id}/autopilot` (state, presets, waiting-on lines, open windows), `PUT /accounts/{id}/autopilot` (with `preview=true` for the dry run), `GET /accounts/{id}/ladder`.
 - **Style (new):** S3c's setup fields grouped as Look (caption preset, hook title card, brand kit, visual brief), Voice & persona (voice with a sample, persona link, disclosure), Format (length, series formats with their beats as a bar, pillars) and Posting (slots, hashtags, CTA, bio link). Each value shows its origin (category, blueprint, account) and its change class; a preview frame re-renders the last item with the pending change. Saving goes through S3c's one dry run (`POST /setup/preview`) and its versions; no new write path.
 - **Hooks (new):** the library (pattern, version, status, rotation weight with ❄ when frozen, items, 👍/👎, 3-second hold after S7) with Edit (writes v+1), Approve (a draft), Retire, Share to blueprint; the approval rate per pattern with a 90% interval (dataviz: dot and interval, direct labels, a table view); the frozen-weights notice while a setup experiment runs. API: `GET /accounts/{id}/hooks`, `POST /hooks` (draft, also from the phone's + Hook idea), `PUT /hooks/{id}` (new version), `POST /hooks/{id}/approve|retire|share`, `GET /hooks/{id}/stats`.
 - **Activity (new):** what ran without the owner, per day, each line linked to its record (§3.5). API: `GET /accounts/{id}/activity?date=`.
 - **Telegram:** deep links to `/accounts/<id>` (08 §2b) and to a tab with `?tab=`; nothing is edited from Telegram.
-- **Tabs:** Overview, Autopilot, Style, Hooks and Activity, then a **More** menu for S3c's tabs (Setup & History, Results, Experiments, Notes, Sources), so the phone row fits.
+- **Tabs:** Overview, the type's own tabs, Autopilot, Style, Hooks and Activity, then a **More** menu for S3c's tabs, so the phone row fits (it wraps to two rows below 1024 px).
 - **Phone:** the loop panels stack; Style's preview frame comes after the groups; + Note lives in the header only.
 - **States:** not found; a new account (empty Overview: "approve a series and plan its first batch"); the shared four.
 
@@ -284,13 +300,22 @@ S3c §2.5's workspace with four new tabs. S3c's tabs (Setup & History, Results, 
 - **API:** `GET /results/stats|money|costs?from=&to=&accounts=`.
 - **When:** now: costs per job; S1: costs per account; S3: caps and fixed subscriptions; S7: views, followers, revenue, programs, winners. The empty state says "Views arrive with analytics (S7)".
 
-### 7.8 Personas (`/personas/<id>`) · mockup `personas.html`
+### 7.8 Personas (`/personas`, `/personas/<id>`, `/personas/new`) · mockups `personas.html`, `persona.html`, `persona-new.html`
 
-- **Purpose:** keep a synthetic persona consistent and disclosed (ADR-39).
-- **Data:** the three anchor images (generated from the brief only), the LoRA version, accounts using it; the voice master (design prompt, pace, pauses, reference clip) with a sample; a consistency score per recent render against the anchors (X3's method) with the drift threshold (default 0.80; below it the item goes to `review`, never publishes); the disclosure checklist (bio, platform labels, C2PA kept, no first-person claims).
-- **Actions:** regenerate anchors (a new version; renders keep their stamp), try a voice variant, retire.
-- **API:** `GET /personas/{id}`, `GET /personas/{id}/renders`, `POST /personas/{id}/anchors|voice|retire`.
-- **When:** S8 (the persona producer); the page is empty until then ("comes with the avatar producer").
+**A persona can serve several accounts, within a pair or one niche** (owner ruling, #432): an EN/ES pair shares the face with a native voice per language, and accounts of one niche can share a presenter. Linking a persona to accounts of unrelated niches is allowed but flagged, because each account should read as its own brand (07). Personas stay synthetic and disclosed (ADR-39).
+
+- **List (`/personas`):** every persona as a card: face, name, role and niche, status (draft with its step, active, retired), voices per language, the accounts it serves (chips), 30-day consistency (median and drift count), looks, and the unrelated-niche warning. "Design a persona…" opens the flow. API: `GET /personas`.
+- **Persona page (`/personas/<id>`)**, header with face, status, LoRA version and the accounts it serves; tabs:
+  - **Profile:** name, role, a bio per language (with "AI host" or "AI creator"), personality and tone, niche, lifecycle; **rules** (never says: first-person product use, health, finance, legal or earnings claims, anything hiding that it is AI; always on: AI labels, C2PA, #ad on affiliate items, synthetic-only training); the accounts it serves with each one's voice, allowed looks, renders and median score.
+  - **Looks:** outfits, settings and props made by inpainting from the anchors (the face stays locked), each draft or approved, with the accounts allowed to use it, its renders and median score; renders rotate through an account's allowed looks; "+ New look" shows its cost. A look that drifts is named in Consistency.
+  - **Consistency:** the score of every render over 30 days per account (dots, the 0.80 threshold as a reference line, a table view), the causes of drift (lighting, pose, outfit) with the look behind them, and a flagged render side by side with the anchors, with "re-render with another look" or "approve anyway" (a note).
+  - **Voice:** one voice master per language (design prompt, pace, pauses), a box to hear any test line, A/B variants. A dub uses the target account's voice.
+  - **Anchors & LoRA:** the 3 anchors (versioned; renders keep the version they used) and the LoRA versions with what each was trained on and its median score.
+- **Design a persona (`/personas/new`):** seven steps, saved after each, each showing its cost before it runs: (1) brief, with the synthetic-only checks (no photos of real people, disclosure on, niche check); (2) about 12 candidate faces; (3) pick 3 and refine them into front, ¾ and profile anchors; (4) a voice per language from a prompt; (5) test lines; (6) train the LoRA on its own generated images only; (7) link accounts (the niche warning applies) and activate. The footer keeps the running cost (about $1.10–2.10 per persona, mostly the LoRA; spike X3 measures it). A failed step charges nothing and keeps what was saved.
+- **API:** `GET /personas`, `POST /personas` (draft), `GET /personas/{id}`, `PUT /personas/{id}/profile`, `GET/POST /personas/{id}/looks`, `POST /looks/{id}/approve|retire`, `GET /personas/{id}/renders?days=30`, `GET/POST /personas/{id}/voices`, `POST /personas/{id}/voices/{lang}/say` (a test line), `POST /personas/{id}/anchors`, `POST /personas/{id}/lora`, `PUT /personas/{id}/accounts`, `POST /personas/{id}/activate|retire`.
+- **Data (proposed):** `personas(id, name, status, niche, profile jsonb)`, `persona_versions` (anchors and LoRA, append-only), `persona_accounts(persona_id, account_id, voice_id, looks[])`, `persona_looks(id, persona_id, version, status, data)`, `persona_voices(id, persona_id, lang, version, data)`, and on each item `persona_id`, `look_id`, `anchor_version`, `lora_version` and `consistency`.
+- **Telegram:** none, except a drifted render that blocks a due item, which is a normal review row.
+- **When:** S8 (the persona producer, with X3's consistency method); the model accounts' looks and carousels in S13. Until then the list is empty ("comes with the avatar producer").
 
 ### 7.9 Settings (`/settings`, no mockup)
 
@@ -434,7 +459,8 @@ Modal allows 5 deployed crons. Three are used: `sweeper` (every 10 min), `postin
 | G17 | Lifecycle day N of 90 (from `accounts.created_at`) and program progress from editable thresholds | S3 (day), S7 (programs) |
 | G18 | Settings page and `settings` table | S3 |
 | G19 | Results page with tabs; Costs in S3, Stats and Money in S7 | S3, S7 |
-| G20 | Personas page: anchors, consistency score, voice master, drift threshold | S8 (with X3's method) |
+| G20 | Personas: the list, the persona page (profile, looks, consistency, voices, anchors and LoRA), the creation flow, the persona–account links with the niche warning, and per-item stamps (`persona_id`, `look_id`, anchor and LoRA versions, score) | S8 (with X3's method); looks for model accounts in S13 |
+| G26 | Type tabs in the account workspace (§7.3 table): routes and data per type | S3 (clips), S6 (story), S8 (avatar), S9 (band), S13 (model) |
 | G21 | Review routes (copy edit, re-render, batch approve) | S2 (the review service), S3 (the page) |
 | G22 | Link-contract test (§7.10) | S3 |
 | G23 | `system:` actor prefix | S3c-1's migration 0002 (or S2's, whichever lands first) |

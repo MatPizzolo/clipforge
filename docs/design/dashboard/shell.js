@@ -35,7 +35,7 @@
   bar.append(left);
   const states = (body.dataset.states || "live").split(" ");
   const sw = el("div", { class: "states", role: "group", "aria-label": "Page state" });
-  const LABEL = { live: "Live", empty: "Empty", loading: "Loading", error: "Error", stale: "Stale", over: "Over budget", done: "Already handled", spend: "Spend row", promote: "Promotion row", pres2: "Before S2" };
+  const LABEL = { live: "Live", empty: "Empty", loading: "Loading", error: "Error", stale: "Stale", over: "Over budget", done: "Already handled", spend: "Spend row", promote: "Promotion row", pres2: "Before S2", faces: "Step 2: faces", brief: "Step 1: brief", voice: "Step 4: voice", lora: "Step 6: LoRA", link: "Step 7: link" };
   const set = (s) => {
     body.dataset.state = s;
     const note = document.getElementById("stale-note");
@@ -53,6 +53,23 @@
     sw.append(b);
   });
   bar.append(sw);
+  // Account type switch (mockup only): <body data-accts="clips story ..."> shows [data-type~=<type>] blocks.
+  const types = (body.dataset.accts || "").split(" ").filter(Boolean);
+  if (types.length) {
+    const sel = el("select", { "aria-label": "Account type", style: "width:auto;min-height:0;padding:0.1rem 0.4rem;font-size:0.75rem" });
+    types.forEach((t) => sel.append(el("option", { value: t }, "Type: " + t)));
+    const applyType = (t) => {
+      body.dataset.acct = t; sel.value = t;
+      document.querySelectorAll("[data-type]").forEach((n) => n.classList.toggle("type-on", n.dataset.type.split(" ").includes(t)));
+      document.querySelectorAll("[data-tabs]").forEach((g) => { const b = g.querySelector('[data-tab="' + g.dataset.tabs + '"]'); if (b) b.click(); });
+      window.dispatchEvent(new Event("resize"));
+    };
+    sel.addEventListener("change", () => applyType(sel.value));
+    body._applyType = applyType;
+    const q = new URLSearchParams(location.search).get("type");
+    body.dataset.acct = types.includes(q) ? q : types[0];
+    sw.prepend(sel);
+  }
   body.prepend(bar);
 
   // Sidebar
@@ -115,6 +132,7 @@
     g.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
     show(g.dataset.tabs);
   });
+  if (body._applyType) body._applyType(body.dataset.acct);
   // Switches and dials are clickable so the mockup feels real.
   document.querySelectorAll(".switch").forEach((s) => s.addEventListener("click", () =>
     s.setAttribute("aria-checked", String(s.getAttribute("aria-checked") !== "true"))));

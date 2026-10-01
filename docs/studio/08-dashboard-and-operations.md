@@ -123,7 +123,7 @@ Implementation notes:
 
 ### 2c. Proposed by card 009 (pending the owner's review)
 
-> **Proposed, not accepted.** These changes come from the S3 dashboard design ([spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), log #420–#430). §2 and §2b above stay as they are until the owner accepts them; the coordinator then folds them in.
+> **Proposed, not accepted.** These changes come from the S3 dashboard design ([spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), log #420–#432). §2 and §2b above stay as they are until the owner accepts them; the coordinator then folds them in.
 
 **Pages (§2).** The structure is inbox-first (#430):
 - **Home** becomes "needs me" (one prioritized list across the fleet, one decision per row, with an attention meter against a ~20-minute daily budget), then the fleet scoreboard, then today's slots.
@@ -136,6 +136,8 @@ Implementation notes:
   - **Style:** S3c's setup fields, grouped;
   - **Hooks:** a versioned library with rotation;
   - **Activity:** what ran without you.
+- **The account workspace is a shared core plus the type's own tabs** (#431), e.g. clips get Sources & episodes and Framing & captions; avatar accounts get Offers & links, Claims and Persona & looks.
+- **Personas** opens on a list of every persona with the accounts it serves; a persona may serve a pair or one niche, with a warning across unrelated niches (#432). A persona page has Profile, Looks, Consistency, Voice, Anchors & LoRA, plus a seven-step creation flow with costs.
 - **Jobs moves into Produce** as a tab; `/jobs` and `/jobs/<id>` keep working as link targets.
 - **New: Settings:** the attention budget, caps and lines, payout-program thresholds, and quiet hours (read-only).
 - Personas, Decisions, Desk, Funnel and Settings sit under **More**.
