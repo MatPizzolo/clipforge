@@ -121,6 +121,41 @@ Implementation notes:
 
 **Telegram after S2.** It keeps review cards, alerts, the brake, the digest and the AssistedPublisher fallback. `/clip` retires when Produce ships; `/status <job_id>` and typed `/resume` retire when the job page has Resume; the ✅ taps stay only for accounts on the fallback.
 
+### 2c. Proposed by card 009 (pending the owner's review)
+
+> **Proposed, not accepted.** These changes come from the S3 dashboard design ([spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), log #420–#430). §2 and §2b above stay as they are until the owner accepts them; the coordinator then folds them in.
+
+**Pages (§2).** The structure is inbox-first (#430):
+- **Home** becomes "needs me" (one prioritized list across the fleet, one decision per row, with an attention meter against a ~20-minute daily budget), then the fleet scoreboard, then today's slots.
+- **New: `/act/<kind>/<id>`**, a focused action view for one row (context, 2–3 actions, then Next). Every Telegram alert's Open button lands there.
+- **Stats, Money and Costs merge into Results** (tabs Stats · Money · Costs, one filter row). Fixed subscriptions are shown on Costs and never count against caps.
+- **Accounts** gets two views: S3c's **Map** and a new **Compare** (every account side by side, led by "the 3 accounts that need you this week").
+- **The account workspace** gains these tabs:
+  - **Overview:** the loop at a glance, the next rung, and day N of 90;
+  - **Autopilot:** three switches and the Review dial, presets, rails and spend;
+  - **Style:** S3c's setup fields, grouped;
+  - **Hooks:** a versioned library with rotation;
+  - **Activity:** what ran without you.
+- **Jobs moves into Produce** as a tab; `/jobs` and `/jobs/<id>` keep working as link targets.
+- **New: Settings:** the attention budget, caps and lines, payout-program thresholds, and quiet hours (read-only).
+- Personas, Decisions, Desk, Funnel and Settings sit under **More**.
+- **Navigation:**
+  - laptop sidebar: Home · Review · Calendar · Accounts · Produce · Experiments · Results · Sources · More;
+  - phone tabs: Home · Review · Accounts · Results · More.
+
+**Two surfaces (§2b).**
+- **Every Telegram alert is a "needs me" row** pushed to the phone, with Open → `/act/<kind>/<id>`. Acting in either place clears both. A link to something already handled shows who did it, when and where (#429).
+- **One-tap inside Telegram only** for review items due within 2 hours (approve or reject, plus the posting buttons) and for the brake (`/pause`, `/go`, and `/pause all` at fleet scope, the same Dict key as 04's S2 brake). Everything else opens the dashboard (#427).
+- **Telegram is the only push channel.** There are no browser push notifications.
+- **New link formats** (a contract, with a test that each one resolves): `/act/<kind>/<id>`, `/?needs=<kind>`, `/accounts?view=compare`, `/results?tab=costs&account=<id>`.
+- **Levels per row type:**
+
+  | Level | Row types |
+  |---|---|
+  | Instant | due-soon reviews, the brake, platform health (a failed post due today, a disconnected publisher, a strike), spend over a line or a cap, expired permissions holding clips |
+  | Digest | runway under 14 days, promotions ready, demotions done, experiments, held clips, other failures, the review backlog, weak hook patterns, "what ran without you" |
+  | Dashboard only | everything else |
+
 ## 3. Notion mirror (one-way)
 
 

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Act · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .act-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .act-head .pos { font-size: 0.75rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .progress { display: flex; gap: 3px; }
+  .progress span { flex: 1; height: 3px; border-radius: 2px; background: var(--border); }
+  .progress span.on { background: var(--foreground); }
+  .act { display: grid; gap: 0.9rem; }
+  .act .video { justify-self: center; width: auto; height: 42vh; }
+  main { padding-bottom: 5rem; }
+  .why { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .copy { font-size: 0.8125rem; }
+  .copy summary { cursor: pointer; font-weight: 550; padding: 0.35rem 0; }
+  .copy pre { white-space: pre-wrap; font: inherit; margin: 0.25rem 0 0.6rem; padding: 0.6rem 0.7rem; background: var(--muted); border-radius: 0.5rem; }
+  .bar-actions { position: sticky; bottom: calc(3.6rem + env(safe-area-inset-bottom)); display: grid; grid-template-columns: 1fr 2fr; gap: 0.5rem;
+    padding: 0.6rem 0; background: linear-gradient(to top, var(--background) 75%, transparent); }
+  .next { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 1rem; text-decoration: none; }
+  .crit { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; font-size: 0.875rem; }
+  .crit li { display: grid; grid-template-columns: 1.25rem 1fr auto; gap: 0.5rem; align-items: baseline; }
+  .crit .ok { color: var(--good); font-weight: 700; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; font-size: 0.875rem; }
+  .kv dt { color: var(--muted-foreground); } .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .hookrate { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.8125rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem; }
+  @media (min-width: 1024px) {
+    .act-layout { display: grid; grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); gap: 2rem; align-items: start; }
+    .act .video { height: auto; width: 100%; max-height: none; }
+    .bar-actions { position: static; background: none; }
+  }
+</style>
+</head>
+<body data-page="home" data-states="live spend promote done error stale">
+<!--
+THESIS: one alert opens one decision, then flows into the next: the Telegram "Open" button lands here, never on a page that needs hunting.
+OWN-WORLD: S3a neutral shell; the item's evidence (video, why it is here, gate answers) above, 2-3 actions in a sticky bar within thumb reach, "Next" below.
+STORY: the owner sees why this needs them, decides in one tap, and moves to the next row without going back to Home.
+FIRST VIEWPORT: phone: position in the list, the 9:16 video at ~42vh, title and reason chips, sticky Reject / Approve above the tabs; laptop: video left, evidence and actions right.
+FORM: focused action view /act/<kind>/<id> (spec §4, §7.2); extension of the S3a world, no seed run.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main>
+  <div class="act-head">
+    <a class="btn ghost" href="home.html" aria-label="Back to Home">✕ Close</a>
+    <span class="pos">1 of 8 · Now</span>
+  </div>
+  <div class="progress" aria-hidden="true"><span class="on"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+
+  <!-- Review an item -->
+  <section class="act-layout act" data-when="live" aria-label="Review an item">
+    <div class="video" role="img" aria-label="Video preview, 61 seconds">
+      <div class="title">The keeper left the lamp <em style="color:#ffd400;font-style:normal">burning</em></div>
+      <div class="play" aria-hidden="true">▶</div>
+      <div class="cap">nobody saw him <em>leave</em></div>
+      <div class="meta">0:00 / 1:01</div>
+    </div>
+    <div class="act">
+      <div class="stack">
+        <h1>The lighthouse keeper who vanished</h1>
+        <p class="small muted">@archive.tales.demo · story · slot 14:00, due in 1 h 20 min</p>
+        <div class="why">
+          <span class="chip warning">◐ New format: 4 of 10 in review</span>
+          <span class="chip good">✓ Gate passed</span>
+          <span class="chip">AI label on</span>
+          <span class="chip">3 fact sources</span>
+        </div>
+      </div>
+      <div class="hookrate">
+        <span><b>Hook:</b> Number + conflict <span class="muted">v3</span> · “3 men, 1 lamp, 0 witnesses”</span>
+        <span class="row"><button class="btn ghost" type="button" aria-label="Good hook">👍</button><button class="btn ghost" type="button" aria-label="Weak hook">👎</button></span>
+      </div>
+      <details class="copy" open>
+        <summary>Copy per platform</summary>
+        <pre>TikTok · In 1900 three keepers vanished from a Scottish lighthouse. The lamp was still burning. Part 1/2 #history #mystery</pre>
+        <pre>Instagram · Same copy, + “AI-narrated” in the first line</pre>
+        <a class="small" href="review.html">Edit copy in Review ▸</a>
+      </details>
+      <div class="bar-actions">
+        <button class="btn lg danger" type="button">Reject…</button>
+        <button class="btn lg primary" type="button">Approve for 14:00</button>
+      </div>
+      <a class="card next" href="#spend"><span><span class="xs muted">Next</span><br><b class="small">YouTube disconnected: 2 posts failed</b></span><span aria-hidden="true">▸</span></a>
+    </div>
+  </section>
+
+  <!-- Approve spend -->
+  <section class="act" data-when="spend" aria-label="Approve spend">
+    <h1>Approve about $2.10 for @founder.cuts.demo?</h1>
+    <p class="small muted">A re-cut of 12 sources for the running experiment “max clip length 45 s”. Over the account's $2 batch line, so it waits for you.</p>
+    <div class="card"><div class="bd" style="padding-top:1rem">
+      <dl class="kv">
+        <dt>Transcripts (18.5 source hours)</dt><dd>cached · $0.00</dd>
+        <dt>Highlights, ~$0.07 per source hour</dt><dd>$1.30</dd>
+        <dt>Captions and render, ~260 clips</dt><dd>$0.39</dd>
+        <dt>Hook variants, 3 per clip (Haiku)</dt><dd>$0.39</dd>
+        <dt><b>Estimate</b></dt><dd><b>$2.08</b></dd>
+      </dl>
+    </div></div>
+    <div class="stack">
+      <div class="row between small"><span>Account this month (variable spend)</span><span class="num">$1.90 of $5 → $3.98 after this</span></div>
+      <div class="meter warn" aria-hidden="true"><span style="width:38%"></span><span style="width:42%;opacity:0.45"></span></div>
+      <p class="xs muted">Within the $5 monthly cap. Fleet: $18.40 of $50.</p>
+    </div>
+    <div class="bar-actions"><button class="btn lg" type="button">Decline</button><button class="btn lg primary" type="button">Approve $2.08</button></div>
+  </section>
+
+  <!-- Promotion -->
+  <section class="act" data-when="promote" aria-label="Promotion">
+    <h1>Promote @mindset.clips.demo to Autopilot?</h1>
+    <p class="small muted">The system suggests; promotions always need your tap.</p>
+    <div class="card"><div class="bd" style="padding-top:1rem">
+      <ul class="crit">
+        <li><span class="ok">✓</span><span>30 days or more on Supervised</span><span class="num muted">34 days</span></li>
+        <li><span class="ok">✓</span><span>12 or more spot checks, at most 1 rejected</span><span class="num muted">13, 0 rejected</span></li>
+        <li><span class="ok">✓</span><span>No gate failure or strike in 30 days</span><span class="num muted">none</span></li>
+        <li><span class="ok">✓</span><span>Runway 14 days or more</span><span class="num muted">21 days</span></li>
+      </ul>
+    </div></div>
+    <div class="card"><div class="hd"><h3>What changes</h3></div><div class="bd stack small">
+      <p>Review dial: <b>sample → auto</b> (no spot checks; the gate still runs on every item).</p>
+      <p>Scale switch: <b>on</b>, but it waits: “No paired account”.</p>
+      <p>Your time: <b>about −0.8 min a day</b>. A demotion is automatic after 2 rejects in your last 5 checks, or a strike.</p>
+    </div></div>
+    <div class="bar-actions"><button class="btn lg" type="button">Not yet</button><button class="btn lg primary" type="button">Promote</button></div>
+  </section>
+
+  <!-- Already handled -->
+  <section class="card" data-when="done" aria-label="Already handled">
+    <div class="empty">
+      <span class="big">✓ Already handled</span>
+      <span class="small muted">Approved by <b>telegram:owner</b> at 13:02, in Telegram. Scheduled for 14:00 on TikTok, Instagram, YouTube and Facebook.</span>
+      <a class="btn primary" href="#spend">Next: approve spend ▸</a>
+    </div>
+  </section>
+
+  <!-- Not found -->
+  <section class="card" data-when="error" aria-label="Not found">
+    <div class="empty">
+      <span class="big">This item isn't in the list any more.</span>
+      <span class="small muted">It may have been deleted with its job. Nothing was changed.</span>
+      <a class="btn" href="home.html">Back to Home</a>
+    </div>
+  </section>
+  <p class="sample">Sample data: fictional accounts and numbers, for layout only.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

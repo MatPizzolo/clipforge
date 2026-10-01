@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Home · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .meter-card { display: grid; gap: 0.5rem; padding: 0.875rem 1rem; }
+  .meter-card .figure { font-size: 1.5rem; font-weight: 650; letter-spacing: -0.01em; }
+  .meter-card .figure small { font-size: 0.875rem; font-weight: 500; color: var(--muted-foreground); }
+  .needs { list-style: none; margin: 0; padding: 0; }
+  .needs > li { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); gap: 0.25rem 0.6rem; padding: 0.8rem 1rem; border-top: 1px solid var(--border); }
+  .needs > li:first-child { border-top: 0; }
+  .needs .g { font-size: 1rem; line-height: 1.35rem; text-align: center; }
+  .needs .g.critical { color: var(--critical); } .needs .g.warning { color: var(--warning); } .needs .g.info { color: var(--info); } .needs .g.good { color: var(--good); }
+  .needs .what { display: grid; gap: 0.15rem; min-width: 0; }
+  .needs .what b { font-weight: 600; }
+  .needs .ctx { font-size: 0.8125rem; color: var(--muted-foreground); }
+  .needs .acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; align-items: center; }
+  .needs .cost { font-size: 0.75rem; color: var(--muted-foreground); margin-left: auto; }
+  .group-h { padding: 0.6rem 1rem 0.2rem; font-size: 0.75rem; font-weight: 600; color: var(--muted-foreground); display: flex; justify-content: space-between; border-top: 1px solid var(--border); }
+  .group-h:first-child { border-top: 0; }
+  @media (min-width: 1024px) {
+    .needs > li { grid-template-columns: 1.5rem minmax(0, 1fr) auto; align-items: center; }
+    .needs .acts { grid-column: 3; margin-top: 0; justify-content: flex-end; flex-wrap: nowrap; }
+    .needs .cost { margin-left: 0; margin-right: 0.5rem; min-width: 3.5rem; text-align: right; }
+  }
+  .acct { display: flex; flex-direction: column; min-width: 0; }
+  .acct b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rung { font-size: 0.75rem; font-weight: 550; }
+  .health { display: inline-flex; gap: 0.3rem; align-items: center; font-size: 0.75rem; font-weight: 550; }
+  .sb-phone { list-style: none; margin: 0; padding: 0; }
+  .sb-phone li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.1rem 0.75rem; padding: 0.65rem 1rem; border-top: 1px solid var(--border); }
+  .sb-phone li:first-child { border-top: 0; }
+  .sb-phone .nums { font-size: 0.75rem; color: var(--muted-foreground); grid-column: 1 / -1; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .slots { list-style: none; margin: 0; padding: 0; }
+  .slots li { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: 0.75rem; align-items: center; padding: 0.55rem 1rem; border-top: 1px solid var(--border); }
+  .slots li:first-child { border-top: 0; }
+  .slot-row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .slot { font-size: 0.75rem; font-variant-numeric: tabular-nums; border-radius: 0.375rem; padding: 0.2rem 0.45rem; border: 1px solid var(--border); white-space: nowrap; }
+  .slot.done { color: var(--good); background: var(--good-wash); border-color: transparent; }
+  .slot.fail { color: var(--critical); background: var(--critical-wash); border-color: transparent; }
+  .slot.wait { color: var(--warning); background: var(--warning-wash); border-color: transparent; }
+  .slot.next { border-color: var(--foreground); font-weight: 600; }
+  .stale-wrap { transition: opacity 200ms; }
+  
+  .ran { font-size: 0.8125rem; color: var(--muted-foreground); }
+</style>
+</head>
+<body data-page="home" data-states="live over empty loading error stale">
+<!--
+THESIS: Home is a to-do list, not a scoreboard: "what needs me today" across the fleet, each row one decision, with its time cost against a daily budget.
+OWN-WORLD: the S3a shell's neutral shadcn world, extended with status roles (glyph + word), an attention meter, and dense rows; no hero metrics.
+STORY: the owner sees how much of their ~20 minutes today's list costs, clears rows top-down (urgent first), then glances at the fleet and today's slots.
+FIRST VIEWPORT: phone: meter, then the first 3-4 rows with their primary actions; laptop: meter + list on the left (1.6fr), scoreboard summary and slots on the right.
+FORM: inbox-first IA (spec §6, option A, approved); no seed run: an extension of the S3a shell world (impeccable new-work §3).
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main>
+  <div class="page-head">
+    <div>
+      <h1>Needs you</h1>
+      <p class="sub">Across 6 accounts<span class="fresh"> · updated 12 s ago</span></p>
+    </div>
+    <div class="row only-lg">
+      <a class="btn" href="act.html">Start with the first row ▸</a>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div class="notice critical" data-when="error" role="alert">
+    <span aria-hidden="true">✕</span>
+    <div><b>Can't reach the ClipForge API.</b> Nothing below is current. The brake still works from Telegram (<code>/pause all</code>). <button class="btn" type="button" style="margin-left:0.5rem">Retry</button></div>
+  </div>
+
+  <div class="split">
+    <div class="stack lg">
+      <!-- Attention meter -->
+      <section class="card meter-card" aria-label="Attention budget" data-when="live">
+        <div class="row between">
+          <span class="figure num">18 <small>of ~20 min today</small></span>
+          <span class="chip">8 rows</span>
+        </div>
+        <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="20" aria-valuenow="18" aria-label="18 of 20 minutes">
+          <span class="done" style="width:15%"></span><span style="width:75%"></span>
+        </div>
+        <p class="xs muted">3 min done · 15 min left in the list · estimates per row; measured times replace them after 30 days</p>
+      </section>
+      <section class="card meter-card" aria-label="Attention budget" data-when="over">
+        <div class="row between">
+          <span class="figure num">31 <small>of ~20 min today</small></span>
+          <span class="chip critical">over budget</span>
+        </div>
+        <div class="meter over" role="meter" aria-valuemin="0" aria-valuemax="20" aria-valuenow="31" aria-label="31 of 20 minutes"><span style="width:100%"></span></div>
+        <div class="notice info">
+          <span aria-hidden="true">↑</span>
+          <div><b>Free ~5 min a day:</b> @mindset.clips.demo meets the Supervised → Autopilot criteria. And @toolbench.demo's launch adds ~3 min a day for 30 days; consider waiting.
+            <div class="row wrap" style="margin-top:0.5rem"><a class="btn primary" href="act.html#promote">Review the promotion</a><a class="btn" href="account.html">Compare accounts</a></div></div>
+        </div>
+      </section>
+      <div class="card" data-when="loading" aria-busy="true">
+        <div class="meter-card"><div class="sk" style="height:1.6rem;width:45%"></div><div class="sk" style="height:0.5rem"></div></div>
+      </div>
+
+      <!-- The list -->
+      <section class="card" aria-label="Needs you" data-when="live over">
+        <div class="group-h"><span>Now</span><span>pushed to Telegram</span></div>
+        <ul class="needs">
+          <li>
+            <span class="g critical" aria-hidden="true">◷</span>
+            <div class="what"><b>Review: “The lighthouse keeper who vanished”</b><span class="ctx">@archive.tales.demo · due at 14:00 (in 1 h 20 min) · first 10 of a new format</span></div>
+            <div class="acts"><a class="btn primary" href="act.html">Review</a><button class="btn" type="button">Reject…</button><span class="cost">~1 min</span></div>
+          </li>
+          <li>
+            <span class="g critical" aria-hidden="true">!</span>
+            <div class="what"><b>YouTube disconnected: 2 posts failed today</b><span class="ctx">@mindset.clips.demo · Upload-Post says the token expired · next slot 16:30</span></div>
+            <div class="acts"><a class="btn primary" href="#">Reconnect</a><button class="btn" type="button">Post by hand</button><span class="cost">~3 min</span></div>
+          </li>
+          <li>
+            <span class="g warning" aria-hidden="true">$</span>
+            <div class="what"><b>Approve spend: re-cut 12 sources, $2.08</b><span class="ctx">@founder.cuts.demo · over its $2 batch line · month so far $1.90 of $5</span></div>
+            <div class="acts"><a class="btn primary" href="act.html#spend">Approve $2.08</a><button class="btn" type="button">Decline</button><span class="cost">~1 min</span></div>
+          </li>
+        </ul>
+        <div class="group-h"><span>Today</span><span>from the 09:00 digest</span></div>
+        <ul class="needs">
+          <li>
+            <span class="g warning" aria-hidden="true">▤</span>
+            <div class="what"><b>Review 3 items in a batch</b><span class="ctx">@archivo.relatos.demo · first dubs in the pair (3 of 10) · due tomorrow</span></div>
+            <div class="acts"><a class="btn" href="review.html">Open batch</a><span class="cost">~4 min</span></div>
+          </li>
+          <li>
+            <span class="g warning" aria-hidden="true">◔</span>
+            <div class="what"><b>Runway 9 days: add sources</b><span class="ctx">@charlas.demo · 2 unclipped episodes left · cadence 3 a day</span></div>
+            <div class="acts"><a class="btn" href="#">Add a source</a><button class="btn ghost" type="button">Snooze 3 days</button><span class="cost">~2 min</span></div>
+          </li>
+          <li>
+            <span class="g good" aria-hidden="true">↑</span>
+            <div class="what"><b>Ready to promote: Supervised → Autopilot</b><span class="ctx">@mindset.clips.demo · 34 days on Supervised · 13 spot checks, 0 rejected · runway 21 days</span></div>
+            <div class="acts"><a class="btn" href="act.html#promote">Promote</a><button class="btn ghost" type="button">Not yet</button><span class="cost">~1 min</span></div>
+          </li>
+          <li>
+            <span class="g info" aria-hidden="true">⚗</span>
+            <div class="what"><b>Experiment needs a decision: max clip length 45 s</b><span class="ctx">@founder.cuts.demo · reject rate 12% → 6% · likely better</span></div>
+            <div class="acts"><a class="btn" href="#">Open experiment</a><span class="cost">~2 min</span></div>
+          </li>
+          <li>
+            <span class="g info" aria-hidden="true">✎</span>
+            <div class="what"><b>Weak hook pattern: “Pregunta abierta”</b><span class="ctx">@archivo.relatos.demo · 2 of 9 approved · 👎 from you on 5</span></div>
+            <div class="acts"><a class="btn" href="account.html#hooks">Open hooks</a><span class="cost">~1 min</span></div>
+          </li>
+        </ul>
+      </section>
+
+      <section class="card" data-when="empty">
+        <div class="empty">
+          <span class="big">Nothing needs you.</span>
+          <span class="small muted">Every account is producing, reviewed and posting on its own. Yesterday: 14 posts, 0 failures, $1.12 spent.</span>
+          <a class="btn" href="account.html">Open the weekly compare view</a>
+        </div>
+      </section>
+
+      <section class="card" data-when="loading" aria-busy="true">
+        <div class="bd stack" style="padding-top:1rem">
+          <div class="sk" style="height:2.75rem"></div><div class="sk" style="height:2.75rem"></div><div class="sk" style="height:2.75rem"></div>
+        </div>
+      </section>
+
+      <p class="ran" data-when="live over empty">Ran without you yesterday: 9 produced · 6 auto-approved · 14 posted · 0 dubs · <a href="account.html#activity">activity ▸</a></p>
+    </div>
+
+    <div class="stack lg">
+      <!-- Fleet scoreboard -->
+      <section class="card stale-wrap" aria-label="Fleet scoreboard" data-when="live over empty">
+        <div class="hd"><h2>Fleet</h2><a class="small muted" href="account.html">Compare ▸</a></div>
+        <ul class="sb-phone">
+          <li><span class="acct"><b>@mindset.clips.demo</b><span class="rung muted">clips · Supervised · day 104</span></span><span class="health st good">● ok</span>
+            <span class="nums num"><span>4 posts</span><span>18.6K views</span><span>+412 followers</span><span>$7.80</span><span>21 d runway</span></span></li>
+          <li><span class="acct"><b>@founder.cuts.demo</b><span class="rung muted">clips · Hands-on · day 18</span></span><span class="health st warning">▲ spend</span>
+            <span class="nums num"><span>3 posts</span><span>6.1K views</span><span>+58</span><span>$0.00</span><span>16 d</span></span></li>
+          <li><span class="acct"><b>@charlas.demo</b><span class="rung muted">clips · ES · Hands-on · day 18</span></span><span class="health st warning">▲ runway</span>
+            <span class="nums num"><span>3 posts</span><span>4.4K views</span><span>+31</span><span>$0.00</span><span>9 d</span></span></li>
+          <li><span class="acct"><b>@archive.tales.demo</b><span class="rung muted">story · Hands-on · day 9</span></span><span class="health st good">● ok</span>
+            <span class="nums num"><span>2 posts</span><span>2.9K views</span><span>+40</span><span>$0.00</span><span>12 d</span></span></li>
+          <li><span class="acct"><b>@archivo.relatos.demo</b><span class="rung muted">story · ES · Hands-on · day 9</span></span><span class="health st good">● ok</span>
+            <span class="nums num"><span>1 post</span><span>1.2K views</span><span>+12</span><span>$0.00</span><span>12 d</span></span></li>
+          <li><span class="acct"><b>@toolbench.demo</b><span class="rung muted">avatar · Hands-on · day 3</span></span><span class="health st info">◌ new</span>
+            <span class="nums num"><span>1 post</span><span>380 views</span><span>+9</span><span>$0.00</span><span>6 d</span></span></li>
+        </ul>
+        <p class="xs muted" style="padding:0 1rem 0.8rem">Yesterday, shown as after S7. Before analytics (S7) the views, followers and revenue are left out and the line shows posts, approval rate and cost.</p>
+      </section>
+
+      <!-- Today's slots -->
+      <section class="card stale-wrap" aria-label="Today's slots" data-when="live over empty">
+        <div class="hd"><h2>Today's slots</h2><a class="small muted" href="#">Calendar ▸</a></div>
+        <ul class="slots">
+          <li><span class="small">@mindset.clips.demo</span><span class="slot-row"><span class="slot done">✓ 08:00</span><span class="slot fail">✕ 11:00 YT</span><span class="slot next">● 16:30</span><span class="slot">19:00</span></span></li>
+          <li><span class="small">@founder.cuts.demo</span><span class="slot-row"><span class="slot done">✓ 09:00</span><span class="slot">13:00</span><span class="slot wait">◐ 18:00 waits for you</span></span></li>
+          <li><span class="small">@charlas.demo</span><span class="slot-row"><span class="slot done">✓ 10:00</span><span class="slot">15:00</span><span class="slot">20:00</span></span></li>
+          <li><span class="small">@archive.tales.demo</span><span class="slot-row"><span class="slot wait">◐ 14:00 waits for you</span><span class="slot">19:30</span></span></li>
+          <li><span class="small">@archivo.relatos.demo</span><span class="slot-row"><span class="slot">20:30</span></span></li>
+          <li><span class="small">@toolbench.demo</span><span class="slot-row"><span class="slot">17:00</span></span></li>
+        </ul>
+        <p class="xs muted" style="padding:0 1rem 0.8rem">✓ posted · ✕ failed · ● next · ◐ waits for an approval. Times in your time zone.</p>
+      </section>
+
+      <section class="card" data-when="loading" aria-busy="true"><div class="bd stack" style="padding-top:1rem"><div class="sk" style="height:8rem"></div></div></section>
+    </div>
+  </div>
+  <p class="sample">Sample data: fictional accounts and numbers, for layout only.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

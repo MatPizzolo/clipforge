@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Accounts · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .focus3 { display: grid; gap: 0.75rem; }
+  @media (min-width: 1024px) { .focus3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .focus { padding: 0.9rem 1rem; display: grid; gap: 0.35rem; text-decoration: none; }
+  .focus:hover { border-color: var(--ring); }
+  .focus .why { font-size: 0.8125rem; color: var(--muted-foreground); }
+  .rank { font-size: 0.75rem; font-weight: 600; color: var(--muted-foreground); }
+  td .h { font-weight: 600; white-space: nowrap; }
+  .cards-sm { list-style: none; margin: 0; padding: 0; }
+  .cards-sm li { padding: 0.7rem 1rem; border-top: 1px solid var(--border); display: grid; gap: 0.2rem; }
+  .cards-sm li:first-child { border-top: 0; }
+  .cards-sm .nums { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; font-size: 0.75rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .cat-h { display: flex; align-items: baseline; justify-content: space-between; padding: 0.8rem 1rem 0.3rem; }
+</style>
+</head>
+<body data-page="accounts" data-states="live empty loading error stale">
+<!--
+THESIS: the weekly hour starts with a ranked answer, "these 3 accounts need you this week", then the whole fleet side by side.
+OWN-WORLD: S3a neutral shell; three ranked focus cards, then one dense comparison table (laptop) or stacked rows (phone).
+STORY: the owner reads why each of the top 3 needs them, opens one, and uses the table to spot outliers (runway, approval rate, cost per item, their own minutes).
+FIRST VIEWPORT: page title with the Map / Compare switch, the 3 focus cards, the head of the table.
+FORM: Accounts → Compare (spec §6, §7.4), next to S3c's Map; no seed run.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main data-tab-scope>
+  <div class="page-head">
+    <div><h1>Accounts</h1><p class="sub">6 accounts · 3 categories · week of the 9th</p></div>
+    <div class="row"><button class="btn" type="button">New account from a blueprint</button></div>
+  </div>
+  <div class="seg" role="tablist" data-tabs="compare">
+    <button role="tab" data-tab="map">Map</button>
+    <button role="tab" data-tab="compare">Compare</button>
+  </div>
+
+  <div class="notice critical" data-when="error" role="alert"><span aria-hidden="true">✕</span><div><b>Can't load accounts.</b> The API answered 503 (database unavailable). <button class="btn" type="button">Retry</button></div></div>
+  <section class="card" data-when="empty"><div class="empty"><span class="big">No accounts yet.</span><span class="small muted">An account is a blueprint plus a language, handles and a schedule. It starts Hands-on.</span><button class="btn primary" type="button">New account from a blueprint</button></div></section>
+  <div class="stack" data-when="loading" aria-busy="true"><div class="focus3"><div class="sk" style="height:6rem"></div><div class="sk" style="height:6rem"></div><div class="sk" style="height:6rem"></div></div><div class="sk" style="height:14rem"></div></div>
+
+  <section data-panel="compare" class="stack lg" aria-label="Compare">
+    <div data-when="live" class="stack">
+      <h2>Needs you this week</h2>
+      <div class="focus3">
+        <a class="card focus" href="account.html"><span class="rank">1 · @founder.cuts.demo</span><b>Decide the 45 s experiment, then plan sources</b><span class="why">Experiment ready · runway 16 days · 3 min a day of your time, the highest in the fleet</span></a>
+        <a class="card focus" href="account.html"><span class="rank">2 · @archivo.relatos.demo</span><b>Fix the Spanish hooks</b><span class="why">“Pregunta abierta” 2 of 9 approved · first dubs from the pair in review (3 of 10)</span></a>
+        <a class="card focus" href="account.html"><span class="rank">3 · @charlas.demo</span><b>Add sources before it runs dry</b><span class="why">Runway 9 days · 2 unclipped episodes left</span></a>
+      </div>
+      <p class="xs muted">Ranked by what's waiting (experiments, windows, runway under 14 days, weak hooks, health) and by your minutes per account.</p>
+    </div>
+
+    <section class="card" data-when="live" aria-label="All accounts">
+      <div class="hd"><h2>Side by side</h2><span class="small muted">last 7 days</span></div>
+      <div class="bd flush only-lg" style="overflow-x:auto">
+        <table class="data">
+          <thead><tr><th>Account</th><th>Rung</th><th class="r">Day</th><th class="r">Runway</th><th class="r">Approved</th><th class="r">Cost / item</th><th>Top hook</th><th class="r">Your min / day</th><th class="r">Views 7 d</th></tr></thead>
+          <tbody>
+            <tr><td><span class="h">@mindset.clips.demo</span><br><span class="xs muted">clips · EN</span></td><td>Supervised <span class="chip good">↑ ready</span></td><td class="r">104</td><td class="r">21 d</td><td class="r">96%</td><td class="r">$0.02</td><td>Bold claim v4</td><td class="r">0.8</td><td class="r">111K</td></tr>
+            <tr><td><span class="h">@founder.cuts.demo</span><br><span class="xs muted">clips · EN</span></td><td>Hands-on</td><td class="r">18</td><td class="r">16 d</td><td class="r">88%</td><td class="r">$0.02</td><td>Number + money v1</td><td class="r">3.1</td><td class="r">41K</td></tr>
+            <tr><td><span class="h">@charlas.demo</span><br><span class="xs muted">clips · ES</span></td><td>Hands-on</td><td class="r">18</td><td class="r"><span class="st warning">▲ 9 d</span></td><td class="r">91%</td><td class="r">$0.02</td><td>Pregunta directa v2</td><td class="r">2.8</td><td class="r">29K</td></tr>
+            <tr><td><span class="h">@archive.tales.demo</span><br><span class="xs muted">story · EN · pair</span></td><td>Hands-on</td><td class="r">9</td><td class="r">12 d</td><td class="r">82%</td><td class="r">$0.11</td><td>Number + conflict v3</td><td class="r">2.9</td><td class="r">18K</td></tr>
+            <tr><td><span class="h">@archivo.relatos.demo</span><br><span class="xs muted">story · ES · pair</span></td><td>Hands-on</td><td class="r">9</td><td class="r">12 d</td><td class="r"><span class="st warning">▲ 64%</span></td><td class="r">$0.10</td><td>El día que… v1</td><td class="r">2.4</td><td class="r">7.9K</td></tr>
+            <tr><td><span class="h">@toolbench.demo</span><br><span class="xs muted">avatar · EN</span></td><td>Hands-on</td><td class="r">3</td><td class="r">6 d</td><td class="r">—</td><td class="r">$0.27</td><td>—</td><td class="r">2.6</td><td class="r">1.1K</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="cards-sm only-sm">
+        <li><b>@mindset.clips.demo</b><span class="nums"><span>Supervised ↑ ready</span><span>day 104</span><span>21 d runway</span><span>96% approved</span><span>0.8 min/day</span></span></li>
+        <li><b>@founder.cuts.demo</b><span class="nums"><span>Hands-on</span><span>day 18</span><span>16 d</span><span>88%</span><span>3.1 min/day</span></span></li>
+        <li><b>@charlas.demo</b><span class="nums"><span>Hands-on</span><span>day 18</span><span>▲ 9 d</span><span>91%</span><span>2.8 min/day</span></span></li>
+        <li><b>@archive.tales.demo</b><span class="nums"><span>Hands-on</span><span>day 9</span><span>12 d</span><span>82%</span><span>2.9 min/day</span></span></li>
+        <li><b>@archivo.relatos.demo</b><span class="nums"><span>Hands-on</span><span>day 9</span><span>12 d</span><span>▲ 64%</span><span>2.4 min/day</span></span></li>
+        <li><b>@toolbench.demo</b><span class="nums"><span>Hands-on</span><span>day 3</span><span>6 d</span><span>new</span><span>2.6 min/day</span></span></li>
+      </ul>
+      <p class="xs muted" style="padding:0.6rem 1rem 0.9rem">Fleet: 14.6 min a day of your time against a 20-minute budget. Shown as after S7; before analytics the Views column is left out.</p>
+    </section>
+  </section>
+
+  <section data-panel="map" class="card" aria-label="Map" hidden>
+    <div class="cat-h"><h2>clips</h2><a class="small muted" href="#">Category workspace ▸</a></div>
+    <ul class="cards-sm"><li><b>@mindset.clips.demo</b><span class="nums"><span>blueprint mindset v2</span><span>Supervised</span></span></li><li><b>@founder.cuts.demo</b><span class="nums"><span>founder v1</span><span>⚗ 45 s experiment</span></span></li><li><b>@charlas.demo</b><span class="nums"><span>charlas v1</span></span></li></ul>
+    <div class="cat-h"><h2>story</h2><a class="small muted" href="#">Category workspace ▸</a></div>
+    <ul class="cards-sm"><li><b>@archive.tales.demo ⇄ @archivo.relatos.demo</b><span class="nums"><span>archive v3</span><span>⚗ narration pace</span></span></li></ul>
+    <div class="cat-h"><h2>band · avatar · model</h2></div>
+    <p class="small muted" style="padding:0 1rem 1rem">Map view per S3c §2.2: one section per category, tables on a laptop, cards on a phone; empty categories stay visible.</p>
+  </section>
+  <p class="sample">Sample data: fictional accounts and numbers, for layout only.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

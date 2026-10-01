@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Personas · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .anchors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+  .anchor { aspect-ratio: 4 / 5; border-radius: 0.5rem; position: relative; overflow: hidden;
+    background: radial-gradient(circle at 50% 38%, oklch(0.78 0.04 60) 0 18%, transparent 19%), radial-gradient(ellipse at 50% 95%, oklch(0.55 0.05 250) 0 38%, transparent 39%), linear-gradient(180deg, oklch(0.9 0.01 250), oklch(0.8 0.02 250)); }
+  .anchor span { position: absolute; left: 0.4rem; bottom: 0.35rem; font-size: 0.6875rem; font-weight: 600; color: #fff; text-shadow: 0 0 3px #000; }
+  .renders { list-style: none; margin: 0; padding: 0; }
+  .renders li { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) 7rem auto; gap: 0.75rem; align-items: center; padding: 0.55rem 1rem; border-top: 1px solid var(--border); font-size: 0.8125rem; }
+  .renders li:first-child { border-top: 0; }
+  .renders .th { width: 2.5rem; aspect-ratio: 9 / 16; border-radius: 0.3rem; background: linear-gradient(180deg, oklch(0.6 0.03 250), oklch(0.35 0.02 250)); }
+  .score { display: grid; gap: 0.2rem; }
+  .score .bar { height: 6px; border-radius: 3px; background: var(--muted); position: relative; }
+  .score .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--foreground); }
+  .score .bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--critical); }
+  .score.low .bar i { background: var(--critical); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1rem; font-size: 0.8125rem; margin: 0; }
+  .kv dt { color: var(--muted-foreground); } .kv dd { margin: 0; }
+  .wave { height: 2.5rem; border-radius: 0.375rem; background: repeating-linear-gradient(90deg, var(--muted) 0 3px, transparent 3px 5px); mask: linear-gradient(90deg, #000 0 100%); }
+</style>
+</head>
+<body data-page="personas" data-states="live empty loading error stale">
+<!--
+THESIS: a persona is a locked identity (three anchor images and one voice master) and every new render is scored against it before it can ship.
+OWN-WORLD: S3a neutral shell; anchor images in a strip, a consistency score per render with a visible threshold marker, the voice master with its settings, the disclosure that never turns off.
+STORY: the owner checks that recent renders still look like the persona, sees drift flagged before publish, plays the voice, and confirms disclosure and provenance.
+FIRST VIEWPORT: persona name and accounts, the three anchors, the recent-renders list with scores and the drift threshold.
+FORM: Personas (08 §2; spec §7.8); synthetic and disclosed (ADR-39); no seed run.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main>
+  <div class="page-head">
+    <div><h1>Nova, AI host</h1><p class="sub">Synthetic persona · used by @toolbench.demo · LoRA v2 · voice master v1</p></div>
+    <div class="row wrap"><button class="btn" type="button">Regenerate anchors…</button><button class="btn" type="button">Retire</button></div>
+  </div>
+
+  <div class="notice critical" data-when="error" role="alert"><span aria-hidden="true">✕</span><div><b>Can't load this persona.</b> Renders that need it are held, not published. <button class="btn" type="button">Retry</button></div></div>
+  <section class="card" data-when="empty"><div class="empty"><span class="big">No personas yet.</span><span class="small muted">Avatar and model accounts need one: three anchor images generated from a written brief (synthetic only), a voice master, and a LoRA trained on its own images. Comes with the avatar producer (S8).</span><button class="btn primary" type="button">Design a persona…</button></div></section>
+  <div class="grid-2" data-when="loading" aria-busy="true"><div class="sk" style="height:14rem"></div><div class="sk" style="height:14rem"></div></div>
+
+  <div class="grid-2" data-when="live">
+    <div class="stack lg">
+      <section class="card" aria-label="Identity">
+        <div class="hd"><h2>Identity lock</h2><span class="small muted">3 anchors · all renders scored against them</span></div>
+        <div class="bd stack">
+          <div class="anchors" role="list" aria-label="Anchor images (placeholders)">
+            <div class="anchor" role="listitem" aria-label="Anchor 1, front"><span>front</span></div>
+            <div class="anchor" role="listitem" aria-label="Anchor 2, three-quarter"><span>¾ left</span></div>
+            <div class="anchor" role="listitem" aria-label="Anchor 3, profile"><span>profile</span></div>
+          </div>
+          <p class="xs muted">Generated from the persona brief only. No photos of real people, ever (ADR-39).</p>
+        </div>
+      </section>
+      <section class="card" aria-label="Voice">
+        <div class="hd"><h2>Voice master</h2><span class="small muted">Qwen3-TTS · self-hosted</span></div>
+        <div class="bd stack">
+          <div class="row"><button class="btn" type="button">▶ Play 15 s</button><div class="wave" style="flex:1" aria-hidden="true"></div></div>
+          <dl class="kv">
+            <dt>Design prompt</dt><dd>bright, mid-pitch, friendly teacher; light US accent</dd>
+            <dt>Pace</dt><dd>1.0× · natural pauses and breaths on</dd>
+            <dt>Reference clip</dt><dd>v1, 60 s, made from the design prompt</dd>
+          </dl>
+          <button class="btn" type="button" style="justify-self:start">Try a variant…</button>
+        </div>
+      </section>
+    </div>
+    <div class="stack lg">
+      <section class="card" aria-label="Recent renders">
+        <div class="hd"><h2>Consistency</h2><span class="small muted">drift below 0.80 goes to review</span></div>
+        <ul class="renders">
+          <li><span class="th" aria-hidden="true"></span><span>“This $9 tool replaced my notes app”</span><span class="score"><span class="bar"><i style="width:91%"></i><b style="left:80%"></b></span><span class="xs muted num">0.91</span></span><span class="st good">✓</span></li>
+          <li><span class="th" aria-hidden="true"></span><span>“3 shortcuts nobody uses”</span><span class="score"><span class="bar"><i style="width:88%"></i><b style="left:80%"></b></span><span class="xs muted num">0.88</span></span><span class="st good">✓</span></li>
+          <li><span class="th" aria-hidden="true"></span><span>“Notion vs paper, honestly”</span><span class="score low"><span class="bar"><i style="width:72%"></i><b style="left:80%"></b></span><span class="xs num" style="color:var(--critical)">0.72</span></span><span class="st critical">✕ drift</span></li>
+        </ul>
+        <p class="xs muted" style="padding:0.5rem 1rem 0.9rem">Score: face similarity to the anchors (spike X3's method). A drift sends the item to review with this panel attached; it never publishes on its own.</p>
+      </section>
+      <section class="card" aria-label="Disclosure">
+        <div class="hd"><h2>Disclosure</h2><span class="small muted">always on</span></div>
+        <div class="bd">
+          <ul class="list small">
+            <li style="padding:0.35rem 0"><span class="st good">✓</span> “AI host” in every bio</li>
+            <li style="padding:0.35rem 0"><span class="st good">✓</span> Platform AI labels on every post</li>
+            <li style="padding:0.35rem 0"><span class="st good">✓</span> Provenance metadata (C2PA) kept on every file</li>
+            <li style="padding:0.35rem 0"><span class="st good">✓</span> No first-person product claims (the gate checks)</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </div>
+  <p class="sample">Sample data: a fictional persona, for layout only.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>
