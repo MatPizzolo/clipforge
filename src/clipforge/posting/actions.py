@@ -1,10 +1,11 @@
 """The posting actions both surfaces share (ADR-44, docs/studio/08 §2b).
 
 Telegram's taps and commands call these, and S3's admin endpoint will too, so one backend
-writes each change. Every write carries an actor (`telegram:<user id>`, `web:<login>` or
-`session:<name>`), which Postgres keeps in `post_events.data.actor` (S3c D3). A database
-error becomes `ActionFailed(STORE_UNAVAILABLE)`: the primary store raised before writing, and
-the Dual mirror only runs after a primary success, so nothing changed.
+writes each change. Every write carries an actor (`telegram:<user id>`, `web:<login>`,
+`session:<name>` or `cli:<os user>`), which Postgres keeps in `post_events.data.actor`
+(S3c D3). A database error becomes `ActionFailed(STORE_UNAVAILABLE)`: the primary store
+raised before writing, and the Dual mirror only runs after a primary success, so nothing
+changed.
 """
 
 from __future__ import annotations
@@ -26,7 +27,11 @@ from clipforge.posting.backend import Posting, posting_of
 
 log = logging.getLogger(__name__)
 
-ACTOR = re.compile(r"telegram:\d{1,20}|web:[A-Za-z0-9-]{1,39}|session:[a-z0-9][a-z0-9-]{0,39}")
+# ADR-42's actors: telegram:<id>, web:<login>, session:<name>, and the CLI's cli:<os user>
+ACTOR = re.compile(
+    r"telegram:\d{1,20}|web:[A-Za-z0-9-]{1,39}|session:[a-z0-9][a-z0-9-]{0,39}"
+    r"|cli:[A-Za-z0-9._-]{1,32}"
+)
 _LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}")  # a GitHub login
 
 

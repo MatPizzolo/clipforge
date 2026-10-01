@@ -4,7 +4,7 @@ import type { Job, Posting } from "@/lib/types";
 
 const posting: Posting = {
   enabled: true, paused: false, next_slot: "2026-09-29T18:00:00-03:00",
-  waiting: 41, days_left: 7, per_day: 6, problem: null,
+  waiting: 41, days_left: 7, per_day: 6, problem: null, state: "on", posted_total: 20,
   channels: [
     { slug: "a", name: "A", episodes_clipped: 1, episodes_clipping: 0, episodes_failed: 0, counts: { posted: 20, queued: 3 } },
     { slug: "b", name: "B", episodes_clipped: 1, episodes_clipping: 0, episodes_failed: 0 },

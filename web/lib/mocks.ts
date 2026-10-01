@@ -12,6 +12,8 @@ export const MOCK_POSTING: Posting = {
   days_left: 7,
   per_day: 6,
   problem: null,
+  state: "on",
+  posted_total: 23, // the channels' posted counts (20 + 3)
   channels: [
     {
       slug: "billy-garton",

@@ -99,6 +99,8 @@ def test_actors_are_checked() -> None:
             actions.web_actor(bad)
     with pytest.raises(ValueError):
         actions.skip(None, REF, "api", T0)  # type: ignore[arg-type]
+    for good in ("telegram:42", "web:matpizzolo", "session:s1", "cli:matpizzolo"):
+        assert actions.ACTOR.fullmatch(good)
 
 
 def test_a_database_error_answers_store_unavailable_and_changes_nothing(
