@@ -1,3 +1,5 @@
+> **Historical (Phase 1, ADR-9–16, deployed 2026-09-23):** built and deployed; docs/ARCHITECTURE.md and the code are current.
+
 # Serverless pipeline design (Phase 1)
 
 Date: 2026-09-23 · Status: Awaiting review · ADRs: 9–16 in `docs/DECISIONS.md`

@@ -72,8 +72,9 @@ uv run python scripts/export_openapi.py && (cd web && npm run gen)
 
 ## Deploy (Vercel Pro)
 
-The project is linked from this folder (`vercel link` inside `web/`). Until the git repo exists,
-deploy with the CLI:
+The project is linked from this folder (`vercel link` inside `web/`). The repo is on GitHub. The owner
+connects it in Vercel, with Root Directory `web`, in the Vercel steps before card 004 (owner runbook
+11 §5b). Card 004 deploys with the CLI:
 
 ```bash
 cd web
@@ -97,7 +98,7 @@ Add a value interactively (it isn't echoed or saved in shell history):
 ```bash
 vercel env add API_TOKEN production
 vercel env add AUTH_SECRET preview ""     # the "" means all preview branches (the CLI insists)
-``` Once the repo is on GitHub, connect it in Vercel with Root Directory `web`.
+```
 
 **What a preview proves:** it runs on mock data and has a random URL, and a GitHub OAuth app has one
 callback URL, so **no login is possible on a preview**. It only proves the build works and that pages

@@ -1,7 +1,7 @@
 # Card NNN: <stream> — <title>
 
 Status: proposed | sent YYYY-MM-DD | done YYYY-MM-DD (report: docs/reports/NNN-…md) | superseded by NNN
-Stream: S1 | S2 | S3 | S3a | S3c | S4+ | X1–X6 | X0 | coordinator
+Stream: S1 | S2 | S3 | S3a | S3c | S4+ | X1–X6 | X0 | cleanup | coordinator
 Branch: `<stream>/<topic>` · Worktree: `../clipForge-<stream>` (created with `scripts/worktree.sh <branch>`)
 Decision-log range: #NNN–#NNN (append only, in this range)
 Model: most capable (design, review) | mid-tier (implementing a written plan)

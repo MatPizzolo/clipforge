@@ -1,5 +1,7 @@
 # Evals
 
+> **Planned (ROADMAP Phase 5):** `evals/` and `clipforge eval` aren't built yet. This page is the design.
+
 Prompt and model changes must not make highlight selection worse. The eval set catches regressions before they reach real output.
 
 ## Eval set

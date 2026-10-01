@@ -84,5 +84,5 @@ Totals: 19 accounts in 5 categories (3 clips, 6 story, 3 band, 4 avatar, 3 model
 2. Check the handle on TikTok, Instagram, YouTube and Facebook. Record the final handle.
 3. Write or reuse the blueprint in `blueprints/<name>.toml` (07 has the concept).
 4. Record source permissions (clips) or content rules (other categories).
-5. Launch with prompt E in [06](06-session-prompts.md): `clipforge account create`, persona job, platform connection in Upload-Post, warm-up, first batch in `review` tier.
+5. Launch with a card the coordinator builds from prompt E in [06](06-session-prompts.md) (`docs/cards/`): `clipforge account create`, persona job, platform connection in Upload-Post, warm-up, first batch in `review` tier.
 6. Set the status to `planned`, then `live` once it posts. Add the launch to the decision log ([10](10-decision-log.md)).

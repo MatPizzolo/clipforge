@@ -1,3 +1,5 @@
+> **Historical (ADR-20, 2026-09-28):** built and deployed; docs/ARCHITECTURE.md and the code are current.
+
 # Retention polish: loud-normalized audio, hook title, caption pop, lighter files
 
 Date: 2026-09-28 · Status: Accepted, implemented and deployed · ADR: 20 · Sub-project 1 of 3 from the "professional clips" brainstorm (2: speaker-aware framing, 3: pacing)

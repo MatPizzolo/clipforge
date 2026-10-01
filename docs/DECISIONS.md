@@ -125,7 +125,7 @@ Decision:
 Consequences: Worst-case cost per job is about $0.50. A user can get "4 of 5 clips" instead of nothing.
 
 ## ADR-16: CI checks on every push, auto-deploy on main
-Date: 2026-09-23 · Status: Accepted
+Date: 2026-09-23 · Status: Accepted (CI runs scripts/check.sh; the deploy job is off behind DEPLOY_ENABLED, log #109, #212)
 Context: With serverless, deploying is releasing.
 Decision: `.github/workflows/ci.yml` runs ruff, a format check, mypy and the fast tests on every push and PR. On `main`, after the checks pass, it runs `modal deploy` using the GitHub secrets `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`. GPU and smoke tests run only from a manual `workflow_dispatch` workflow.
 Consequences: Merged to `main` means live. CI never spends Modal money automatically. A bad deploy is rolled back by reverting on `main` (or with `modal app rollback`).
@@ -168,7 +168,7 @@ Decision: Visual first. In a shot with two or more seats (faces seen in at least
 Consequences: A few CPU seconds per clip and no new dependencies. A listener laughing hard can steal a turn shorter than the hold. Diarization stays open in the roadmap for footage where this is wrong. Design: docs/superpowers/specs/2026-09-28-speaker-framing-design.md.
 
 ## ADR-22: Channel folders and batch submit
-Date: 2026-09-28 · Status: Accepted
+Date: 2026-09-28 · Status: Accepted (database sources replace channels.toml at the S1 rollout, ADR-25, ADR-41)
 Context: The owner clips whole podcast channels, starting with 11 episodes of Billy Garton Jr. (creator agreement), with more channels in the same niche later. Every clip needs the right credit, and the posting assistant (ADR-23) needs to know each job's channel. Waiting for each video in turn took hours.
 Decision: Videos go in `videos/<channel>/`. `videos/channels.toml` gives each channel a credit name, an optional url and a permission. `clipforge clip` submits every new video with `JobInput.channel`, `source_credit`, `permission` and `source_label`, then exits. `--fetch` waits for all submitted jobs together and downloads each into `videos/out/<channel>/<episode>/`. The inbox ledger keeps `{job_id, status}` per video; the old format loads as fetched. Spec: docs/superpowers/specs/2026-09-28-posting-assistant-design.md §3.
 Consequences: Credit and permission are set once per channel. A video moved into a channel folder counts as new and is submitted again; this is cheap because the transcript and highlights are cached by source hash, and posting skips overlapping moments.
@@ -180,7 +180,7 @@ Decision: When a channel job (ADR-22) finishes, `package_step` queues its clips 
 Consequences: The laptop is needed only to add videos. Reads scan all `post:*` keys (`KV.items()`), which is fine for thousands of clips; move to an index or SQLite if it grows past that. Reject reasons feed the Phase 5 ranker. API publishing (step B) would replace the ✅ taps and gets its own ADR.
 
 ## ADR-24: Keep the posting state alive against Modal Dict expiry
-Date: 2026-09-29 · Status: Accepted (implementation: plan C Task 6)
+Date: 2026-09-29 · Status: Accepted (implementation: plan C Task 6; refined by ADR-46)
 Context: The Plan B review found that Modal Dict entries expire after 7 days without reads or writes (modal 1.5.5 `Dict` docs; our Dict was created in 2026, so the new rule applies). The posting queue (ADR-23) lives in the job Dict and lasts weeks (11 episodes at 6 clips a day is about 55 days). If a posted clip's `posted:*` keys expire, the clip reads as unposted and the bot sends it again. Expired verdicts would bring rejected clips back, and expired items and `job:*` records would silently shrink the queue and hide jobs from `rebuild`. Whether a streaming `items()` read resets the timer is undocumented. Options: a keep-alive read, a Volume snapshot, or making the Volume the record and the Dict a cache (a redesign).
 Decision: A daily Modal cron, `posting_keepalive`, reads every `post:*` and `job:*` key (and `posting:paused`) one by one with `get`, which the docs count as activity. It then writes every `post:*` key and value to `/jobs/posting/snapshots/<date>.json` on the Volume, keeping the last 14. A restore, `POST /posting/restore` (bearer token), with `clipforge status --restore`, puts back keys from the newest snapshot only where they are missing (set-if-absent), so it never overwrites newer state. Short-lived claims (`posting:slot:*`, `posting:reminded:*`, `tg:update:*`) are left to expire.
 Consequences: A few seconds to about a minute of CPU a day. A week-long cron outage is recoverable from the snapshot. The Volume-as-record redesign stays open if the Dict grows past tens of thousands of keys.
@@ -196,7 +196,7 @@ Decision:
 Consequences: New content types are new producers only. The clip producer gains a small wrapper step. The ADR-23 `PostItem` is replaced by `ContentItem` + `posts` rows.
 
 ## ADR-26: Postgres (Neon) for durable state; Dict only for hot step state
-Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S1; supersedes ADR-5; retires ADR-24 once migrated)
+Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S1; supersedes ADR-5; retires ADR-24 once migrated; refined by ADR-46)
 Context: Modal Dict entries expire after 7 days of inactivity, and ADR-24 works around that with keep-alives. The dashboard needs queries across accounts, dates and platforms (calendar, stats, money) that a key-value scan can't serve. Modal Volumes aren't safe for a database with many writers.
 Decision: Neon Postgres, reached through the pooled endpoint with SQLAlchemy 2 + psycopg 3, holds everything durable. Migrations use Alembic. The Dict keeps only in-flight job and step keys and claims (ADR-14); `job:*` summaries move to a `jobs` table too, so nothing durable depends on a Dict entry surviving 7 idle days. The dashboard reaches the data only through the FastAPI API (ADR-2).
 Consequences: One new managed dependency, free until it's outgrown. Tests need a local Postgres, and CI a Postgres service. Alembic runs in the deploy job before `modal deploy`. During the switch a setting points reads back at the Dict for rollback. The ADR-24 keep-alive and snapshot are removed a week after the migration is verified.

@@ -19,4 +19,4 @@ Write the report for the card this branch runs.
    - item 13 gives the status of every numbered card action.
 4. Put the inlined `git diff --stat` block at the end of item 4.
 5. Be factual: report failures with their output. Say "not verified" when something wasn't.
-6. Run `scripts/check.sh --docs --scope` afterwards (links in the report must resolve).
+6. **Last step:** rerun the full `scripts/check.sh` (no flags) afterwards, until it's green. Links in the report must resolve, and only a full green run after the last file change keeps the Stop hook's marker current.

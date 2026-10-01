@@ -1,3 +1,5 @@
+> **Historical (posting assistant, plans A, B and C, ADR-22–24, live since 2026-09-29):** built and deployed; the "not deployed" status below is from before that. docs/ARCHITECTURE.md and the code are current.
+
 # Plan C: Telegram posting assistant — Implementation Plan
 
 > **Status (2026-09-29): complete, not deployed.** Tasks 1–6 done and the final review's fixes applied (webhook sends reload the Volume before marking a clip unavailable, a lost send race deletes its duplicate, tap answers can't abort a tap, restore by date, tick timeout 600 s, httpx logs quiet). Deferred: taps on an older message of a re-sent clip redraw only that message; full Dict scans per tap (S1 moves the queue to Postgres).
