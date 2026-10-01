@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Design a persona · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .flow { display: grid; gap: 1rem; }
+  @media (min-width: 1024px) { .flow { grid-template-columns: 15rem minmax(0, 1fr); align-items: start; } .steps { position: sticky; top: 1.5rem; } }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: s; }
+  .steps li { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; padding: 0.45rem 0.6rem; border-radius: 0.5rem; font-size: 0.8125rem; color: var(--muted-foreground); }
+  .steps li::before { counter-increment: s; content: counter(s); width: 1.4rem; height: 1.4rem; border-radius: 999px; border: 1px solid var(--border); display: grid; place-items: center; font-size: 0.6875rem; font-weight: 600; }
+  .steps li.done::before { content: "✓"; background: var(--muted); border-color: transparent; color: var(--good); }
+  .steps li.now { background: var(--muted); color: var(--foreground); font-weight: 600; }
+  .steps li.now::before { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+  .steps .c { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+  @media (max-width: 1023px) { .steps { grid-auto-flow: column; overflow-x: auto; } .steps li { grid-template-columns: 1.6rem; } .steps li span { display: none; } }
+  .cands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+  @media (min-width: 1024px) { .cands { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+  .cand { aspect-ratio: 4 / 5; border-radius: 0.5rem; border: 2px solid transparent; position: relative; cursor: pointer; padding: 0; }
+  .cand[aria-pressed="true"] { border-color: var(--foreground); }
+  .cand[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 0.3rem; right: 0.35rem; width: 1.2rem; height: 1.2rem; border-radius: 999px; background: var(--foreground); color: var(--background); font-size: 0.7rem; display: grid; place-items: center; }
+  .footer { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: space-between; align-items: center; }
+  .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; font-size: 0.8125rem; }
+</style>
+</head>
+<body data-page="personas" data-states="faces brief voice lora link error">
+<!--
+THESIS: designing a persona is seven short steps, each showing what it costs before it runs, with the synthetic-only rule checked at the brief and disclosure fixed from the start.
+OWN-WORLD: S3a neutral shell; a numbered step list (sticky on a laptop, a compact row on a phone), one step's work in the main column, the running cost in the footer.
+STORY: the owner writes a brief, picks faces from generated candidates, designs a voice per language, hears test lines, trains the LoRA, links accounts, activates.
+FIRST VIEWPORT: step list, then the current step (here: pick 3 anchors from 12 candidate faces), the cost so far and the next step's cost.
+FORM: persona creation flow /personas/new (spec §7.8); no seed run.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main>
+  <div class="page-head"><div><h1>Design a persona</h1><p class="sub">Profe Sol · draft · saved after every step</p></div><a class="btn ghost" href="personas.html">Save and close</a></div>
+  <div class="flow">
+    <ol class="steps" aria-label="Steps">
+      <li class="done"><span>Brief</span><span class="c">$0.01</span></li>
+      <li class="now" aria-current="step"><span>Candidate faces</span><span class="c">$0.02</span></li>
+      <li><span>Pick 3 anchors</span><span class="c">$0.01</span></li>
+      <li><span>Voice per language</span><span class="c">~$0.01</span></li>
+      <li><span>Test lines</span><span class="c">~$0.01</span></li>
+      <li><span>Train the LoRA</span><span class="c">~$1–2</span></li>
+      <li><span>Link accounts</span><span class="c">$0</span></li>
+    </ol>
+
+    <div class="stack lg">
+      <!-- Brief -->
+      <section class="card" data-when="brief"><div class="hd"><h2>1 · Brief</h2><span class="small muted">who the persona is; no real person, ever</span></div><div class="bd stack">
+        <div class="field"><label for="b1">Role and niche</label><input id="b1" type="text" value="AI tutor who teaches everyday English to Spanish speakers"></div>
+        <div class="field"><label for="b2">Look (described, never a photo of someone)</label><textarea id="b2">Woman in her 30s, warm smile, short dark hair, glasses, cardigan; classroom light.</textarea></div>
+        <div class="field"><label for="b3">Personality and tone</label><input id="b3" type="text" value="patient, upbeat, uses examples from US daily life"></div>
+        <ul class="checks"><li><span class="st good">✓</span> No reference photos of real people uploaded (synthetic only, ADR-39)</li><li><span class="st good">✓</span> “AI tutor” will be in every bio; AI labels and C2PA on</li><li><span class="st warning">◐</span> Niche check: fits a new account (no linked account yet)</li></ul>
+      </div></section>
+
+      <!-- Faces -->
+      <section class="card" data-when="faces"><div class="hd"><h2>2 · Candidate faces</h2><span class="small muted">12 generated from the brief · pick 3 to refine as anchors</span></div><div class="bd stack">
+        <div class="cands" role="group" aria-label="Candidate faces">
+          <button class="cand" type="button" aria-pressed="true" aria-label="Candidate 1" style="background:radial-gradient(circle at 50% 38%, oklch(0.74 0.05 55) 0 22%, transparent 23%),radial-gradient(ellipse at 50% 100%, oklch(0.55 0.08 30) 0 42%, transparent 43%),linear-gradient(180deg, oklch(0.9 0.02 80), oklch(0.8 0.03 80))"></button>
+          <button class="cand" type="button" aria-pressed="false" aria-label="Candidate 2" style="background:radial-gradient(circle at 50% 38%, oklch(0.7 0.05 50) 0 22%, transparent 23%),radial-gradient(ellipse at 50% 100%, oklch(0.45 0.05 250) 0 42%, transparent 43%),linear-gradient(180deg, oklch(0.88 0.01 250), oklch(0.78 0.02 250))"></button>
+          <button class="cand" type="button" aria-pressed="true" aria-label="Candidate 3" style="background:radial-gradient(circle at 50% 38%, oklch(0.76 0.05 58) 0 22%, transparent 23%),radial-gradient(ellipse at 50% 100%, oklch(0.5 0.08 145) 0 42%, transparent 43%),linear-gradient(180deg, oklch(0.9 0.02 100), oklch(0.8 0.03 100))"></button>
+          <button class="cand" type="button" aria-pressed="false" aria-label="Candidate 4" style="background:radial-gradient(circle at 50% 38%, oklch(0.68 0.05 45) 0 22%, transparent 23%),radial-gradient(ellipse at 50% 100%, oklch(0.4 0.03 280) 0 42%, transparent 43%),linear-gradient(180deg, oklch(0.86 0.02 280), oklch(0.76 0.02 280))"></button>
+          <button class="cand" type="button" aria-pressed="true" aria-label="Candidate 5" style="background:radial-gradient(circle at 50% 38%, oklch(0.75 0.05 56) 0 22%, transparent 23%),radial-gradient(ellipse at 50% 100%, oklch(0.55 0.08 30) 0 42%, transparent 43%),linear-gradient(180deg, oklch(0.92 0.02 60), oklch(0.82 0.03 60))"></button>
+          <button class="cand" type="button" aria-pressed="false" aria-label="Candidate 6" style="background:radial-gradient(circle at 50% 38%, oklch(0.72 0.05 52) 0 22%, transparent 23%),radial-gradient(ellipse at 50% 100%, oklch(0.5 0.05 200) 0 42%, transparent 43%),linear-gradient(180deg, oklch(0.9 0.01 200), oklch(0.8 0.02 200))"></button>
+        </div>
+        <p class="xs muted">6 of 12 shown. Pick candidates that look like one person from three angles; the next step refines them into front, ¾ and profile anchors.</p>
+      </div></section>
+
+      <!-- Voice -->
+      <section class="card" data-when="voice"><div class="hd"><h2>4 · Voice per language</h2><span class="small muted">one voice master per language, designed from a prompt</span></div><div class="bd stack">
+        <div class="field"><label for="v1">Spanish (es-419) voice prompt</label><input id="v1" type="text" value="warm, clear, mid-pitch; neutral Latin American Spanish; teacher's pace"></div>
+        <div class="row wrap"><button class="btn primary" type="button">Design 3 options · ~$0.01</button><button class="btn" type="button">+ Add English voice</button></div>
+        <p class="xs muted">Self-hosted Qwen3-TTS (X1). A persona serving an EN/ES pair gets a native voice in each language, never a translated accent.</p>
+      </div></section>
+
+      <!-- LoRA -->
+      <section class="card" data-when="lora"><div class="hd"><h2>6 · Train the LoRA</h2><span class="small muted">on the persona's own generated images only</span></div><div class="bd stack">
+        <ul class="checks"><li><span class="st good">✓</span> 3 anchors and 24 generated renders, all synthetic</li><li><span class="st good">✓</span> No external images in the training set</li><li><span class="st info">◌</span> About 25 min on one GPU; you'll get a Telegram message only if it fails</li></ul>
+        <div class="row wrap"><button class="btn primary" type="button">Train · about $1–2</button><span class="xs muted">Estimate until spike X3 measures it.</span></div>
+      </div></section>
+
+      <!-- Link -->
+      <section class="card" data-when="link"><div class="hd"><h2>7 · Link accounts and activate</h2><span class="small muted">a pair or one niche</span></div><div class="bd stack">
+        <label class="row small"><input type="checkbox" checked> @profe.ia.demo · ES · English lessons</label>
+        <label class="row small"><input type="checkbox"> @ai.tools.demo · EN · tools <span class="chip warning">▲ other niche</span></label>
+        <p class="xs muted">Linking a second niche is allowed but flagged: each account should read as its own brand (07).</p>
+        <button class="btn primary" type="button" style="justify-self:start">Activate Profe Sol</button>
+      </div></section>
+
+      <div class="notice critical" data-when="error" role="alert"><span aria-hidden="true">✕</span><div><b>Face generation failed</b> (the image server timed out). Nothing was charged for this step; the brief is saved. <button class="btn" type="button">Try again</button></div></div>
+
+      <div class="footer"><span class="small muted">Spent so far: <b class="num">$0.03</b> · next step: about $0.01 · the whole persona: about $1.10–2.10</span><span class="row"><button class="btn" type="button">Back</button><button class="btn primary" type="button">Refine the 3 picks ▸</button></span></div>
+    </div>
+  </div>
+  <p class="sample">Sample data: a fictional persona, for layout only. Costs are estimates from 03 and X1; spike X3 measures faces and LoRA training.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+<script>document.querySelectorAll(".cand").forEach((b) => b.addEventListener("click", () => b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"))));</script>
+</body>
+</html>

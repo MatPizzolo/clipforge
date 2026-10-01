@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nova · Personas · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .head-row { display: flex; gap: 0.9rem; align-items: center; }
+  .face { width: 3.5rem; aspect-ratio: 4 / 5; border-radius: 0.5rem; flex: none;
+    background: radial-gradient(circle at 50% 38%, oklch(0.78 0.04 60) 0 22%, transparent 23%), radial-gradient(ellipse at 50% 100%, oklch(0.55 0.05 250) 0 42%, transparent 43%), linear-gradient(180deg, oklch(0.9 0.01 250), oklch(0.8 0.02 250)); }
+  .kv { display: grid; grid-template-columns: minmax(0, 10rem) minmax(0, 1fr); gap: 0.5rem 1rem; font-size: 0.875rem; margin: 0; }
+  .kv dt { color: var(--muted-foreground); font-size: 0.8125rem; } .kv dd { margin: 0; }
+  @media (max-width: 640px) { .kv { grid-template-columns: 1fr; gap: 0.15rem; } .kv dd { margin-bottom: 0.5rem; } }
+  .rules { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: 0.875rem; }
+  .looks { display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (min-width: 1024px) { .looks { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .look { display: grid; gap: 0.4rem; padding: 0.6rem; min-width: 0; }
+  .look .chip { white-space: normal; }
+  .look .row { flex-wrap: wrap; }
+  .look .img { aspect-ratio: 4 / 5; border-radius: 0.5rem; }
+  .look .row.wrap { gap: 0.25rem; }
+  .l1 { background: radial-gradient(circle at 50% 34%, oklch(0.78 0.04 60) 0 16%, transparent 17%), radial-gradient(ellipse at 50% 92%, oklch(0.35 0.03 250) 0 36%, transparent 37%), linear-gradient(180deg, oklch(0.86 0.01 80), oklch(0.74 0.02 80)); }
+  .l2 { background: radial-gradient(circle at 50% 34%, oklch(0.78 0.04 60) 0 16%, transparent 17%), radial-gradient(ellipse at 50% 92%, oklch(0.55 0.1 145) 0 36%, transparent 37%), linear-gradient(180deg, oklch(0.9 0.02 60), oklch(0.78 0.03 60)); }
+  .l3 { background: radial-gradient(circle at 50% 34%, oklch(0.78 0.04 60) 0 16%, transparent 17%), radial-gradient(ellipse at 50% 92%, oklch(0.6 0.08 30) 0 36%, transparent 37%), linear-gradient(180deg, oklch(0.88 0.03 40), oklch(0.72 0.04 40)); }
+  .l4 { background: linear-gradient(180deg, var(--muted), var(--muted)); display: grid; place-items: center; color: var(--muted-foreground); font-size: 1.5rem; }
+  .anchors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+  .anchor { aspect-ratio: 4 / 5; border-radius: 0.5rem; position: relative; overflow: hidden;
+    background: radial-gradient(circle at 50% 38%, oklch(0.78 0.04 60) 0 18%, transparent 19%), radial-gradient(ellipse at 50% 95%, oklch(0.55 0.05 250) 0 38%, transparent 39%), linear-gradient(180deg, oklch(0.9 0.01 250), oklch(0.8 0.02 250)); }
+  .anchor.drift { background: radial-gradient(circle at 46% 40%, oklch(0.74 0.05 55) 0 17%, transparent 18%), radial-gradient(ellipse at 50% 95%, oklch(0.5 0.08 30) 0 38%, transparent 39%), linear-gradient(180deg, oklch(0.82 0.04 40), oklch(0.66 0.05 40)); outline: 2px solid var(--critical); outline-offset: -2px; }
+  .anchor span { position: absolute; left: 0.4rem; bottom: 0.35rem; font-size: 0.6875rem; font-weight: 600; color: #fff; text-shadow: 0 0 3px #000; }
+  .causes { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; font-size: 0.8125rem; }
+  .causes li { display: grid; grid-template-columns: 6rem minmax(0, 1fr) 2rem; gap: 0.6rem; align-items: center; }
+  .causes .bar { height: 0.5rem; border-radius: 0 4px 4px 0; background: var(--series-1); }
+  .wave { height: 2.25rem; flex: 1; border-radius: 0.375rem; background: repeating-linear-gradient(90deg, var(--muted) 0 3px, transparent 3px 5px); }
+  .voice { display: grid; gap: 0.6rem; }
+</style>
+</head>
+<body data-page="personas" data-states="live loading error stale">
+<!--
+THESIS: a persona is a locked identity shared by the accounts it serves: profile, looks, voices and anchors are edited here once, and every render is checked against them.
+OWN-WORLD: S3a neutral shell; tabs Profile · Looks · Consistency · Voice · Anchors & LoRA; looks as image cards with per-account permission chips; drift as dots against a threshold line (dataviz).
+STORY: the owner checks who the persona is and which accounts it serves, approves looks, sees drift over time and its causes, tunes each language's voice, and versions anchors.
+FIRST VIEWPORT: face, name, status and the accounts it serves; then the Profile tab.
+FORM: persona page /personas/<id> (spec §7.8); no seed run.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main data-tab-scope>
+  <a class="small muted" href="personas.html" style="text-decoration:none">◎ Personas</a>
+  <div class="notice critical" data-when="error" role="alert"><span aria-hidden="true">✕</span><div><b>Persona not found.</b> Nothing was changed. <a href="personas.html">Back to Personas</a></div></div>
+  <div class="stack" data-when="loading" aria-busy="true"><div class="sk" style="height:4rem"></div><div class="sk" style="height:14rem"></div></div>
+
+  <header class="page-head" data-when="live">
+    <div class="head-row">
+      <span class="face" aria-hidden="true"></span>
+      <div><h1>Nova, AI host</h1><p class="sub">active since day 1 · LoRA v2 · tools and productivity</p>
+        <div class="row wrap" style="margin-top:0.4rem"><a class="chip" href="account.html?type=avatar">@toolbench.demo · EN</a><a class="chip" href="account.html?type=avatar">@herramientas.demo · ES</a><a class="chip warning" href="#">▲ @kitchen.finds.demo · EN</a></div></div>
+    </div>
+    <div class="row wrap"><button class="btn" type="button">Link an account…</button><button class="btn" type="button">Retire</button></div>
+  </header>
+
+  <div class="seg" role="tablist" data-tabs="profile" data-when="live">
+    <button role="tab" data-tab="profile">Profile</button>
+    <button role="tab" data-tab="looks">Looks</button>
+    <button role="tab" data-tab="consistency">Consistency</button>
+    <button role="tab" data-tab="voice">Voice</button>
+    <button role="tab" data-tab="anchors">Anchors &amp; LoRA</button>
+  </div>
+
+  <!-- Profile -->
+  <section data-panel="profile" class="stack lg">
+    <div class="notice warning" data-when="live"><span aria-hidden="true">▲</span><div><b>Nova spans unrelated niches</b> (tools on two accounts, kitchen on one). Each account should read as its own brand (07). <button class="btn" type="button" style="margin-left:0.4rem">Design a kitchen persona</button></div></div>
+    <div class="grid-2" data-when="live">
+      <section class="card"><div class="hd"><h2>Who she is</h2><span class="small muted">edited here, used by every account she serves</span></div><div class="bd">
+        <dl class="kv">
+          <dt>Name</dt><dd>Nova</dd>
+          <dt>Role</dt><dd>AI host who demonstrates tools in 60 s</dd>
+          <dt>Bio (EN)</dt><dd>“AI host. One tool, one task, one minute. Links are affiliate (#ad).”</dd>
+          <dt>Bio (ES)</dt><dd>“Presentadora IA. Una herramienta, una tarea, un minuto. Enlaces de afiliado (#ad).”</dd>
+          <dt>Personality</dt><dd>curious, quick, dry humour; explains, never hypes</dd>
+          <dt>Niche</dt><dd>productivity and AI tools</dd>
+          <dt>Lifecycle</dt><dd>draft → <b>active</b> → retired</dd>
+        </dl>
+      </div></section>
+      <section class="card"><div class="hd"><h2>Rules</h2><span class="small muted">the gate and the claim check enforce them</span></div><div class="bd stack">
+        <p class="lbl">Never says</p>
+        <ul class="rules"><li>that she used, tested or owns a product (“I use it every day”)</li><li>health, finance, legal or earnings claims</li><li>that she is human, or anything that hides being AI</li></ul>
+        <p class="lbl" style="margin-top:0.4rem">Always on</p>
+        <ul class="rules"><li>“AI host” in every bio; platform AI labels on every post</li><li>C2PA provenance kept on every file</li><li>#ad on every affiliate item</li><li>Trained only on her own generated images (ADR-39)</li></ul>
+      </div></section>
+    </div>
+    <section class="card" data-when="live"><div class="hd"><h2>Accounts she serves</h2><span class="small muted">a pair or one niche; voices per language</span></div><div class="bd flush" style="overflow-x:auto">
+      <table class="data"><thead><tr><th>Account</th><th>Language</th><th>Voice</th><th>Looks allowed</th><th class="r">Renders 30 d</th><th class="r">Median score</th></tr></thead><tbody>
+        <tr><td>@toolbench.demo</td><td>EN</td><td>Nova EN v1</td><td>Studio desk, Hoodie</td><td class="r">22</td><td class="r">0.89</td></tr>
+        <tr><td>@herramientas.demo</td><td>ES</td><td>Nova ES v1</td><td>Studio desk, Café</td><td class="r">14</td><td class="r">0.88</td></tr>
+        <tr><td>@kitchen.finds.demo <span class="chip warning">▲ other niche</span></td><td>EN</td><td>Nova EN v1</td><td>Café</td><td class="r">6</td><td class="r">0.84</td></tr>
+      </tbody></table></div></section>
+  </section>
+
+  <!-- Looks -->
+  <section data-panel="looks" class="stack lg" hidden>
+    <div class="row between wrap"><p class="small muted">Outfits, settings and props made by inpainting from the anchors; the face stays locked. Each account chooses which looks it may use; renders rotate through them.</p><button class="btn" type="button">+ New look · ~$0.04</button></div>
+    <div class="looks">
+      <div class="card look"><div class="img l1" role="img" aria-label="Studio desk look"></div><b class="small">Studio desk</b><div class="row wrap"><span class="chip good">approved</span><span class="chip">toolbench</span><span class="chip">herramientas</span></div><span class="xs muted">31 renders · 0.90 median</span></div>
+      <div class="card look"><div class="img l2" role="img" aria-label="Hoodie, home office look"></div><b class="small">Hoodie, home office</b><div class="row wrap"><span class="chip good">approved</span><span class="chip">toolbench</span></div><span class="xs muted">9 renders · 0.88 median</span></div>
+      <div class="card look"><div class="img l3" role="img" aria-label="Café look"></div><b class="small">Café</b><div class="row wrap"><span class="chip good">approved</span><span class="chip">herramientas</span><span class="chip">kitchen.finds</span></div><span class="xs muted">10 renders · 0.81 median · lighting drifts</span></div>
+      <div class="card look"><div class="img l4" aria-hidden="true">+</div><b class="small">Night desk, neon</b><div class="row wrap"><span class="chip">draft</span></div><span class="row"><button class="btn primary" type="button">Approve</button><button class="btn ghost" type="button">Discard</button></span></div>
+    </div>
+  </section>
+
+  <!-- Consistency -->
+  <section data-panel="consistency" class="stack lg" hidden>
+    <section class="card"><div class="hd"><h2>Score per render</h2><span class="small muted">last 30 days · below 0.80 goes to review</span></div><div class="bd">
+      <div class="legend" id="lg-drift"></div>
+      <div class="chart" id="ch-drift" style="margin-top:0.5rem"></div>
+      <details class="table-view"><summary>Show as a table</summary><table class="data" id="tb-drift"></table></details>
+    </div></section>
+    <div class="grid-2">
+      <section class="card"><div class="hd"><h2>What caused drift</h2><span class="small muted">3 renders below 0.80</span></div><div class="bd">
+        <ul class="causes"><li><span>Lighting</span><span class="bar" style="width:66%"></span><span class="num">2</span></li><li><span>Pose (profile)</span><span class="bar" style="width:33%"></span><span class="num">1</span></li><li><span>Outfit</span><span class="bar" style="width:0%"></span><span class="num">0</span></li></ul>
+        <p class="xs muted" style="margin-top:0.6rem">The Café look accounts for both lighting drifts: re-make it with the anchors' light, or retire it.</p>
+      </div></section>
+      <section class="card"><div class="hd"><h2>Flagged render vs anchors</h2><span class="small muted">“Notion vs paper, honestly” · 0.72</span></div><div class="bd stack">
+        <div class="anchors"><div class="anchor drift" role="img" aria-label="Flagged render"><span>render · 0.72</span></div><div class="anchor" role="img" aria-label="Anchor front"><span>anchor front</span></div><div class="anchor" role="img" aria-label="Anchor three-quarter"><span>anchor ¾</span></div></div>
+        <div class="row wrap"><button class="btn primary" type="button">Re-render with Studio desk</button><button class="btn" type="button">Approve anyway…</button></div>
+      </div></section>
+    </div>
+  </section>
+
+  <!-- Voice -->
+  <section data-panel="voice" class="grid-2" hidden>
+    <section class="card"><div class="hd"><h2>Nova EN v1</h2><span class="small muted">@toolbench.demo, @kitchen.finds.demo</span></div><div class="bd voice">
+      <div class="row"><button class="btn" type="button">▶ 15 s</button><span class="wave" aria-hidden="true"></span></div>
+      <dl class="kv"><dt>Design prompt</dt><dd>bright, mid-pitch, friendly teacher; light US accent</dd><dt>Pace</dt><dd>1.0× · natural pauses and breaths on</dd></dl>
+      <div class="field"><label for="t1">Try a line</label><div class="row"><input id="t1" type="text" value="This free tool turns any PDF into flashcards."><button class="btn" type="button">▶ Hear it</button></div></div>
+      <button class="btn" type="button" style="justify-self:start">Try a variant (A/B)…</button>
+    </div></section>
+    <section class="card"><div class="hd"><h2>Nova ES v1</h2><span class="small muted">@herramientas.demo</span></div><div class="bd voice">
+      <div class="row"><button class="btn" type="button">▶ 15 s</button><span class="wave" aria-hidden="true"></span></div>
+      <dl class="kv"><dt>Design prompt</dt><dd>bright, warm, neutral Latin American Spanish, native (not a translation)</dd><dt>Pace</dt><dd>1.05×</dd></dl>
+      <div class="field"><label for="t2">Try a line</label><div class="row"><input id="t2" type="text" value="Esta herramienta gratis convierte un PDF en tarjetas."><button class="btn" type="button">▶ Hear it</button></div></div>
+      <p class="xs muted">Self-hosted Qwen3-TTS (X1). Each language has its own voice master; a dub uses the target account's voice.</p>
+    </div></section>
+  </section>
+
+  <!-- Anchors & LoRA -->
+  <section data-panel="anchors" class="grid-2" hidden>
+    <section class="card"><div class="hd"><h2>Anchors v2</h2><span class="small muted">every render is scored against these</span></div><div class="bd stack">
+      <div class="anchors"><div class="anchor" role="img" aria-label="Anchor front"><span>front</span></div><div class="anchor" role="img" aria-label="Anchor three-quarter"><span>¾ left</span></div><div class="anchor" role="img" aria-label="Anchor profile"><span>profile</span></div></div>
+      <p class="xs muted">Generated from the brief only; never photos of real people (ADR-39). Regenerating makes v3; renders keep the version they were made with.</p>
+      <button class="btn" type="button" style="justify-self:start">Regenerate anchors… (~$0.05)</button>
+    </div></section>
+    <section class="card"><div class="hd"><h2>LoRA versions</h2></div><div class="bd flush">
+      <table class="data"><thead><tr><th>Version</th><th>Trained on</th><th class="r">Median score</th><th>Status</th></tr></thead><tbody>
+        <tr><td>v2</td><td>40 own renders</td><td class="r">0.89</td><td><span class="chip good">in use</span></td></tr>
+        <tr><td>v1</td><td>3 anchors + 12 own renders</td><td class="r">0.83</td><td><span class="chip">retired</span></td></tr>
+      </tbody></table></div></section>
+  </section>
+  <p class="sample">Sample data: a fictional persona and accounts, for layout only.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+<script>
+// Score per render: dots per account (slots 1-3), threshold as a reference line, per-dot tooltip, table view.
+(function () {
+  const NS = "http://www.w3.org/2000/svg";
+  const mk = (t, a) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); return n; };
+  const S = [
+    { name: "@toolbench.demo", color: "var(--series-1)", v: [[1,.9],[3,.91],[5,.88],[7,.9],[9,.92],[12,.89],[14,.9],[17,.72],[19,.9],[22,.91],[25,.89],[28,.9]] },
+    { name: "@herramientas.demo", color: "var(--series-2)", v: [[2,.88],[6,.87],[10,.89],[13,.86],[18,.88],[23,.9],[27,.87]] },
+    { name: "@kitchen.finds.demo", color: "var(--series-3)", v: [[8,.84],[15,.78],[21,.85],[26,.76],[29,.86]] },
+  ];
+  function draw() {
+    const host = document.getElementById("ch-drift"); if (!host.clientWidth) return; host.replaceChildren();
+    const W = host.clientWidth, H = 220, L = 40, R = 16, T = 10, B = 26, lo = 0.6, hi = 1.0;
+    const x = (d) => L + ((d - 1) / 29) * (W - L - R), y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    const svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Consistency score per render over 30 days, by account, against the 0.80 threshold" });
+    [0.6, 0.7, 0.8, 0.9, 1.0].forEach((v) => { svg.append(mk("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: v === 0.6 ? "baseline" : "gridline" })); const t = mk("text", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }); t.textContent = v.toFixed(1); svg.append(t); });
+    [1, 15, 30].forEach((d) => { const t = mk("text", { x: x(d), y: H - 6, "text-anchor": "middle" }); t.textContent = "day " + d; svg.append(t); });
+    svg.append(mk("line", { x1: L, x2: W - R, y1: y(0.8), y2: y(0.8), stroke: "var(--critical)", "stroke-width": 1.5 }));
+    const th = mk("text", { x: W - R, y: y(0.8) - 5, "text-anchor": "end" }); th.textContent = "review below 0.80"; svg.append(th);
+    const tip = document.createElement("div"); tip.className = "tip"; host.append(tip);
+    S.forEach((s) => s.v.forEach(([d, v]) => {
+      svg.append(mk("circle", { cx: x(d), cy: y(v), r: 4.5, fill: s.color, stroke: "var(--card)", "stroke-width": 2 }));
+      const hit = mk("circle", { cx: x(d), cy: y(v), r: 12, fill: "transparent", tabindex: 0 });
+      const show = () => {
+        tip.replaceChildren();
+        const t = document.createElement("div"); t.className = "t"; t.textContent = "Day " + d;
+        const r = document.createElement("div"); r.className = "r";
+        const l = document.createElement("span"); const k = document.createElement("span"); k.className = "k"; k.style.background = s.color; l.append(k, document.createTextNode(" " + s.name));
+        const b = document.createElement("b"); b.textContent = v.toFixed(2) + (v < 0.8 ? " · drift" : ""); r.append(l, b); tip.append(t, r);
+        tip.style.display = "block"; tip.style.left = Math.min(W - 200, x(d) + 10) + "px"; tip.style.top = Math.max(0, y(v) - 50) + "px";
+      };
+      hit.addEventListener("pointermove", show); hit.addEventListener("focus", show);
+      hit.addEventListener("pointerleave", () => (tip.style.display = "none")); hit.addEventListener("blur", () => (tip.style.display = "none"));
+      svg.append(hit);
+    }));
+    host.prepend(svg);
+    const lg = document.getElementById("lg-drift"); lg.replaceChildren();
+    S.forEach((s) => { const sp = document.createElement("span"); const k = document.createElement("span"); k.className = "k rect"; k.style.background = s.color; k.style.borderRadius = "999px"; sp.append(k, document.createTextNode(s.name)); lg.append(sp); });
+    const tb = document.getElementById("tb-drift"); tb.replaceChildren();
+    const head = document.createElement("thead"); const hr = document.createElement("tr");
+    ["Day", "Account", "Score"].forEach((h, i) => { const c = document.createElement("th"); c.textContent = h; if (i === 2) c.className = "r"; hr.append(c); }); head.append(hr);
+    const body = document.createElement("tbody");
+    S.flatMap((s) => s.v.map(([d, v]) => [d, s.name, v])).sort((a, b) => a[0] - b[0]).forEach(([d, n, v]) => { const tr = document.createElement("tr"); [String(d), n, v.toFixed(2)].forEach((c, i) => { const td = document.createElement("td"); td.textContent = c; if (i === 2) td.className = "r"; tr.append(td); }); body.append(tr); });
+    tb.append(head, body);
+  }
+  draw();
+  document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => requestAnimationFrame(draw)));
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(draw, 120); });
+})();
+</script>
+</body>
+</html>

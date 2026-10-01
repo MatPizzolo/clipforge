@@ -1,0 +1,159 @@
+{
+ "schemaVersion": 2,
+ "generatedAt": "2026-10-01T00:00:00Z",
+ "title": "Design System: ClipForge dashboard",
+ "extensions": {
+  "colorMeta": {
+   "primary": {
+    "role": "primary",
+    "displayName": "Ink",
+    "canonical": "oklch(0.205 0 0)"
+   },
+   "muted-foreground": {
+    "role": "neutral",
+    "displayName": "Quiet text",
+    "canonical": "oklch(0.50 0 0)"
+   },
+   "border": {
+    "role": "neutral",
+    "displayName": "Hairline",
+    "canonical": "oklch(0.922 0 0)"
+   },
+   "critical": {
+    "role": "status",
+    "displayName": "Critical",
+    "canonical": "oklch(0.55 0.20 27)"
+   },
+   "series-3": {
+    "role": "chart",
+    "displayName": "Aqua (below 3:1 on white; labels + table required)",
+    "canonical": "#1baf7a"
+   }
+  },
+  "shadows": [
+   {
+    "name": "tooltip",
+    "value": "0 4px 14px oklch(0 0 0 / 0.12)",
+    "purpose": "Chart tooltip only."
+   },
+   {
+    "name": "switch-thumb",
+    "value": "0 1px 2px oklch(0 0 0 / 0.25)",
+    "purpose": "Switch thumb only."
+   }
+  ],
+  "motion": [
+   {
+    "name": "switch",
+    "value": "160ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+    "purpose": "Switch thumb travel."
+   },
+   {
+    "name": "skeleton-pulse",
+    "value": "1.4s ease-in-out infinite",
+    "purpose": "Loading blocks; off under prefers-reduced-motion."
+   }
+  ],
+  "breakpoints": [
+   {
+    "name": "laptop",
+    "value": "1024px"
+   }
+  ]
+ },
+ "components": [
+  {
+   "name": "Button",
+   "kind": "button",
+   "refersTo": "button",
+   "description": "Outlined default action.",
+   "html": "<button class=\"ds-btn\">Decline</button>",
+   "css": ".ds-btn{font:550 0.8125rem/1 system-ui,sans-serif;min-height:2rem;padding:0 0.75rem;border-radius:0.5rem;border:1px solid var(--border,oklch(0.922 0 0));background:var(--background,#fff);color:var(--foreground,oklch(0.145 0 0));cursor:pointer}.ds-btn:hover{background:var(--muted,oklch(0.97 0 0))}.ds-btn:focus-visible{outline:2px solid var(--ring,oklch(0.708 0 0));outline-offset:2px}"
+  },
+  {
+   "name": "Primary Button",
+   "kind": "button",
+   "refersTo": "button-primary",
+   "description": "The one primary action per row; names its verb.",
+   "html": "<button class=\"ds-btn-p\">Approve $2.08</button>",
+   "css": ".ds-btn-p{font:550 0.8125rem/1 system-ui,sans-serif;min-height:2rem;padding:0 0.75rem;border-radius:0.5rem;border:1px solid oklch(0.205 0 0);background:oklch(0.205 0 0);color:oklch(0.985 0 0);cursor:pointer}.ds-btn-p:hover{opacity:.9}.ds-btn-p:focus-visible{outline:2px solid oklch(0.708 0 0);outline-offset:2px}"
+  },
+  {
+   "name": "Status chip",
+   "kind": "chip",
+   "refersTo": "chip-critical",
+   "description": "Role text on wash; always a word.",
+   "html": "<span class=\"ds-chip\">over budget</span>",
+   "css": ".ds-chip{display:inline-flex;font:550 0.75rem/1 system-ui,sans-serif;padding:0.25rem 0.5rem;border-radius:999px;color:oklch(0.55 0.20 27);background:oklch(0.97 0.03 27)}"
+  },
+  {
+   "name": "Card",
+   "kind": "card",
+   "refersTo": "card",
+   "description": "Hairline, flat, 10px radius.",
+   "html": "<section class=\"ds-card\"><h2>Fleet</h2><p>6 accounts</p></section>",
+   "css": ".ds-card{background:#fff;border:1px solid oklch(0.922 0 0);border-radius:0.625rem;padding:0.875rem 1rem 1rem;font:14px/1.45 system-ui,sans-serif}.ds-card h2{font-size:1rem;font-weight:600;margin:0 0 .5rem}"
+  },
+  {
+   "name": "Review dial",
+   "kind": "custom",
+   "refersTo": "",
+   "description": "Three-stop radiogroup, no Off.",
+   "html": "<div class=\"ds-dial\" role=\"radiogroup\"><button aria-checked=\"true\">review</button><button aria-checked=\"false\">sample</button><button aria-checked=\"false\">auto</button></div>",
+   "css": ".ds-dial{display:inline-grid;grid-auto-flow:column;border:1px solid oklch(0.922 0 0);border-radius:0.5rem;overflow:hidden}.ds-dial button{font:550 0.8125rem system-ui,sans-serif;border:0;background:#fff;color:oklch(0.50 0 0);padding:.35rem .75rem;cursor:pointer}.ds-dial button+button{border-left:1px solid oklch(0.922 0 0)}.ds-dial button[aria-checked=true]{background:oklch(0.145 0 0);color:#fff}.ds-dial button:focus-visible{outline:2px solid oklch(0.708 0 0);outline-offset:-2px}"
+  }
+ ],
+ "narrative": {
+  "northStar": "The Control Room To-Do List",
+  "overview": "A neutral shadcn world extended for a single owner running many accounts: dense rows that each hold one decision with its time cost, hue reserved for meaning, phone first.",
+  "keyCharacteristics": [
+   "Achromatic shell. Hue is reserved for meaning.",
+   "Dense rows, each one decision with its verb and its time cost.",
+   "The phone comes first: the same content stacks, nothing is hidden behind hover.",
+   "Flat surfaces: hairline borders, no shadows at rest.",
+   "Every page has the same five states (live, empty, loading, error, stale) plus its own."
+  ],
+  "rules": [
+   {
+    "name": "The Glyph-and-Word Rule",
+    "body": "Color never carries a status by itself. Every status ships a glyph and a word: `● ok`, `▲ spend`, `◌ new`, `✓ 08:00`, `✕ 11:00 YT`, `◐ waits for you`, plus a legend line under slot rows.",
+    "section": "colors"
+   },
+   {
+    "name": "The Aqua Relief Rule",
+    "body": "Aqua (`#1baf7a`) is under 3:1 on the white surface. Any chart that uses slot 3 must also carry direct end labels in `foreground` and the \"Show as a table\" view. Neither is optional.",
+    "section": "colors"
+   },
+   {
+    "name": "The Tabular Rule",
+    "body": "Every number that can be compared (counts, money, times, right-aligned table cells) uses `tabular-nums`.",
+    "section": "typography"
+   },
+   {
+    "name": "The Min-Width Rule",
+    "body": "Every grid track is `minmax(0, 1fr)` and every grid child gets `min-width: 0`, so long handles truncate instead of blowing out the phone column.",
+    "section": "layout"
+   },
+   {
+    "name": "The Flat-At-Rest Rule",
+    "body": "Cards, buttons and notices never cast shadows. Only floating or physical things do (the tooltip, the switch thumb).",
+    "section": "elevation"
+   }
+  ],
+  "dos": [
+   "**Do** name the verb on every action: \"Approve $2.08\", \"Reconnect\", \"Review the promotion\", \"Start with the first row ▸\". Never \"OK\" or \"Submit\".",
+   "**Do** make every error say what still works, and every empty state say what fills or unlocks the page.",
+   "**Do** suffix all sample handles with `.demo` and label sample data in a quiet footer line.",
+   "**Do** show the time and money cost before a commitment (the row's `~N min`, the batch estimate against the cap).",
+   "**Do** keep focus visible: a 2px `ring` outline, offset 2px."
+  ],
+  "donts": [
+   "**Don't** build hero-metric tiles or big-number scoreboards. The fleet is dense rows, and the only large figure is the attention meter's minutes.",
+   "**Don't** use eyebrows (small uppercase kickers above titles).",
+   "**Don't** use modals for routine tasks. Decisions happen in place or on `/act`; the mockups contain no dialogs.",
+   "**Don't** use browser push. Telegram is the only push channel (ADR-44/45).",
+   "**Don't** dim stale content or disable its actions.",
+   "**Don't** let color alone carry a status, a series or a post state."
+  ]
+ }
+}

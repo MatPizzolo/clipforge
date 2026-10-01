@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Account workspace · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .acct-head { display: grid; gap: 0.5rem; }
+  @media (max-width: 1023px) { .seg.acct-tabs { flex-wrap: wrap; overflow: visible; row-gap: 0; } }
+  .seg .more-tabs { width: auto; min-height: 0; border: 0; background: none; font-size: 0.8125rem; font-weight: 550; color: var(--muted-foreground); padding: 0.5rem 0.4rem; flex: none; max-width: 6rem; }
+  .acct-head .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .loop { display: grid; gap: 0.75rem; }
+  @media (min-width: 1024px) { .loop { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  .step { padding: 0.85rem 0.9rem; display: grid; gap: 0.35rem; align-content: start; }
+  .step .lbl { text-transform: none; }
+  .step .big { font-size: 1.25rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .step .line { font-size: 0.8125rem; color: var(--muted-foreground); }
+  .crit { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; font-size: 0.8125rem; }
+  .crit li { display: grid; grid-template-columns: 1.1rem 1fr auto; gap: 0.5rem; align-items: baseline; }
+  .crit .ok { color: var(--good); font-weight: 700; } .crit .no { color: var(--muted-foreground); }
+  .prog { display: grid; gap: 0.3rem; }
+  .ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 1rem; padding: 0.9rem 1rem; border-top: 1px solid var(--border); align-items: center; }
+  .ctl:first-child { border-top: 0; }
+  .ctl .desc { font-size: 0.8125rem; color: var(--muted-foreground); }
+  .ctl .wait { grid-column: 1 / -1; font-size: 0.8125rem; display: flex; gap: 0.4rem; align-items: baseline; }
+  .presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+  .preset { text-align: left; font: inherit; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.7rem 0.8rem; background: var(--background); color: var(--foreground); cursor: pointer; display: grid; gap: 0.2rem; }
+  .preset[aria-checked="true"] { border-color: var(--foreground); box-shadow: inset 0 0 0 1px var(--foreground); }
+  .preset .t { font-weight: 600; } .preset .d { font-size: 0.75rem; color: var(--muted-foreground); }
+  .rails { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; font-size: 0.8125rem; }
+  .rails li { display: flex; gap: 0.5rem; align-items: baseline; }
+  .origin { font-size: 0.6875rem; font-weight: 600; border-radius: 0.3rem; padding: 0.1rem 0.35rem; background: var(--muted); color: var(--muted-foreground); white-space: nowrap; }
+  .origin.acct { background: var(--info-wash); color: var(--info); }
+  .cls { font-size: 0.6875rem; color: var(--muted-foreground); white-space: nowrap; }
+  .setting { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 0.5rem 1rem; padding: 0.7rem 1rem; border-top: 1px solid var(--border); align-items: center; }
+  .setting:first-of-type { border-top: 0; }
+  .setting .k { font-size: 0.8125rem; font-weight: 550; }
+  .setting .v { display: flex; flex-wrap: wrap; gap: 0.4rem 0.6rem; align-items: center; font-size: 0.875rem; }
+  @media (max-width: 640px) { .setting { grid-template-columns: 1fr; gap: 0.3rem; } }
+  .swatch { width: 1.1rem; height: 1.1rem; border-radius: 0.25rem; border: 1px solid var(--border); display: inline-block; }
+  .beats { display: flex; gap: 2px; width: 100%; border-radius: 0.375rem; overflow: hidden; font-size: 0.6875rem; }
+  .beats span { padding: 0.35rem 0.4rem; background: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .beats span.hook { background: var(--foreground); color: var(--background); font-weight: 600; }
+  .style-grid { display: grid; gap: 1rem; }
+  .preview-col .video { height: 50vh; width: auto; justify-self: center; }
+  @media (min-width: 1024px) { .style-grid { grid-template-columns: minmax(0, 1fr) 15rem; align-items: start; } .preview-col { position: sticky; top: 1.5rem; } .preview-col .video { height: auto; width: 100%; } }
+  .pending { border: 1px solid var(--foreground); border-radius: var(--radius); padding: 0.8rem 1rem; display: grid; gap: 0.5rem; font-size: 0.8125rem; }
+  .pending .diff { font-family: var(--font-mono); font-size: 0.75rem; display: grid; gap: 0.15rem; }
+  .pending .diff .from { color: var(--critical); text-decoration: line-through; }
+  .pending .diff .to { color: var(--good); }
+  .hooks-chart text { font-size: 11px; }
+  .pat { display: grid; gap: 0.1rem; }
+  .pat b { font-weight: 600; }
+  .frozen { font-size: 0.75rem; color: var(--info); }
+  .thumbs { display: flex; gap: 4px; }
+  .thumbs span { width: 2.2rem; aspect-ratio: 4 / 5; border-radius: 0.3rem; background: linear-gradient(160deg, oklch(0.82 0.03 60), oklch(0.62 0.04 250)); }
+  .pipe { display: grid; gap: 0.75rem; }
+  @media (min-width: 1024px) { .pipe { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .pipe .col { display: grid; gap: 0.4rem; align-content: start; }
+  .pipe .item { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.5rem 0.6rem; font-size: 0.8125rem; display: grid; gap: 0.1rem; }
+  .flag { font-size: 0.8125rem; padding: 0.6rem 1rem; border-top: 1px solid var(--border); display: grid; gap: 0.25rem; }
+  .flag:first-of-type { border-top: 0; }
+  .flag q { font-style: italic; }
+  .looks { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .feed { list-style: none; margin: 0; padding: 0; }
+  .feed li { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) auto; gap: 0.6rem; padding: 0.55rem 1rem; border-top: 1px solid var(--border); font-size: 0.8125rem; align-items: baseline; }
+  .feed li:first-child { border-top: 0; }
+  .feed time { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .feed a { color: var(--muted-foreground); font-size: 0.75rem; }
+</style>
+</head>
+<body data-page="accounts" data-states="live empty loading error stale" data-accts="story clips band avatar model">
+<!--
+THESIS: one account's whole loop on one page: what runs alone, what waits for the owner, and the dials that move the line between them.
+OWN-WORLD: S3a neutral shell; S3c's workspace tabs and origin badges (category / blueprint / account); controls as switches and a three-stop dial with a "waiting on" line under each.
+STORY: the owner reads the loop at a glance, sees how close the account is to its next rung, and changes autopilot, style or hooks with the cost and the time it adds shown first.
+FIRST VIEWPORT: header (handle, type, pair or persona, versions, rung, day N of 90), tab row (shared core + the type's own tabs), then the five loop steps for that type side by side (laptop) or stacked (phone). The mock bar's Type select switches clips, story, band, avatar, model.
+FORM: account workspace /accounts/<id> (spec §6, §7.3), extending S3c §2.5; no seed run.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main data-tab-scope>
+  <a class="small muted" href="accounts.html" style="text-decoration:none">◫ Accounts</a>
+
+  <div class="notice critical" data-when="error" role="alert"><span aria-hidden="true">✕</span><div><b>Account not found.</b> No account has the id <code>archive-tales-en</code>. <a href="accounts.html">Back to Accounts</a></div></div>
+
+  <header class="acct-head" data-when="live empty">
+    <div class="page-head">
+      <div data-type="story"><h1>@archive.tales.demo</h1><p class="sub">archive-tales-en · AI narrated stories · English</p></div>
+      <div data-type="clips"><h1>@mindset.clips.demo</h1><p class="sub">mindset-clips-en · Podcast clips · English</p></div>
+      <div data-type="band"><h1>@far.sounds.demo</h1><p class="sub">far-sounds-en · Band discovery · English, Spanish captions</p></div>
+      <div data-type="avatar"><h1>@toolbench.demo</h1><p class="sub">toolbench-en · AI-avatar affiliate · English · presented by <a href="personas.html#nova">Nova (AI host)</a></p></div>
+      <div data-type="model"><h1>@lena.travels.demo</h1><p class="sub">lena-travels-en · AI model persona · English · <a href="personas.html#lena">Lena (AI creator)</a></p></div>
+      <div class="row wrap">
+        <button class="btn only-lg" type="button">+ Note</button>
+        <button class="btn" type="button">Pause this account</button>
+      </div>
+    </div>
+    <div class="chips" data-type="clips"><span class="chip solid">clips</span><span class="chip">Supervised</span><span class="chip">day 104 of 90 ✓</span><span class="chip">2 sources, creator agreements</span><span class="chip">blueprint mindset v2 · account v11</span><span class="chip good">↑ ready for Autopilot</span></div>
+    <div class="chips" data-type="band"><span class="chip solid">band</span><span class="chip">Hands-on</span><span class="chip">day 12 of 90</span><span class="chip">music-free masters</span><span class="chip">blueprint far-sounds v1 · account v3</span><span class="chip warning">◐ 2 assets need a license</span></div>
+    <div class="chips" data-type="avatar"><span class="chip solid">avatar</span><span class="chip">Hands-on</span><span class="chip">day 3 of 90</span><span class="chip">paired with @herramientas.demo</span><span class="chip">#ad on every item</span><span class="chip warning">◐ sponsored: first 30 days in review</span></div>
+    <div class="chips" data-type="model"><span class="chip solid">model</span><span class="chip">Hands-on</span><span class="chip">day 20 of 90</span><span class="chip">“AI creator” in bio</span><span class="chip">carousels + reels</span><span class="chip critical">✕ 1 render drifted</span></div>
+    <div class="chips" data-type="story">
+      <span class="chip solid">story</span>
+      <span class="chip">Hands-on</span>
+      <span class="chip">day 9 of 90</span>
+      <span class="chip">paired with @archivo.relatos.demo</span>
+      <span class="chip">blueprint archive v3 · account v7</span>
+      <span class="chip warning">◐ new format: 4 of 10 in review</span>
+    </div>
+  </header>
+
+  <div class="seg acct-tabs" role="tablist" data-tabs="overview" data-when="live empty">
+    <button role="tab" data-tab="overview">Overview</button>
+    <button role="tab" data-tab="t-episodes" data-type="clips">Sources &amp; episodes</button>
+    <button role="tab" data-tab="t-framing" data-type="clips">Framing &amp; captions</button>
+    <button role="tab" data-tab="t-series" data-type="story">Series &amp; topics</button>
+    <button role="tab" data-tab="t-research" data-type="story">Research</button>
+    <button role="tab" data-tab="t-bands" data-type="band">Bands &amp; licenses</button>
+    <button role="tab" data-tab="t-sounds" data-type="band">Sounds</button>
+    <button role="tab" data-tab="t-offers" data-type="avatar">Offers &amp; links</button>
+    <button role="tab" data-tab="t-claims" data-type="avatar">Claims</button>
+    <button role="tab" data-tab="t-persona" data-type="avatar model">Persona &amp; looks</button>
+    <button role="tab" data-tab="t-carousels" data-type="model">Carousels</button>
+    <button role="tab" data-tab="t-deals" data-type="model">Brand deals</button>
+    <button role="tab" data-tab="autopilot">Autopilot</button>
+    <button role="tab" data-tab="style">Style</button>
+    <button role="tab" data-tab="hooks">Hooks</button>
+    <button role="tab" data-tab="activity">Activity</button>
+    <button role="tab" data-tab="setup" hidden>Setup &amp; History</button>
+    <button role="tab" data-tab="results" hidden>Results</button>
+    <button role="tab" data-tab="experiments" hidden>Experiments</button>
+    <button role="tab" data-tab="notes" hidden>Notes</button>
+    <button role="tab" data-tab="sources" hidden>Sources</button>
+    <select class="more-tabs" aria-label="More tabs" onchange="if(this.value){document.querySelector('[data-tab=&quot;'+this.value+'&quot;]').click()}">
+      <option value="">More</option><option value="setup">Setup &amp; History</option><option value="results">Results</option><option value="experiments">Experiments</option><option value="notes">Notes</option><option value="sources">Sources</option>
+    </select>
+  </div>
+
+  <div class="stack lg" data-when="loading" aria-busy="true">
+    <div class="sk" style="height:2rem;width:50%"></div><div class="sk" style="height:1.5rem"></div>
+    <div class="grid-3"><div class="sk" style="height:7rem"></div><div class="sk" style="height:7rem"></div><div class="sk" style="height:7rem"></div></div>
+  </div>
+
+  <!-- ===== Overview ===== -->
+  <section data-panel="overview" class="stack lg" aria-label="Overview">
+    <div class="loop" data-when="live" data-type="story">
+      <div class="card step"><span class="lbl">Produce · switch off</span><span class="big">12 days</span><span class="line">runway · 3 in production · you start batches</span><a class="small" href="produce.html">Plan a batch ▸</a></div>
+      <div class="card step"><span class="lbl">Review · dial review</span><span class="big">2 waiting</span><span class="line">next due 14:00 · approval rate 82% (14 of 17)</span><a class="small" href="review.html">Review ▸</a></div>
+      <div class="card step"><span class="lbl">Publish · switch on</span><span class="big">6 this week</span><span class="line">4 platforms · next slot 14:00 waits for you</span><a class="small" href="#">Calendar ▸</a></div>
+      <div class="card step"><span class="lbl">Measure</span><span class="big">18.4K</span><span class="line">views in 7 days · $0.11 per item · $1.62 this month</span><a class="small" href="results.html">Results ▸</a></div>
+      <div class="card step"><span class="lbl">Scale · switch off</span><span class="big">0 winners</span><span class="line">winners need 7 days of views · dubs go to @archivo.relatos.demo</span></div>
+    </div>
+    <div class="loop" data-when="live" data-type="clips"><div class="card step"><span class="lbl">Produce · switch on</span><span class="big">21 days</span><span class="line">runway · 6 episodes unclipped · fetch is local until S11</span><a class="small" href="#" data-goto="t-episodes">Episodes ▸</a></div><div class="card step"><span class="lbl">Review · dial sample</span><span class="big">13 spot checks</span><span class="line">in 30 days · 0 rejected · next due Thu</span><a class="small" href="review.html">Review ▸</a></div><div class="card step"><span class="lbl">Publish · switch on</span><span class="big">28 this week</span><span class="line">4 platforms · credit to the creator on every post</span><a class="small" href="#">Calendar ▸</a></div><div class="card step"><span class="lbl">Measure</span><span class="big">111K</span><span class="line">views in 7 days · $0.02 per item</span><a class="small" href="results.html">Results ▸</a></div><div class="card step"><span class="lbl">Scale · switch off</span><span class="big">3 winners</span><span class="line">no paired account: clone a series instead</span></div></div>
+    <div class="grid-2" data-when="live empty" data-type="clips">
+      <section class="card" aria-label="Next rung"><div class="hd"><h2>Next rung: Autopilot</h2><span class="small muted">all met: tap to promote</span></div><div class="bd"><ul class="crit"><li><span class="ok">✓</span><span>30 days on Supervised</span><span class="num muted">34</span></li><li><span class="ok">✓</span><span>12 spot checks, at most 1 rejected</span><span class="num muted">13, 0</span></li><li><span class="ok">✓</span><span>No gate failure or strike in 30 days</span><span class="num muted">none</span></li><li><span class="ok">✓</span><span>Runway 14 days or more</span><span class="num muted">21 d</span></li></ul><p class="xs muted" style="margin-top:0.6rem">Your time on this account: about 0.8 min a day now; about 0.2 on Autopilot.</p></div></section>
+      <section class="card" aria-label="Lifecycle and programs"><div class="hd"><h2>Day 104</h2><span class="small muted">what this type earns from</span></div><div class="bd stack"><div class="prog"><div class="row between small"><span>Whop campaign “Founder stories”: payout</span><span class="num muted">$41 of $60 min</span></div><div class="meter"><span style="width:68%"></span></div></div><div class="prog"><div class="row between small"><span>TikTok Creator Rewards: followers</span><span class="num muted">10,000 ✓</span></div><div class="meter"><span style="width:100%"></span></div></div><div class="prog"><div class="row between small"><span>YouTube Partner Program: Shorts views, 90 days</span><span class="num muted">3.1M of 10M</span></div><div class="meter"><span style="width:31%"></span></div></div></div></section>
+    </div>
+    <div class="loop" data-when="live" data-type="band"><div class="card step"><span class="lbl">Produce · switch off</span><span class="big">8 days</span><span class="line">runway · 3 bands researched · 2 waiting on a license</span><a class="small" href="#" data-goto="t-bands">Bands ▸</a></div><div class="card step"><span class="lbl">Review · dial review</span><span class="big">1 waiting</span><span class="line">approval rate 90% (9 of 10)</span><a class="small" href="review.html">Review ▸</a></div><div class="card step"><span class="lbl">Publish · switch on</span><span class="big">5 this week</span><span class="line">IG first (collab posts) · sound added in the app</span><a class="small" href="#">Calendar ▸</a></div><div class="card step"><span class="lbl">Measure</span><span class="big">9.6K</span><span class="line">views in 7 days · $0.12 per item</span><a class="small" href="results.html">Results ▸</a></div><div class="card step"><span class="lbl">Scale · switch off</span><span class="big">0 winners</span><span class="line">no paired account</span></div></div>
+    <div class="grid-2" data-when="live empty" data-type="band">
+      <section class="card" aria-label="Next rung"><div class="hd"><h2>Next rung: Supervised</h2><span class="small muted">suggested when all are met</span></div><div class="bd"><ul class="crit"><li><span class="no">○</span><span>30 days live</span><span class="num muted">12</span></li><li><span class="no">○</span><span>50 approved items</span><span class="num muted">10</span></li><li><span class="ok">✓</span><span>Under 10% rejected</span><span class="num muted">10%</span></li><li><span class="ok">✓</span><span>No gate failure in 14 days</span><span class="num muted">none</span></li></ul><p class="xs muted" style="margin-top:0.6rem">Licenses are always yours: a band or asset is a new source.</p></div></section>
+      <section class="card" aria-label="Lifecycle and programs"><div class="hd"><h2>Day 12 of 90</h2><span class="small muted">what this type earns from</span></div><div class="bd stack"><div class="prog"><div class="row between small"><span>Paid features (disclosed): this month</span><span class="num muted">1 of 2 booked</span></div><div class="meter"><span style="width:50%"></span></div></div><div class="prog"><div class="row between small"><span>Curator reviews: this month</span><span class="num muted">14 of 30</span></div><div class="meter"><span style="width:47%"></span></div></div></div></section>
+    </div>
+    <div class="loop" data-when="live" data-type="avatar"><div class="card step"><span class="lbl">Produce · switch off</span><span class="big">6 days</span><span class="line">runway · 2 offers approved · persona Nova</span><a class="small" href="#" data-goto="t-offers">Offers ▸</a></div><div class="card step"><span class="lbl">Review · dial review</span><span class="big">3 waiting</span><span class="line">sponsored: every item in review until day 30</span><a class="small" href="review.html">Review ▸</a></div><div class="card step"><span class="lbl">Publish · switch on</span><span class="big">4 this week</span><span class="line">#ad and AI label on every post</span><a class="small" href="#">Calendar ▸</a></div><div class="card step"><span class="lbl">Measure</span><span class="big">41 clicks</span><span class="line">tracked links, 7 days · 2 sales · $0.27 per item</span><a class="small" href="results.html">Results ▸</a></div><div class="card step"><span class="lbl">Scale · switch off</span><span class="big">0 winners</span><span class="line">dubs go to @herramientas.demo (Nova, Spanish voice)</span></div></div>
+    <div class="grid-2" data-when="live empty" data-type="avatar">
+      <section class="card" aria-label="Next rung"><div class="hd"><h2>Next rung: Supervised</h2><span class="small muted">suggested when all are met</span></div><div class="bd"><ul class="crit"><li><span class="no">○</span><span>30 days live (sponsored rule)</span><span class="num muted">3</span></li><li><span class="no">○</span><span>50 approved items</span><span class="num muted">4</span></li><li><span class="ok">✓</span><span>No claim-check failure in 14 days</span><span class="num muted">none</span></li><li><span class="ok">✓</span><span>Persona consistency ≥ 0.80</span><span class="num muted">0.89 median</span></li></ul><p class="xs muted" style="margin-top:0.6rem">Every sponsored item stays in review for the first 30 days, whatever the dial.</p></div></section>
+      <section class="card" aria-label="Lifecycle and programs"><div class="hd"><h2>Day 3 of 90</h2><span class="small muted">what this type earns from</span></div><div class="bd stack"><div class="prog"><div class="row between small"><span>Commission this month</span><span class="num muted">$6.30</span></div><div class="meter"><span style="width:6%"></span></div></div><div class="prog"><div class="row between small"><span>TikTok Shop: eligible followers</span><span class="num muted">180 of 5,000</span></div><div class="meter"><span style="width:4%"></span></div></div></div></section>
+    </div>
+    <div class="loop" data-when="live" data-type="model"><div class="card step"><span class="lbl">Produce · switch off</span><span class="big">10 days</span><span class="line">runway · 3 carousels + 2 reels planned · 4 looks approved</span><a class="small" href="#" data-goto="t-carousels">Carousels ▸</a></div><div class="card step"><span class="lbl">Review · dial review</span><span class="big">2 waiting</span><span class="line">1 drifted render held (0.72)</span><a class="small" href="review.html">Review ▸</a></div><div class="card step"><span class="lbl">Publish · switch on</span><span class="big">6 this week</span><span class="line">IG + TikTok · C2PA kept on every file</span><a class="small" href="#">Calendar ▸</a></div><div class="card step"><span class="lbl">Measure</span><span class="big">24.1K</span><span class="line">reach in 7 days · saves 3.2% · $0.06 per item</span><a class="small" href="results.html">Results ▸</a></div><div class="card step"><span class="lbl">Scale · switch off</span><span class="big">1 deal</span><span class="line">in negotiation · disclosed when it posts</span><a class="small" href="#" data-goto="t-deals">Deals ▸</a></div></div>
+    <div class="grid-2" data-when="live empty" data-type="model">
+      <section class="card" aria-label="Next rung"><div class="hd"><h2>Next rung: Supervised</h2><span class="small muted">suggested when all are met</span></div><div class="bd"><ul class="crit"><li><span class="no">○</span><span>30 days live</span><span class="num muted">20</span></li><li><span class="no">○</span><span>50 approved items</span><span class="num muted">31</span></li><li><span class="ok">✓</span><span>Under 10% rejected</span><span class="num muted">6%</span></li><li><span class="no">○</span><span>No drift in 14 days</span><span class="num muted">1 drifted</span></li></ul><p class="xs muted" style="margin-top:0.6rem">A drifted render always goes to review and never publishes on its own.</p></div></section>
+      <section class="card" aria-label="Lifecycle and programs"><div class="hd"><h2>Day 20 of 90</h2><span class="small muted">what this type earns from</span></div><div class="bd stack"><div class="prog"><div class="row between small"><span>Brand deals this quarter</span><span class="num muted">1 of 3 target</span></div><div class="meter"><span style="width:33%"></span></div></div><div class="prog"><div class="row between small"><span>Instagram followers (deal floor)</span><span class="num muted">2,140 of 5,000</span></div><div class="meter"><span style="width:43%"></span></div></div></div></section>
+    </div>
+    <div class="card" data-when="empty"><div class="empty"><span class="big">Nothing produced yet.</span><span class="small muted">This account was created today in Hands-on. Approve a series and plan its first batch; the first 10 items go to review.</span><a class="btn primary" href="produce.html">Plan the first batch</a></div></div>
+
+    <div class="grid-2" data-when="live empty" data-type="story">
+      <section class="card" aria-label="Next rung">
+        <div class="hd"><h2>Next rung: Supervised</h2><span class="small muted">suggested when all are met</span></div>
+        <div class="bd">
+          <ul class="crit">
+            <li><span class="no">○</span><span>30 days live</span><span class="num muted">9</span></li>
+            <li><span class="no">○</span><span>50 approved items</span><span class="num muted">14</span></li>
+            <li><span class="no">○</span><span>Under 10% rejected, last 50</span><span class="num muted">18% (3 of 17)</span></li>
+            <li><span class="ok">✓</span><span>No gate failure in 14 days</span><span class="num muted">none</span></li>
+          </ul>
+          <p class="xs muted" style="margin-top:0.6rem">Your time on this account: about 3 min a day now; about 0.5 on Supervised.</p>
+        </div>
+      </section>
+      <section class="card" aria-label="Lifecycle and programs">
+        <div class="hd"><h2>Day 9 of 90</h2><span class="small muted">months 1–2 usually earn nothing</span></div>
+        <div class="bd stack">
+          <div class="prog"><div class="row between small"><span>TikTok Creator Rewards: followers</span><span class="num muted">312 of 10,000</span></div><div class="meter"><span style="width:3.1%"></span></div></div>
+          <div class="prog"><div class="row between small"><span>TikTok: views in 30 days</span><span class="num muted">18.4K of 100K</span></div><div class="meter"><span style="width:18.4%"></span></div></div>
+          <div class="prog"><div class="row between small"><span>YouTube Partner Program: subscribers</span><span class="num muted">41 of 1,000</span></div><div class="meter"><span style="width:4.1%"></span></div></div>
+          <p class="xs muted">Thresholds are settings (Settings → Programs), not constants. Progress needs analytics (S7).</p>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- ===== Type tabs (one set per account type) ===== -->
+  <section data-panel="t-episodes" class="stack lg" hidden><section class="card"><div class="hd"><h2>Sources</h2><span class="small muted">permission on record, credited on every post</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Source</th><th>Permission</th><th>Monetize</th><th>Translate</th><th>Expires</th><th class="r">Episodes</th></tr></thead><tbody><tr><td>Creator A podcast</td><td><span class="st good">✓</span> creator agreement</td><td>yes</td><td>no</td><td>—</td><td class="r">11</td></tr><tr><td>Creator B show</td><td><span class="st good">✓</span> Whop campaign</td><td>yes</td><td>no</td><td><span class="st warning">▲ in 12 days</span></td><td class="r">6</td></tr></tbody></table></div></section><section class="card"><div class="hd"><h2>Episodes</h2><span class="small muted">clipped and waiting</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Episode</th><th>Length</th><th>Status</th><th class="r">Clips</th><th class="r">Clips / h</th></tr></thead><tbody><tr><td>Ep. 48 · “Discipline at 6 am”</td><td>1 h 52</td><td><span class="st good">✓ clipped</span></td><td class="r">14</td><td class="r">7.5</td></tr><tr><td>Ep. 49 · “Money talks”</td><td>2 h 05</td><td><span class="st info">◌ clipping</span></td><td class="r">—</td><td class="r">—</td></tr><tr><td>Ep. 50–55</td><td>6 episodes</td><td>imported, not clipped</td><td class="r">—</td><td class="r">~7 expected</td></tr><tr><td>Newer episodes</td><td>—</td><td><span class="muted">not fetched: run <code>clipforge fetch</code> on your laptop (until S11)</span></td><td class="r">—</td><td class="r">—</td></tr></tbody></table></div></section><div class="row wrap"><button class="btn primary" type="button">Clip the next 3 episodes · ~$0.40</button><button class="btn" type="button">Add a source…</button></div></section>
+  <section data-panel="t-framing" class="stack lg" hidden><div class="style-grid"><div class="stack lg"><section class="card"><div class="hd"><h2>Framing</h2><span class="small muted">recut: new jobs</span></div><div class="setting"><span class="k">Reframe</span><span class="v">auto: face per shot, cut to the speaker in multi-person shots <span class="origin">category</span></span></div><div class="setting"><span class="k">No face in shot</span><span class="v">blurred fit <span class="origin">category</span></span></div><div class="setting"><span class="k">Length</span><span class="v">30–55 s <span class="origin acct">account</span> <span class="cls">overrides 30–60 s</span></span></div><div class="setting"><span class="k">Minimum score</span><span class="v">0.82 <span class="origin acct">account</span> <span class="cls">live</span></span></div></section><section class="card"><div class="hd"><h2>Captions</h2><span class="small muted">recut: new jobs</span></div><div class="setting"><span class="k">Preset</span><span class="v">Anton bold, one yellow key word per line <span class="origin">category</span></span></div><div class="setting"><span class="k">Hook title card</span><span class="v">first 3 s, from the hook library <span class="origin">category</span></span></div><div class="setting"><span class="k">Credit line</span><span class="v">“via Creator A podcast” in every caption <span class="origin">category · rules</span></span></div><div class="setting"><span class="k">Loudness</span><span class="v">−14 LUFS, two-pass (ADR-47) <span class="origin">fixed</span></span></div></section></div><div class="preview-col stack"><div class="video" role="img" aria-label="Clip preview frame"><div class="title">Nobody tells you <em style="color:#ffd400;font-style:normal">this</em></div><div class="cap">discipline is a <em>decision</em></div></div><p class="xs muted">Preview from the last clip, re-rendered with these settings (no cost).</p></div></div></section>
+  <section data-panel="t-series" class="stack lg" hidden><section class="card"><div class="hd"><h2>Series formats</h2><span class="small muted">approved formats rotate; new ones are yours to approve</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Series</th><th>Beats</th><th>Share</th><th>Status</th></tr></thead><tbody><tr><td>The day that…</td><td><span class="beats" style="min-width:12rem"><span class="hook" style="flex:3">Hook</span><span style="flex:12">Setup</span><span style="flex:30">Turn</span><span style="flex:25">Reveal</span><span style="flex:10">CTA</span></span></td><td>45%</td><td><span class="chip good">approved</span></td></tr><tr><td>Part 1/2</td><td><span class="beats" style="min-width:12rem"><span class="hook" style="flex:3">Hook</span><span style="flex:20">Setup</span><span style="flex:40">Turn</span><span style="flex:10">Cliff</span></span></td><td>35%</td><td><span class="chip good">approved</span></td></tr><tr><td>Last known photo</td><td><span class="beats" style="min-width:12rem"><span class="hook" style="flex:3">Photo</span><span style="flex:30">Who</span><span style="flex:30">What next</span><span style="flex:10">Q</span></span></td><td>20%</td><td><span class="chip good">approved</span></td></tr><tr><td>Map mysteries</td><td>—</td><td>0%</td><td><span class="chip">draft</span> <button class="btn" type="button">Approve…</button></td></tr></tbody></table></div></section><section class="card"><div class="hd"><h2>Topic queue</h2><span class="small muted">12 topics · enough for 9 days</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Topic</th><th>Pillar</th><th>Series</th><th>Research</th></tr></thead><tbody><tr><td>The river that ran backwards</td><td>lost cities</td><td>The day that…</td><td><span class="st good">✓ 3 sources</span></td></tr><tr><td>The inventor who sold his patent for a coat</td><td>forgotten inventors</td><td>Part 1/2</td><td><span class="st good">✓ 4 sources</span></td></tr><tr><td>A village gone in one night</td><td>unsolved mysteries</td><td>The day that…</td><td><span class="st warning">◐ 1 weak source</span></td></tr><tr><td>+ 9 more</td><td></td><td></td><td></td></tr></tbody></table></div></section><div class="row wrap"><button class="btn" type="button">+ Topic</button><button class="btn" type="button">Suggest 10 topics · ~$0.02</button></div></section>
+  <section data-panel="t-research" class="stack lg" hidden><section class="card"><div class="hd"><h2>Research per item</h2><span class="small muted">an item without enough sources is held, never posted</span></div><div class="bd flush" style="overflow-x:auto"><div><div class="flag"><b>The lighthouse keeper who vanished</b><span class="st good">✓ 3 sources: Northern Lighthouse Board record (1900), newspaper archive, book</span></div><div class="flag"><b>A village gone in one night</b><span class="st warning">◐ 1 source is a forum post: replace it or drop the claim “200 people”</span><span class="row"><button class="btn" type="button">Find another source</button><button class="btn ghost" type="button">Drop the claim</button></span></div><div class="flag"><b>The ship found sailing empty</b><span class="st good">✓ 2 sources, both primary</span></div></div></div></section></section>
+  <section data-panel="t-bands" class="stack lg" hidden><div class="pipe"><div class="col"><span class="lbl">Submitted · 4</span><div class="item"><b>Ulaan Steppe</b><span class="xs muted">Mongolia · folk metal · submitted 2 d ago</span></div><div class="item"><b>Las Calles</b><span class="xs muted">Chile · indie</span></div></div><div class="col"><span class="lbl">Researching · 2</span><div class="item"><b>Kuro Tide</b><span class="xs muted">Japan · shoegaze · 3 sources</span></div></div><div class="col"><span class="lbl">Licensing · 2</span><div class="item"><b>Blue Fjell</b><span class="xs muted">Norway · 2 photos need a license</span></div></div><div class="col"><span class="lbl">Featured · 12</span><div class="item"><b>Tamtam Sud</b><span class="xs muted">Senegal · posted Tue</span></div><div class="item"><b>+ 11 more</b><span class="xs muted"></span></div></div></div><section class="card"><div class="hd"><h2>Asset licenses</h2><span class="small muted">every asset needs one; photoreal images of real people are never generated</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Band</th><th>Asset</th><th>License</th><th>Attribution</th><th>Status</th></tr></thead><tbody><tr><td>Blue Fjell</td><td>Live photo, 2019</td><td>CC BY-SA 4.0 (Wikimedia Commons)</td><td>Photo: K. Berg</td><td><span class="st good">✓</span></td></tr><tr><td>Blue Fjell</td><td>Press photo</td><td>band permission requested</td><td>—</td><td><span class="st warning">◐ waiting for the band</span></td></tr><tr><td>Kuro Tide</td><td>Generated map art</td><td>generated art (no people)</td><td>—</td><td><span class="st good">✓</span></td></tr></tbody></table></div></section></section>
+  <section data-panel="t-sounds" class="stack lg" hidden><section class="card"><div class="hd"><h2>Suggested sounds</h2><span class="small muted">masters are music-free; the song is added in the app from the platform library</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Item</th><th>Suggested sound</th><th>In the app</th></tr></thead><tbody><tr><td>“Mongolia has a metal scene”</td><td>Ulaan Steppe · “Khar Salkhi”</td><td><span class="st good">✓ added on TikTok, IG</span></td></tr><tr><td>“Sounds like Slowdive, from Tokyo”</td><td>Kuro Tide · “Glass Sea”</td><td><span class="st warning">◐ add on IG by hand</span></td></tr><tr><td>“Senegal’s desert blues”</td><td>Tamtam Sud · “Sahel”</td><td><span class="st good">✓ added</span></td></tr></tbody></table></div></section></section>
+  <section data-panel="t-offers" class="stack lg" hidden><section class="card"><div class="hd"><h2>Offers</h2><span class="small muted">only approved offers are produced; every item carries #ad and its tracking link</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Offer</th><th>Program</th><th class="r">Commission</th><th>Link</th><th class="r">Clicks 7 d</th><th class="r">Sales</th><th>Status</th></tr></thead><tbody><tr><td>NoteFlow Pro</td><td>SaaS affiliate</td><td class="r">30% recurring</td><td>/go/tb-noteflow</td><td class="r">28</td><td class="r">2</td><td><span class="chip good">approved</span></td></tr><tr><td>Desk timer</td><td>TikTok Shop</td><td class="r">15%</td><td>/go/tb-timer</td><td class="r">13</td><td class="r">0</td><td><span class="chip good">approved</span></td></tr><tr><td>AI course (Skool)</td><td>Skool</td><td class="r">40% recurring</td><td>—</td><td class="r">—</td><td class="r">—</td><td><span class="chip warning">waits for you</span></td></tr></tbody></table></div></section><div class="row wrap"><button class="btn" type="button">+ Offer…</button></div></section>
+  <section data-panel="t-claims" class="stack lg" hidden><section class="card"><div class="hd"><h2>Claim check</h2><span class="small muted">first-person use, health, finance and earnings claims are blocked</span></div><div class="bd flush" style="overflow-x:auto"><div><div class="flag"><b>“This $9 tool replaced my notes app”</b><span class="st critical">✕ first-person use: <q>replaced my notes app</q></span><span class="muted">Suggested fix: <q>This $9 tool can replace a notes app</q></span><span class="row"><button class="btn primary" type="button">Use the fix</button><button class="btn" type="button">Edit in Review</button></span></div><div class="flag"><b>“3 shortcuts nobody uses”</b><span class="st good">✓ no claims found</span></div><div class="flag"><b>“Notion vs paper, honestly”</b><span class="st warning">◐ comparison claim: <q>2× faster</q> needs a source or goes</span></div></div></div></section></section>
+  <section data-panel="t-persona" class="stack lg" hidden><div class="grid-2"><section class="card"><div class="hd"><h2 data-type="avatar">Nova, AI host</h2><h2 data-type="model">Lena, AI creator</h2><a class="small muted" href="personas.html">Open persona ▸</a></div><div class="bd stack"><div class="row"><span class="thumbs"><span></span><span></span><span></span></span><span class="small muted" data-type="avatar">active · consistency 0.89 median (30 d) · also presents @herramientas.demo (Spanish voice)</span><span class="small muted" data-type="model">active · consistency 0.86 median (30 d) · this account only</span></div><p class="small"><b>Voice for this account:</b> <span data-type="avatar">Nova EN v1, bright, friendly teacher</span><span data-type="model">Lena EN v2, warm, relaxed</span> <button class="btn ghost" type="button">▶</button></p><p class="xs muted">Disclosure fixed on: AI label, “AI host / AI creator” in the bio, C2PA kept.</p></div></section><section class="card"><div class="hd"><h2>Looks this account may use</h2><span class="small muted">rotate per render; the face stays locked</span></div><div class="bd stack"><div class="looks"><span class="chip good" data-type="avatar">✓ Studio desk</span><span class="chip good" data-type="avatar">✓ Hoodie, home office</span><span class="chip" data-type="avatar">○ Café</span><span class="chip good" data-type="model">✓ Linen, Lisbon street</span><span class="chip good" data-type="model">✓ Rain jacket, harbour</span><span class="chip good" data-type="model">✓ Hotel balcony</span><span class="chip good" data-type="model">✓ Train window</span><span class="chip" data-type="model">○ Ski lodge (draft)</span></div><a class="small" href="personas.html#looks">Manage looks on the persona ▸</a></div></section></div></section>
+  <section data-panel="t-carousels" class="stack lg" hidden><section class="card"><div class="hd"><h2>Carousels and images</h2><span class="small muted">media kinds: carousel · image · reel</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Post</th><th>Kind</th><th>Look</th><th>Consistency</th><th>Status</th></tr></thead><tbody><tr><td>“48 hours in Lisbon”</td><td><span class="thumbs"><span></span><span></span><span></span><span></span><span></span></span> carousel · 5</td><td>Linen, Lisbon street</td><td>0.88</td><td><span class="st good">✓ posted</span></td></tr><tr><td>“Packing list: 7 days, 1 bag”</td><td><span class="thumbs"><span></span><span></span><span></span></span> carousel · 7</td><td>Train window</td><td>0.72 on slide 4</td><td><span class="st critical">✕ drift: in review</span></td></tr><tr><td>“Harbour at 6 am”</td><td>reel · 12 s</td><td>Rain jacket, harbour</td><td>0.90</td><td><span class="st info">◌ scheduled Thu</span></td></tr></tbody></table></div></section></section>
+  <section data-panel="t-deals" class="stack lg" hidden><section class="card"><div class="hd"><h2>Brand deals</h2><span class="small muted">every sponsored post carries #ad or the paid-partnership tag</span></div><div class="bd flush" style="overflow-x:auto"><table class="data"><thead><tr><th>Brand</th><th>Stage</th><th class="r">Fee</th><th>Deliverables</th><th>Disclosure</th><th>Due</th></tr></thead><tbody><tr><td>Travel gear brand (sample)</td><td>negotiating</td><td class="r">$350</td><td>1 carousel + 1 reel</td><td>paid-partnership tag</td><td>—</td></tr><tr><td>Hotel group (sample)</td><td>lead</td><td class="r">—</td><td>—</td><td>—</td><td>—</td></tr><tr><td>Luggage brand (sample)</td><td>posted</td><td class="r">$200</td><td>1 reel</td><td><span class="st good">✓ #ad + tag</span></td><td>done</td></tr></tbody></table></div></section></section>
+  <!-- ===== Autopilot ===== -->
+  <section data-panel="autopilot" class="stack lg" aria-label="Autopilot" hidden>
+    <div class="presets" role="radiogroup" aria-label="Preset">
+      <button class="preset" role="radio" aria-checked="true" type="button"><span class="t">Hands-on</span><span class="d">You start batches and review every item. ~3 min a day.</span></button>
+      <button class="preset" role="radio" aria-checked="false" type="button"><span class="t">Supervised</span><span class="d">Produces to 7 days ahead; spot checks only. ~0.5 min a day. Criteria not met yet.</span></button>
+      <button class="preset" role="radio" aria-checked="false" type="button"><span class="t">Autopilot</span><span class="d">Produces, posts and dubs alone; the gate and caps still apply. ~0.2 min a day.</span></button>
+    </div>
+    <div class="grid-2">
+      <section class="card" aria-label="Controls">
+        <div class="ctl">
+          <div><b>Produce</b><p class="desc">Off: you start batches in Produce. On: keep <b>7 days</b> of runway, within budget.</p></div>
+          <span class="row"><span class="chip warning">unsaved</span><button class="switch" role="switch" aria-checked="true" aria-label="Produce"></button></span>
+          <p class="wait"><span class="st info">◌</span><span class="muted">When saved: 12 days of runway, so the first top-up runs Friday.</span></p>
+        </div>
+        <div class="ctl">
+          <div><b>Review</b><p class="desc">review: every item · sample: spot checks (1 in 10, at least 3 a week) · auto: none. The gate runs in every position.</p></div>
+          <div class="dial" role="radiogroup" aria-label="Review"><button role="radio" aria-checked="true" type="button">review</button><button role="radio" aria-checked="false" type="button">sample</button><button role="radio" aria-checked="false" type="button">auto</button></div>
+          <p class="wait"><span class="st warning">◐</span><span class="muted">2 items waiting for you · the new-format window (4 of 10) applies whatever the dial says.</span></p>
+        </div>
+        <div class="ctl">
+          <div><b>Publish</b><p class="desc">On: Upload-Post at the slots. Off: Telegram sends each item to you to post by hand.</p></div>
+          <button class="switch" role="switch" aria-checked="true" aria-label="Publish"></button>
+          <p class="wait"><span class="st warning">◐</span><span class="muted">Publishing: 0 approved for today, 1 waiting for you (14:00).</span></p>
+        </div>
+        <div class="ctl">
+          <div><b>Scale</b><p class="desc">On: queue dubs of winners to the paired account, under its dial and budget.</p></div>
+          <button class="switch" role="switch" aria-checked="false" aria-label="Scale"></button>
+          <p class="wait"><span class="st info">◌</span><span class="muted">Off. When on, it waits for winners (7 days of views) and for @archivo.relatos.demo's Produce budget.</span></p>
+        </div>
+      </section>
+      <div class="stack lg">
+        <section class="card" aria-label="Spend">
+          <div class="hd"><h2>Spend</h2><span class="small muted">variable spend only</span></div>
+          <div class="bd stack">
+            <div class="row between small"><span>This month</span><span class="num">$1.62 of $10</span></div>
+            <div class="meter"><span style="width:16.2%"></span></div>
+            <div class="grid-2">
+              <div class="field"><label for="line">Ask me above (per batch)</label><input id="line" type="text" value="$2.00" inputmode="decimal"></div>
+              <div class="field"><label for="cap">Monthly cap</label><input id="cap" type="text" value="$10.00" inputmode="decimal"></div>
+            </div>
+          </div>
+        </section>
+        <section class="card" aria-label="Rails">
+          <div class="hd"><h2>Always on</h2></div>
+          <div class="bd">
+            <ul class="rails">
+              <li><span class="st good">✓</span>Policy gate on every item</li>
+              <li><span class="st warning">◐</span>New format: first 10 items to review (4 of 10 done)</li>
+              <li><span class="st good">✓</span>Producer version: first 5 items to review after a change (none open)</li>
+              <li><span class="st good">✓</span>First 10 dubs in the pair go to review</li>
+              <li><span class="st info">◌</span>Always yours: spend over the line, sponsored items, new sources and series</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="pending" role="status">
+      <b>Unsaved: Produce on. +$4.20 a month (~38 items), and about −1 min a day of your time.</b>
+      <span class="muted">Autopilot settings are operating state, not a setup version: they apply to the next batch and are logged in Activity with your name. The running experiment gets a marker (“Produce switched on, day 3”), not a stop.</span>
+      <div class="row wrap"><input type="text" placeholder="Note (required when turning the Review dial up)" aria-label="Note" style="max-width:24rem"><button class="btn primary" type="button">Apply</button><button class="btn ghost" type="button">Discard</button></div>
+    </div>
+  </section>
+
+  <!-- ===== Style ===== -->
+  <section data-panel="style" class="style-grid" aria-label="Style" hidden>
+    <div class="stack lg">
+      <section class="card" aria-label="Look">
+        <div class="hd"><h2>Look</h2><span class="small muted">recut: new jobs</span></div>
+        <div class="setting"><span class="k">Caption preset</span><span class="v"><select aria-label="Caption preset" style="max-width:12rem"><option>Anton bold, yellow key word</option><option>Clean lower third</option></select><span class="origin">category</span></span></div>
+        <div class="setting"><span class="k">Hook title card</span><span class="v">on · first 3 s · fade 0.3 s <span class="origin">category</span></span></div>
+        <div class="setting"><span class="k">Brand kit</span><span class="v"><span class="swatch" style="background:#1b2a3a"></span><span class="swatch" style="background:#ffd400"></span><span class="swatch" style="background:#f2efe6"></span> deep navy, signal yellow, paper <span class="origin">blueprint</span></span></div>
+        <div class="setting"><span class="k">Visual brief</span><span class="v">archival photos, ink maps, slow push-ins; no photoreal people <span class="origin">blueprint</span></span></div>
+      </section>
+      <section class="card" aria-label="Voice and persona" data-type="story band avatar model">
+        <div class="hd"><h2>Voice &amp; persona</h2><span class="small muted">format: first 10 to review</span></div>
+        <div class="setting"><span class="k">Voice</span><span class="v">“Archivist”: warm baritone, slow, natural pauses <button class="btn" type="button">▶ 12 s sample</button><span class="origin acct">account</span></span></div>
+        <div class="setting"><span class="k">Persona</span><span class="v">none (narrator only) <a class="small" href="personas.html">Personas ▸</a></span></div>
+        <div class="setting"><span class="k">Disclosure</span><span class="v">AI label on every platform · “AI-narrated” in the first line <span class="origin">category · rules</span></span></div>
+      </section>
+      <section class="card" aria-label="Format">
+        <div class="hd"><h2>Format</h2><span class="small muted">format: first 10 to review</span></div>
+        <div class="setting"><span class="k">Length</span><span class="v">61–90 s <span class="origin">category</span></span></div>
+        <div class="setting"><span class="k">Series: “The day that…”</span><span class="v" style="display:grid;gap:0.35rem;width:100%">
+          <span class="beats" role="img" aria-label="Beats: hook 0 to 3 seconds, setup to 15, turn to 45, reveal to 70, call to action at 75">
+            <span class="hook" style="flex:3">Hook 0–3 s</span><span style="flex:12">Setup</span><span style="flex:30">Turn</span><span style="flex:25">Reveal</span><span style="flex:10">CTA ~75 s</span></span>
+          <span class="xs muted">curiosity loop every 20–30 s · hook from the library (Hooks tab) <span class="origin">blueprint</span></span></span></div>
+        <div class="setting"><span class="k">Series: “Part 1/2”</span><span class="v"><span class="muted">2 parts, cliffhanger at the turn</span> <span class="origin">blueprint</span></span></div>
+        <div class="setting"><span class="k">Pillars</span><span class="v">unsolved mysteries · lost cities · forgotten inventors <span class="origin">blueprint</span></span></div>
+      </section>
+      <section class="card" aria-label="Posting">
+        <div class="hd"><h2>Posting</h2><span class="small muted">live: next send</span></div>
+        <div class="setting"><span class="k">Slots</span><span class="v num">14:00 · 19:30 <span class="origin acct">account</span></span></div>
+        <div class="setting"><span class="k">Hashtags</span><span class="v">#history #mystery #untold <span class="origin">blueprint</span></span></div>
+        <div class="setting"><span class="k">Call to action</span><span class="v">“Part 2 tomorrow. Follow so you don't miss it.” <span class="origin acct">account</span></span></div>
+      </section>
+    </div>
+    <div class="preview-col stack">
+      <div class="video" role="img" aria-label="Style preview frame">
+        <div class="title">The day the <em style="color:#ffd400;font-style:normal">lamp</em> stayed lit</div>
+        <div class="cap">three men <em>vanished</em></div>
+      </div>
+      <p class="xs muted">Preview frame from the last item, re-rendered with these settings (no cost).</p>
+      <div class="pending">
+        <b>1 change</b>
+        <div class="diff"><span class="from">caption preset: Anton bold</span><span class="to">caption preset: Clean lower third</span></div>
+        <span class="muted">Re-runs captions and render for new jobs only · no extra cost · first 10 new items go to review.</span>
+        <button class="btn primary" type="button">Review and save…</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Hooks ===== -->
+  <section data-panel="hooks" class="stack lg" aria-label="Hooks" hidden>
+    <div class="row between wrap">
+      <p class="small muted">Approved patterns rotate per item by weight; each item records the pattern and version it used. Separate from experiments.</p>
+      <div class="row"><button class="btn" type="button">+ Hook idea</button><button class="btn" type="button">Share to blueprint…</button></div>
+    </div>
+    <div class="notice info"><span aria-hidden="true">❄</span><div><b>Weights frozen</b> while the experiment “narration pace 1.1×” runs (day 3 of 7), so both sides rotate hooks the same way.</div></div>
+    <section class="card" aria-label="Approval rate per pattern">
+      <div class="hd"><h2>Approval rate by pattern</h2><span class="small muted">last 30 days · 90% interval</span></div>
+      <div class="bd">
+        <div class="chart hooks-chart" id="hookchart"></div>
+        <details class="table-view"><summary>Show as a table</summary>
+          <table class="data"><thead><tr><th>Pattern</th><th class="r">Approved</th><th class="r">Rate</th><th class="r">90% interval</th></tr></thead>
+          <tbody id="hooktable"></tbody></table></details>
+        <p class="xs muted" style="margin-top:0.5rem">Judged by your review decisions and 👍/👎 now; 3-second hold and views at 24 h join with analytics (S7).</p>
+      </div>
+    </section>
+    <section class="card" aria-label="Library">
+      <div class="hd"><h2>Library</h2><span class="small muted">5 patterns</span></div>
+      <div class="bd flush" style="overflow-x:auto">
+        <table class="data">
+          <thead><tr><th>Pattern</th><th>Status</th><th class="r">Weight</th><th class="r">Items</th><th class="r">👍 / 👎</th><th class="r only-lg">3-s hold</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="pat"><b>Number + conflict <span class="muted">v3</span></b><span class="xs muted">“3 men, 1 lamp, 0 witnesses”</span></span></td><td><span class="chip good">approved</span></td><td class="r">35% ❄</td><td class="r">9</td><td class="r">6 / 1</td><td class="r only-lg muted">S7</td><td><button class="btn ghost" type="button">Edit → v4</button></td></tr>
+            <tr><td><span class="pat"><b>The day that… <span class="muted">v2</span></b><span class="xs muted">“The day the river ran backwards”</span></span></td><td><span class="chip good">approved</span></td><td class="r">30% ❄</td><td class="r">6</td><td class="r">4 / 0</td><td class="r only-lg muted">S7</td><td><button class="btn ghost" type="button">Edit → v3</button></td></tr>
+            <tr><td><span class="pat"><b>Open question <span class="muted">v1</span></b><span class="xs muted">“Why did no one open the door?”</span></span></td><td><span class="chip good">approved</span></td><td class="r">25% ❄</td><td class="r">4</td><td class="r">1 / 2</td><td class="r only-lg muted">S7</td><td><button class="btn ghost" type="button">Retire</button></td></tr>
+            <tr><td><span class="pat"><b>Last known photo <span class="muted">v1</span></b><span class="xs muted">shared from blueprint archive</span></span></td><td><span class="chip good">approved</span></td><td class="r">10% ❄</td><td class="r">2</td><td class="r">1 / 0</td><td class="r only-lg muted">S7</td><td><button class="btn ghost" type="button">Edit → v2</button></td></tr>
+            <tr><td><span class="pat"><b>“Nobody talks about…” <span class="muted">draft</span></b><span class="xs muted">from your phone, yesterday 22:14</span></span></td><td><span class="chip">draft</span></td><td class="r muted">0%</td><td class="r">0</td><td class="r">—</td><td class="r only-lg muted">—</td><td><button class="btn" type="button">Approve</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===== S3c tabs (designed in the S3c spec §2.5) ===== -->
+  <section data-panel="setup" class="card" hidden><div class="empty"><span class="big">Setup &amp; History</span><span class="small muted">Designed in the S3c spec §2.5: every effective value with its origin, versions, diff and restore.</span></div></section>
+  <section data-panel="results" class="card" hidden><div class="empty"><span class="big">Results</span><span class="small muted">The account's slice of <a href="results.html">Results</a>, plus S3c §4.2's table per version.</span></div></section>
+  <section data-panel="experiments" class="card" hidden><div class="empty"><span class="big">Experiments</span><span class="small muted">S3c §2.6–2.7.</span></div></section>
+  <section data-panel="notes" class="card" hidden><div class="empty"><span class="big">Notes</span><span class="small muted">S3c notes; + Note and + Hook idea from the phone land here.</span></div></section>
+  <section data-panel="sources" class="card" hidden><div class="empty"><span class="big">Sources</span><span class="small muted">The account's sources (S1), linking to Sources.</span></div></section>
+
+  <!-- ===== Activity ===== -->
+  <section data-panel="activity" class="card" aria-label="What ran without you" hidden>
+    <div class="hd"><h2>What ran without you</h2><span class="small muted">yesterday</span></div>
+    <ul class="feed">
+      <li><time>06:10</time><span>Produced 2 items (“The ship found sailing empty”, “A city under the lake”)</span><a href="#">job ▸</a></li>
+      <li><time>06:14</time><span>Policy gate passed both (AI label, 3 fact sources each)</span><a href="#">decision ▸</a></li>
+      <li><time>14:00</time><span>Posted “The ship found sailing empty” to TikTok, Instagram, YouTube, Facebook</span><a href="#">posts ▸</a></li>
+      <li><time>19:30</time><span>Posted “A city under the lake” to 4 platforms</span><a href="#">posts ▸</a></li>
+      <li><time>21:02</time><span>Hook ranking moved: “The day that…” up to 30%</span><a href="#">hooks ▸</a></li>
+      <li><time>21:40</time><span>Autopilot: Publish switch off → on, by web:owner (“Upload-Post connected”)</span><a href="#">history ▸</a></li>
+    </ul>
+    <p class="xs muted" style="padding:0 1rem 0.9rem">Each line links to its record: the decision ledger from S6, the job or post event before that, and the autopilot change history (who, when, from → to, why).</p>
+  </section>
+  <p class="sample">Sample data: fictional accounts and numbers, for layout only.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+<script>document.querySelectorAll("[data-goto]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); const b = document.querySelector('[data-tab="' + a.dataset.goto + '"]'); if (b) b.click(); }));</script>
+<script>
+// Approval rate per hook pattern: dot + 90% Wilson interval, one series (no legend), direct labels, hover tooltip.
+(function () {
+  function draw() {
+  const rows = [["Number + conflict v3", 8, 9], ["The day that… v2", 6, 6], ["Open question v1", 2, 4], ["Last known photo v1", 2, 2]];
+  const z = 1.645;
+  const wilson = (k, n) => { const p = k / n, d = 1 + z * z / n, c = p + z * z / (2 * n), m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)); return [(c - m) / d, (c + m) / d]; };
+  const host = document.getElementById("hookchart"), tbody = document.getElementById("hooktable");
+  if (!host.clientWidth) return; host.replaceChildren(); tbody.replaceChildren();
+  const W = host.clientWidth, narrow = W < 520, rowH = 34, L = narrow ? 120 : 170, R = narrow ? 70 : 90, T = 8, H = T + rows.length * rowH + 22;
+  const x = (v) => L + v * (W - L - R);
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Approval rate per hook pattern with 90% intervals");
+  const mk = (t, a) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); return n; };
+  [0, 0.25, 0.5, 0.75, 1].forEach((v) => {
+    svg.append(mk("line", { x1: x(v), x2: x(v), y1: T, y2: H - 18, class: v === 0 ? "baseline" : "gridline" }));
+    const t = mk("text", { x: x(v), y: H - 4, "text-anchor": "middle" }); t.textContent = Math.round(v * 100) + "%"; svg.append(t);
+  });
+  const tip = document.createElement("div"); tip.className = "tip"; host.append(tip);
+  rows.forEach(([name, k, n], i) => {
+    const y = T + i * rowH + rowH / 2, [lo, hi] = wilson(k, n), p = k / n;
+    const lab = mk("text", { x: L - 10, y: y + 4, "text-anchor": "end" }); lab.textContent = name; svg.append(lab);
+    svg.append(mk("line", { x1: x(lo), x2: x(hi), y1: y, y2: y, stroke: "var(--series-1)", "stroke-width": 2, "stroke-linecap": "round", opacity: 0.45 }));
+    svg.append(mk("circle", { cx: x(p), cy: y, r: 5, fill: "var(--series-1)", stroke: "var(--card)", "stroke-width": 2 }));
+    const v = mk("text", { x: x(hi) + 8, y: y + 4, class: "lab" }); v.textContent = `${Math.round(p * 100)}% · ${k}/${n}`; svg.append(v);
+    const hit = mk("rect", { x: 0, y: y - rowH / 2, width: W, height: rowH, fill: "transparent", tabindex: 0 });
+    const show = (ev) => {
+      tip.replaceChildren();
+      const t = document.createElement("div"); t.className = "t"; t.textContent = name;
+      const r = document.createElement("div"); r.className = "r";
+      const s1 = document.createElement("span"); s1.textContent = "approved";
+      const b = document.createElement("b"); b.textContent = `${k} of ${n} (${Math.round(p * 100)}%)`;
+      r.append(s1, b);
+      const r2 = document.createElement("div"); r2.className = "r";
+      const s2 = document.createElement("span"); s2.textContent = "90% interval";
+      const b2 = document.createElement("b"); b2.textContent = `${Math.round(lo * 100)}–${Math.round(hi * 100)}%`;
+      r2.append(s2, b2);
+      tip.append(t, r, r2); tip.style.display = "block";
+      const box = host.getBoundingClientRect();
+      tip.style.left = Math.min(box.width - 160, (x(p) / W) * box.width + 10) + "px";
+      tip.style.top = ((y - 10) / H) * box.height + "px";
+    };
+    hit.addEventListener("pointermove", show); hit.addEventListener("focus", show);
+    hit.addEventListener("pointerleave", () => (tip.style.display = "none")); hit.addEventListener("blur", () => (tip.style.display = "none"));
+    svg.append(hit);
+    const tr = document.createElement("tr");
+    [name, `${k} of ${n}`, `${Math.round(p * 100)}%`, `${Math.round(lo * 100)}–${Math.round(hi * 100)}%`].forEach((c, j) => {
+      const td = document.createElement("td"); td.textContent = c; if (j) td.className = "r"; tr.append(td);
+    });
+    tbody.append(tr);
+  });
+  host.prepend(svg);
+  }
+  draw();
+  document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => requestAnimationFrame(draw)));
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(draw, 120); });
+})();
+</script>
+</body>
+</html>

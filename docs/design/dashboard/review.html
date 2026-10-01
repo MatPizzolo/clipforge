@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Review · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .filters { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .filters select { width: auto; min-height: 2rem; font-size: 0.8125rem; }
+  .rv { display: grid; gap: 1rem; }
+  @media (min-width: 1024px) { .rv { grid-template-columns: 22rem minmax(0, 1fr); align-items: start; } }
+  .q { list-style: none; margin: 0; padding: 0; }
+  .q li { display: grid; grid-template-columns: auto 3rem minmax(0, 1fr); gap: 0.6rem; align-items: center; padding: 0.6rem 0.75rem; border-top: 1px solid var(--border); cursor: pointer; }
+  .q li:first-child { border-top: 0; }
+  .q li[aria-selected="true"] { background: var(--muted); }
+  .q .thumb { width: 3rem; aspect-ratio: 9 / 16; border-radius: 0.375rem; background: linear-gradient(180deg, oklch(0.32 0.02 250), oklch(0.2 0.01 250)); }
+  .q .t { font-weight: 600; font-size: 0.8125rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q .m { font-size: 0.75rem; color: var(--muted-foreground); display: block; }
+  .q .due { font-size: 0.75rem; font-weight: 600; }
+  .q .due.soon { color: var(--critical); }
+  .q input[type="checkbox"] { width: 1rem; height: 1rem; }
+  .detail { display: grid; gap: 1rem; }
+  @media (min-width: 1024px) { .detail-in { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 1.25rem; align-items: start; } }
+  .gate { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; font-size: 0.8125rem; }
+  .gate li { display: flex; gap: 0.5rem; justify-content: space-between; }
+  .platform { display: grid; gap: 0.3rem; }
+  .platform .row b { font-size: 0.8125rem; }
+  .batchbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: space-between; padding: 0.55rem 0.75rem; background: var(--foreground); color: var(--background); border-radius: var(--radius); font-size: 0.8125rem; }
+  .batchbar .btn { background: var(--background); color: var(--foreground); border-color: transparent; }
+  .q a.open { display: contents; color: inherit; text-decoration: none; }
+  @media (max-width: 1023px) {
+    .batchbar, .q input[type="checkbox"], .detail { display: none; }
+    .q li { grid-template-columns: 3rem minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body data-page="review" data-states="live pres2 empty loading error stale">
+<!--
+THESIS: batch review on the laptop, one-at-a-time on the phone; every item shows why it is here and what the gate said, and copy is edited only here.
+OWN-WORLD: S3a neutral shell; a queue list on the left (thumb, title, account, reason, due), the item on the right (9:16 video, gate answers, copy per platform, hook rating).
+STORY: the owner filters to the items that need them, approves a batch or opens one, fixes copy, rejects with a reason.
+FIRST VIEWPORT: laptop: filters row, queue (left), selected item (right) with Approve / Reject; phone: filters and the queue only (no batch bar, no inline detail), each row opening /act.
+FORM: Review inbox (08 §2; spec §7.5); before S2 a queue manager (D8). No seed run.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main>
+  <div class="page-head">
+    <div><h1>Review</h1><p class="sub" data-when="live">4 waiting · 1 due within 2 h (also in Telegram)</p><p class="sub" data-when="pres2">Queue manager until S2: posting stays in Telegram</p></div>
+    <div class="filters">
+      <select aria-label="Account"><option>All accounts</option><option>@archive.tales.demo</option></select>
+      <select aria-label="Why"><option>Every reason</option><option>New format window</option><option>Producer version window</option><option>First dubs in a pair</option><option>Sponsored</option><option>Gate failed</option><option>Spot check</option></select>
+      <select aria-label="Due"><option>Due first</option><option>Oldest first</option></select>
+    </div>
+  </div>
+
+  <div class="notice critical" data-when="error" role="alert"><span aria-hidden="true">✕</span><div><b>Can't load the review queue.</b> Items due within 2 h still reach you in Telegram. <button class="btn" type="button">Retry</button></div></div>
+
+  <div class="rv" data-when="live">
+    <section class="card" aria-label="Queue">
+      <div class="batchbar" role="region" aria-label="Batch actions"><span>2 selected</span><span class="row"><button class="btn" type="button">Approve 2</button><button class="btn" type="button">Reject…</button></span></div>
+      <ul class="q" role="listbox" aria-label="Items waiting">
+        <li role="option" aria-selected="true"><input type="checkbox" checked aria-label="Select"><a class="open" href="act.html"><span class="thumb" aria-hidden="true"></span><span><span class="t">The lighthouse keeper who vanished</span><span class="m">@archive.tales.demo · new format 4 of 10</span><span class="due soon">◷ due 14:00 · in 1 h 20 min</span></span></a></li>
+        <li role="option" aria-selected="false"><input type="checkbox" checked aria-label="Select"><a class="open" href="act.html"><span class="thumb" aria-hidden="true"></span><span><span class="t">El barco que navegaba vacío</span><span class="m">@archivo.relatos.demo · first dubs 3 of 10</span><span class="due">tomorrow 20:30</span></span></a></li>
+        <li role="option" aria-selected="false"><input type="checkbox" aria-label="Select"><a class="open" href="act.html"><span class="thumb" aria-hidden="true"></span><span><span class="t">La ciudad bajo el lago</span><span class="m">@archivo.relatos.demo · first dubs 4 of 10</span><span class="due">Thu 20:30</span></span></a></li>
+        <li role="option" aria-selected="false"><input type="checkbox" aria-label="Select"><a class="open" href="act.html"><span class="thumb" aria-hidden="true"></span><span><span class="t">This $9 tool replaced my notes app</span><span class="m">@toolbench.demo · gate: #ad missing</span><span class="due">Thu 17:00</span></span></a></li>
+      </ul>
+    </section>
+
+    <section class="detail" aria-label="Selected item">
+      <div class="detail-in">
+        <div class="video" role="img" aria-label="Video preview, 61 seconds">
+          <div class="title">The keeper left the lamp <em style="color:#ffd400;font-style:normal">burning</em></div>
+          <div class="play" aria-hidden="true">▶</div>
+          <div class="cap">nobody saw him <em>leave</em></div>
+          <div class="meta">0:00 / 1:01</div>
+        </div>
+        <div class="stack lg">
+          <div class="stack">
+            <h2>The lighthouse keeper who vanished</h2>
+            <p class="small muted">@archive.tales.demo · story · made by story:4c1a9e02 · account v7 · hook Number + conflict v3</p>
+            <div class="row wrap"><span class="chip warning">◐ New format: 4 of 10</span><span class="chip">due 14:00</span></div>
+          </div>
+          <div class="card"><div class="hd"><h3>Policy gate</h3><span class="st good">✓ passed</span></div><div class="bd">
+            <ul class="gate"><li><span>AI disclosure flags (4 platforms)</span><span class="st good">✓</span></li><li><span>Fact sources stored</span><span class="st good">✓ 3</span></li><li><span>Licenses for every asset</span><span class="st good">✓ 7</span></li><li><span>Duplicate of another account</span><span class="st good">✓ none</span></li></ul>
+          </div></div>
+          <div class="card"><div class="hd"><h3>Copy per platform</h3><span class="small muted">edited only here</span></div><div class="bd stack">
+            <div class="platform"><div class="row between"><b>TikTok</b><span class="xs muted">142 / 2,200</span></div><textarea aria-label="TikTok copy">In 1900 three keepers vanished from a Scottish lighthouse. The lamp was still burning. Part 1/2 #history #mystery</textarea></div>
+            <div class="platform"><div class="row between"><b>Instagram · YouTube · Facebook</b><span class="xs muted">same as TikTok, + “AI-narrated”</span></div></div>
+          </div></div>
+          <div class="row wrap">
+            <button class="btn lg primary" type="button">Approve for 14:00</button>
+            <button class="btn lg danger" type="button">Reject…</button>
+            <button class="btn lg" type="button">Re-render</button>
+            <span class="row small muted">Hook: <button class="btn ghost" type="button" aria-label="Good hook">👍</button><button class="btn ghost" type="button" aria-label="Weak hook">👎</button></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Before S2: queue manager (D8) -->
+  <section class="card" data-when="pres2" aria-label="Posting queue">
+    <div class="hd"><h2>Next up for @mindset.clips.demo</h2><span class="small muted">sent by Telegram at each slot</span></div>
+    <div class="bd flush" style="overflow-x:auto">
+      <table class="data">
+        <thead><tr><th>#</th><th>Clip</th><th class="r">Score</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>“Discipline is a decision you make at 6 am”</td><td class="r">0.91</td><td>queued</td><td class="row"><button class="btn ghost" type="button" aria-label="Move down">↓</button><button class="btn ghost" type="button">Skip</button><button class="btn ghost danger" type="button">Reject…</button></td></tr>
+          <tr><td class="num">2</td><td>“The money conversation nobody has”</td><td class="r">0.88</td><td>queued</td><td class="row"><button class="btn ghost" type="button" aria-label="Move up">↑</button><button class="btn ghost" type="button" aria-label="Move down">↓</button><button class="btn ghost" type="button">Skip</button><button class="btn ghost danger" type="button">Reject…</button></td></tr>
+          <tr><td class="num">—</td><td>“Why your first job doesn't matter”</td><td class="r">0.86</td><td>sent 08:00 · TT ✓ IG ✓ YT · FB</td><td><button class="btn ghost" type="button">Correct posted marks…</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="xs muted" style="padding:0.6rem 1rem 0.9rem">Skip, reject, reorder and posted corrections go through the same actions as the Telegram buttons (actor web:owner). Nothing here sends a clip.</p>
+  </section>
+
+  <section class="card" data-when="empty"><div class="empty"><span class="big">Nothing to review.</span><span class="small muted">Accounts on sample or auto post on their own; the gate still checks every item. Spot checks appear here when they're due.</span></div></section>
+  <div class="rv" data-when="loading" aria-busy="true"><div class="sk" style="height:18rem"></div><div class="sk" style="height:24rem"></div></div>
+  <p class="sample">Sample data: fictional accounts and numbers, for layout only.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>

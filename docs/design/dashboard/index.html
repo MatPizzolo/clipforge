@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard mockups · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  body { padding: 2rem 1rem 3rem; }
+  .wrap { max-width: 52rem; margin: 0 auto; display: grid; gap: 1.25rem; }
+  .pages { list-style: none; margin: 0; padding: 0; }
+  .pages li { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr); gap: 0.25rem 1rem; padding: 0.8rem 1rem; border-top: 1px solid var(--border); }
+  .pages li:first-child { border-top: 0; }
+  .pages a { font-weight: 600; }
+  @media (max-width: 640px) { .pages li { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>ClipForge dashboard: mockups (card 009)</h1>
+    <p class="muted small" style="margin-top:0.35rem">Static HTML: open any file in a browser, no build. Resize below 1024 px for the phone layout. The bar at the top of each page switches its states (live, empty, loading, error, stale and page-specific ones). Every name and number is fictional sample data. The design rules are in <a href="DESIGN.md">DESIGN.md</a>; the decisions behind each page are in the spec, <code>docs/superpowers/specs/2026-10-01-studio-s3-dashboard-design.md</code> §7.</p>
+  </div>
+  <section class="card">
+    <ul class="pages">
+      <li><a href="home.html">Home</a><span class="small muted">“Needs you” with the attention meter, then the fleet scoreboard and today's slots. States: over budget, empty, loading, error, stale.</span></li>
+      <li><a href="act.html">Act (focused view)</a><span class="small muted">Where a Telegram “Open” lands: one decision, then Next. States: a spend row, a promotion, already handled, not found.</span></li>
+      <li><a href="accounts.html">Accounts → Compare</a><span class="small muted">The weekly hour: the 3 accounts that need you, then every account side by side.</span></li>
+      <li><a href="account.html">Account workspace</a><span class="small muted">A shared core (Overview, Autopilot, Style, Hooks, Activity, S3c's tabs under More) plus each type's own tabs. Switch the type in the top bar: clips (Sources &amp; episodes, Framing &amp; captions), story (Series &amp; topics, Research), band (Bands &amp; licenses, Sounds), avatar (Offers &amp; links, Claims, Persona &amp; looks), model (Persona &amp; looks, Carousels, Brand deals).</span></li>
+      <li><a href="review.html">Review</a><span class="small muted">Batch review with the gate's answers and copy editing; the before-S2 queue manager (D8).</span></li>
+      <li><a href="produce.html">Produce</a><span class="small muted">The batch planner with its estimate and review time, the queue fillers, Jobs.</span></li>
+      <li><a href="results.html">Results</a><span class="small muted">Stats, Money and Costs on one filter row: views, winners, revenue against variable cost, programs, burn against the fleet cap, fixed subscriptions.</span></li>
+      <li><a href="personas.html">Personas</a><span class="small muted">Every persona with the accounts it serves (a pair or one niche; a warning when it spans unrelated niches) and its 30-day consistency.</span></li>
+      <li><a href="persona.html">Persona page</a><span class="small muted">Profile (who, rules, accounts and voices), Looks (per-account permissions), Consistency (drift over time, causes, render vs anchors), Voice (one master per language, test lines), Anchors &amp; LoRA.</span></li>
+      <li><a href="persona-new.html">Design a persona</a><span class="small muted">Seven steps with the cost of each: brief (synthetic only), faces, anchors, voice per language, test lines, LoRA, link accounts.</span></li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>

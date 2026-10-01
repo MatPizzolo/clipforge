@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Personas · ClipForge</title>
+<link rel="stylesheet" href="dashboard.css">
+<style>
+  .plist { display: grid; gap: 0.75rem; }
+  @media (min-width: 1024px) { .plist { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .pc { padding: 0.9rem 1rem; display: grid; gap: 0.55rem; text-decoration: none; align-content: start; }
+  .pc:hover { border-color: var(--ring); }
+  .face { width: 3.25rem; aspect-ratio: 4 / 5; border-radius: 0.5rem; flex: none;
+    background: radial-gradient(circle at 50% 38%, oklch(0.78 0.04 60) 0 22%, transparent 23%), radial-gradient(ellipse at 50% 100%, oklch(0.55 0.05 250) 0 42%, transparent 43%), linear-gradient(180deg, oklch(0.9 0.01 250), oklch(0.8 0.02 250)); }
+  .face.b { background: radial-gradient(circle at 50% 38%, oklch(0.62 0.05 50) 0 22%, transparent 23%), radial-gradient(ellipse at 50% 100%, oklch(0.6 0.08 140) 0 42%, transparent 43%), linear-gradient(180deg, oklch(0.92 0.02 90), oklch(0.82 0.03 90)); }
+  .face.c { opacity: 0.55; }
+  .pc .kv { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; font-size: 0.8125rem; margin: 0; }
+  .pc .kv dt { color: var(--muted-foreground); } .pc .kv dd { margin: 0; }
+  .accts { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+</style>
+</head>
+<body data-page="personas" data-states="live empty loading error stale">
+<!--
+THESIS: personas are shared assets, so the page opens on all of them and the accounts each one serves; one persona can serve a pair or one niche, never unrelated brands without a warning.
+OWN-WORLD: S3a neutral shell; one card per persona (face, status, voices, accounts as chips, 30-day consistency), a niche warning as a notice inside the card.
+STORY: the owner sees every persona, which accounts it presents for, whether it stays consistent, and opens one or designs a new one.
+FIRST VIEWPORT: title with "Design a persona", then the persona cards (three across on a laptop, stacked on a phone).
+FORM: Personas list (spec §7.8, owner ruling on persona use); no seed run.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="page">
+<main>
+  <div class="page-head">
+    <div><h1>Personas</h1><p class="sub">Synthetic and disclosed. One persona can serve a pair or one niche.</p></div>
+    <a class="btn primary" href="persona-new.html">Design a persona…</a>
+  </div>
+
+  <div class="notice critical" data-when="error" role="alert"><span aria-hidden="true">✕</span><div><b>Can't load personas.</b> Renders that need one are held, not published. <button class="btn" type="button">Retry</button></div></div>
+  <section class="card" data-when="empty"><div class="empty"><span class="big">No personas yet.</span><span class="small muted">Avatar and model accounts need one: a brief, three anchor images (synthetic only), a voice per language and a LoRA trained on its own images. Comes with the avatar producer (S8).</span><a class="btn primary" href="persona-new.html">Design a persona…</a></div></section>
+  <div class="plist" data-when="loading" aria-busy="true"><div class="sk" style="height:12rem"></div><div class="sk" style="height:12rem"></div><div class="sk" style="height:12rem"></div></div>
+
+  <div class="plist" data-when="live">
+    <a class="card pc" href="persona.html">
+      <div class="row"><span class="face" aria-hidden="true"></span><span><b>Nova</b><br><span class="small muted">AI host · tools and productivity</span></span><span class="chip good" style="margin-left:auto">active</span></div>
+      <dl class="kv"><dt>Voices</dt><dd>EN v1 · ES v1</dd><dt>Consistency</dt><dd>0.89 median, 3 drifts in 30 days</dd><dt>Looks</dt><dd>3 approved</dd></dl>
+      <div class="accts"><span class="chip">@toolbench.demo · EN</span><span class="chip">@herramientas.demo · ES</span><span class="chip">@kitchen.finds.demo · EN</span></div>
+      <div class="notice warning"><span aria-hidden="true">▲</span><div><b>Spans unrelated niches:</b> tools and kitchen. Each account should read as its own brand (07).</div></div>
+    </a>
+    <a class="card pc" href="persona.html">
+      <div class="row"><span class="face b" aria-hidden="true"></span><span><b>Lena</b><br><span class="small muted">AI creator · travel lifestyle</span></span><span class="chip good" style="margin-left:auto">active</span></div>
+      <dl class="kv"><dt>Voices</dt><dd>EN v2</dd><dt>Consistency</dt><dd>0.86 median, 2 drifts in 30 days</dd><dt>Looks</dt><dd>4 approved · 1 draft</dd></dl>
+      <div class="accts"><span class="chip">@lena.travels.demo · EN</span></div>
+    </a>
+    <a class="card pc" href="persona-new.html">
+      <div class="row"><span class="face c" aria-hidden="true"></span><span><b>Profe Sol</b><br><span class="small muted">AI tutor · English for Spanish speakers</span></span><span class="chip" style="margin-left:auto">draft · step 2 of 7</span></div>
+      <dl class="kv"><dt>Voices</dt><dd>ES (designing)</dd><dt>Consistency</dt><dd>—</dd><dt>Spent</dt><dd>$0.03 so far</dd></dl>
+      <div class="accts"><span class="chip">no account yet</span></div>
+    </a>
+  </div>
+  <p class="sample">Sample data: fictional personas and accounts, for layout only.</p>
+</main>
+</div>
+<script src="shell.js"></script>
+</body>
+</html>
