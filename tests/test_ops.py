@@ -85,6 +85,7 @@ def test_owner_chat_and_wiring(tmp_path: Path) -> None:
     owner = make_settings(tmp_path, owner_timezone="America/Argentina/Buenos_Aires")
     assert ops_alerts(MemoryKV(), FakeSender(), owner).timezone.endswith("Buenos_Aires")  # type: ignore[union-attr]
     assert make_settings(tmp_path, owner_timezone="Mars/Base").owner_timezone is None
+    assert make_settings(tmp_path, owner_timezone="Etc").owner_timezone is None  # a folder
 
 
 def test_a_failed_job_without_a_notifier_alerts_the_owner(tmp_path: Path) -> None:

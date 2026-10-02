@@ -10,7 +10,7 @@ from typing import Any
 
 from telegram.request import BaseRequest, RequestData
 
-from clipforge.bot.telegram import Keyboard
+from clipforge.bot.telegram import Keyboard, VideoSize
 from clipforge.config import Settings
 
 ALLOWED_USER = 42
@@ -21,6 +21,7 @@ CHAT = 7
 class FakeSender:
     messages: list[tuple[int, str, int | None]] = field(default_factory=list)
     videos: list[tuple[int, Path, str, int | None]] = field(default_factory=list)
+    sizes: list[VideoSize | None] = field(default_factory=list)  # one per video, in order
     keyboards: dict[int, Keyboard | None] = field(default_factory=dict)  # message id -> buttons
     answers: list[tuple[str, str]] = field(default_factory=list)
     deleted: list[tuple[int, int]] = field(default_factory=list)
@@ -52,10 +53,17 @@ class FakeSender:
         return message_id
 
     def send_video(
-        self, chat_id: int, path: Path, caption: str, reply_to: int | None = None
+        self,
+        chat_id: int,
+        path: Path,
+        caption: str,
+        reply_to: int | None = None,
+        *,
+        size: VideoSize | None = None,
     ) -> int:
         self._check("send_video")
         self.videos.append((chat_id, path, caption, reply_to))
+        self.sizes.append(size)
         return self._id()
 
     def edit_buttons(self, chat_id: int, message_id: int, buttons: Keyboard | None) -> None:

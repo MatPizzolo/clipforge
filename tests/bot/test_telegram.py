@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from clipforge.bot.telegram import TelegramClient
+from clipforge.bot.telegram import TelegramClient, VideoSize
 from tests.bot.fakes import FakeRequest
 
 
@@ -40,6 +40,18 @@ def test_send_video_uploads_the_file(tmp_path: Path) -> None:
     assert name == "sendVideo" and has_files
     assert params["supports_streaming"] is True
     assert len(params["caption"]) == 1024  # Telegram's caption limit
+    assert not {"width", "height", "duration"} & params.keys()  # unknown: Telegram guesses
+
+
+def test_send_video_passes_the_frame_size(tmp_path: Path) -> None:
+    """Without width and height some clients draw a 9:16 clip squeezed into a square."""
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"\x00" * 16)
+    client, request = _client()
+    client.send_video(7, path, "c", size=VideoSize(width=1080, height=1920, duration_s=31.6))
+    _, params, _ = request.calls[-1]
+    assert (params["width"], params["height"]) == (1080, 1920)
+    assert params["duration"] == 32  # whole seconds
 
 
 def test_set_webhook_sends_secret_and_the_update_types() -> None:

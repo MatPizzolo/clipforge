@@ -1,4 +1,4 @@
-"""Environment checks for the local machine (ffmpeg, libass, encoders). Modal-free.
+"""Environment checks for the local machine (ffmpeg, libass, encoders, time zones). Modal-free.
 
 The GPU side of `doctor` lives in app.py; `uv run modal run src/clipforge/app.py::doctor`
 runs both.
@@ -9,8 +9,12 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_AUDIO_SOURCE = Path("tests/fixtures/talking_head_10s.mp4")
 
@@ -69,6 +73,39 @@ def local_checks() -> list[Check]:
             "present" if not missing else "missing: " + ", ".join(missing),
         ),
     ]
+
+
+class _ZoneSettings(BaseSettings):
+    """The raw time-zone settings: config.Settings falls back to defaults on a bad value
+    (posting turns off), which would hide the failure this check is for."""
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    posting_timezone: str = "America/New_York"
+    owner_timezone: str = ""
+
+
+def configured_zones() -> list[str]:
+    """POSTING_TIMEZONE, OWNER_TIMEZONE (if set) and UTC, from the environment and `.env`."""
+    zones = _ZoneSettings()
+    names = [zones.posting_timezone.strip(), zones.owner_timezone.strip(), "UTC"]
+    return [name for name in names if name]
+
+
+def timezone_check(names: Iterable[str]) -> Check:
+    """Every zone loads with ZoneInfo. Without tzdata (the GPU image before PR #21) even UTC
+    can fail, and the posting slots and ops alerts' quiet hours depend on these."""
+    names = list(names)
+    failed = []
+    for name in names:
+        try:
+            ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError, OSError):  # a tzdata folder: IsADirectoryError
+            failed.append(name)
+    if failed:
+        return Check(
+            "time zones", False, f"not loadable: {', '.join(failed)} (is tzdata installed?)"
+        )
+    return Check("time zones", True, f"{', '.join(names)} load")
 
 
 def audio_wav_bytes(source: Path = DEFAULT_AUDIO_SOURCE) -> bytes:

@@ -200,7 +200,7 @@ class Settings(BaseSettings):
             return None
         try:
             ZoneInfo(value.strip())
-        except (ZoneInfoNotFoundError, ValueError):
+        except (ZoneInfoNotFoundError, ValueError, OSError):  # a tzdata folder: IsADirectoryError
             log.warning("OWNER_TIMEZONE ignored: not a time zone")
             return None
         return value.strip()

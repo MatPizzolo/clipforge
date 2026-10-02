@@ -195,11 +195,28 @@ def job_summaries(deps: Deps) -> list[JobSummary]:
     return [found[job_id] for job_id in sorted(found)]
 
 
+class PostingOutage(Exception):
+    """A rebuild while the outage flag is set: expired posted/verdict keys could re-queue clips
+    (decision log #217). The message says how to clear it."""
+
+    def __init__(self, since: str) -> None:
+        super().__init__(
+            f"Outage: posting_daily didn't run since {since}, so Dict keys may have expired and "
+            f"rebuild is stopped. Restore from that snapshot (clipforge status --restore {since}), "
+            "check /status, then /go; rebuild after that."
+        )
+        self.since = since
+
+
 def rebuild_posting(deps: Deps, now: datetime) -> int:
-    """Queue every finished channel job's clips from its metadata.json (idempotent, spec §5.4)."""
+    """Queue every finished channel job's clips from its metadata.json (idempotent, spec §5.4).
+    Raises PostingOutage while the outage flag is set, like posting_daily (#217)."""
     posting = deps.posting
     if posting is None:
         return 0
+    since = keepalive.outage_since(deps.store.kv)
+    if since is not None:
+        raise PostingOutage(since)
     added = 0
     for summary in job_summaries(deps):
         if summary.status is not JobStatus.DONE or summary.source_id is None:

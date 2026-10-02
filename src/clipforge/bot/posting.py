@@ -19,7 +19,7 @@ from telegram.error import TelegramError
 from clipforge.bot import messages
 from clipforge.bot.context import BotContext
 from clipforge.bot.deeplinks import account_row, item_row
-from clipforge.bot.telegram import Button, Keyboard
+from clipforge.bot.telegram import Button, Keyboard, probe_size
 from clipforge.db.engine import DatabaseUnavailable, is_db_error, redact
 from clipforge.jobs import is_job_id
 from clipforge.models import (
@@ -264,7 +264,9 @@ def _deliver(
         return False
     video_id: int | None = None
     try:
-        video_id = ctx.sender.send_video(chat, path, video_caption(item, waiting, label))
+        video_id = ctx.sender.send_video(
+            chat, path, video_caption(item, waiting, label), size=probe_size(path)
+        )
         text_id = ctx.sender.send_message(
             chat,
             post_html(item, tags, record.platforms, links),

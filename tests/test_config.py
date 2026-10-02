@@ -135,6 +135,7 @@ def test_posting_settings_are_normalized(tmp_path: Path) -> None:
     ("overrides", "problem"),
     [
         ({"posting_timezone": "Mars/Olympus"}, "time zone"),
+        ({"posting_timezone": "America"}, "time zone"),  # a tzdata folder: IsADirectoryError
         ({"posting_slots": "9am"}, "HH:MM"),
         ({"posting_slots": "18:00,09:00"}, "in order"),
         ({"posting_slots": ""}, "slots"),

@@ -24,7 +24,7 @@ def schedule_problem(
 ) -> tuple[str, str] | None:
     try:
         ZoneInfo(timezone)
-    except (ZoneInfoNotFoundError, ValueError):
+    except (ZoneInfoNotFoundError, ValueError, OSError):  # a tzdata folder: IsADirectoryError
         return "timezone", f"unknown time zone {timezone!r}"
     if not 1 <= len(slots) <= 12:
         return "slots", "between 1 and 12 posting slots"
