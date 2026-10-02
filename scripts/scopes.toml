@@ -45,6 +45,10 @@ allow = [
     "docs/DECISIONS.md",
     "CLAUDE.md",
     "docs/superpowers/**/*s1*",
+    # card 010: the rollout ticks S1 and records Neon measurements
+    "docs/studio/03-tools-and-models.md",
+    "docs/studio/04-roadmap.md",
+    "ROADMAP.md",
     "STATUS.md",
     # the API contract and the dashboard's generated client, regenerated with S1's route changes
     "web/openapi.json",

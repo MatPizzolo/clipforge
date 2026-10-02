@@ -1,3 +1,5 @@
+> **Historical (ADR-31, ADR-47, 2026-10-01):** built in card 006 (PR #13) and deployed 2026-10-02; docs/ARCHITECTURE.md and the code are current.
+
 # S4: Timeline renderer, design
 
 Date: 2026-10-01 · Card: [006](../../cards/006-s4-timeline.md) · Branch: `s4/timeline` · Status: **approved 2026-10-01** (owner: `assets` out of the render key; ADR-47 two-pass everywhere)

@@ -83,7 +83,7 @@ Full list with exit criteria, dependencies and action cards: [docs/studio/04-roa
 - [ ] S13: AI model / influencer producer (wave 6)
 - [ ] S14: funnel and own products
 - [x] Spike X1: voice (2026-09-30: Qwen3-TTS primary, Kokoro fallback; see docs/studio/03)
-- [ ] Spikes X2–X6: talking head (X2 resumes in card 005), persona, visuals and music, Judge, hero shots
+- [ ] Spikes X2–X6: talking head (X2 resumes in card 005), persona, visuals and music (X4 is card 012), Judge, hero shots
 
 ## Later / ideas
 - YouTube links (from the bot and the CLI): designed and spiked on 2026-09-28, then deferred because of proxy cost. See ADR-17 and `docs/superpowers/specs/2026-09-28-youtube-ingest-design.md` §9. The next attempt should download audio first plus per-clip 1080p ranges (about $0.50 per 30 minutes of video), or use a flat-price ISP proxy.
