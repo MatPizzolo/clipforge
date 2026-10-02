@@ -40,6 +40,7 @@ Since the S1 plan was written:
 ### Checkpoint B: the rollout, live, one step at a time
 Before starting, confirm with the owner:
 - it's outside a blackout, and there's at least an hour before the next slot;
+- `DATABASE_URL` is **not** in `clipforge-secrets` yet (the owner checks the key list in the Modal dashboard; the value never goes in chat). It goes in only at step 2, after step 1's migration: on 2026-10-02, with the key set before the tables existed, every `sources` read failed and `GET /posting` answered 500 (`docs/ops/deploys.md`);
 - last night's deploy is healthy: `modal app logs clipforge` shows `posting_tick` lines without "posting is off", and one `posting_daily:` run.
 
 Then walk runbook §4c's steps 1 → 6b in one sitting (step 2's deploy opens the mirror-alert window, which closes at step 5). After each step, check the result before giving the next command:

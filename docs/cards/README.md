@@ -24,6 +24,6 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [008](008-x0-followups.md) | X0: `deploy.py` checks the migration head, CI deploys tagged, Stop hook on main/coord | done 2026-10-01 (PR #14) | 002 merged |
 | [009](009-s3-dashboard-design.md) | S3: the dashboard as the studio's control room (brainstorm, IA, autopilot model, mockups, spec; design only) | done 2026-10-01 (PR #20) | — |
 | [010](010-s1-rollout.md) | S1: the rollout (Task 22) with the owner: two small fixes, then runbook §4c step by step, then evidence | proposed | 002 + 006 deployed, one clean night, O5 |
-| [011](011-s2-design.md) | S2: publishing and autopilot, design and plan (no code) | proposed | — |
+| [011](011-s2-design.md) | S2: publishing and autopilot, design and plan (no code) | running (spec at checkpoint A) | — |
 | [012](012-x4-visuals-music.md) | X4: stills, b-roll and music beds: licenses, cost, quality, one end-to-end Timeline | proposed | — |
-| [013](013-x0-small-fixes.md) | X0: scope check aware of merges in progress | proposed | — |
+| [013](013-x0-small-fixes.md) | X0: scope check aware of merges in progress | done 2026-10-02 (PR #26) | — |
