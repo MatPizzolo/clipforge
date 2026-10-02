@@ -333,7 +333,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 → card 006.
 - **Depends:** S0, and ADR-31 accepted (it doesn't need the database, so it runs alongside S1–S3). **Read:** stages/render.py, captions.py, reframe.py, ADR-18/19/20/21.
 - **Actions:**
-  1. Add the `Timeline` contract: visual segments (source crop, still with Ken Burns, video, talking head), audio tracks (source, narration, music with ducking), captions, title card and asset sources.
+  1. Add the `Timeline` contract: visual segments (source crop, still with Ken Burns, video, talking head), audio tracks (source, narration, music with ducking), captions with the hook title card in one ASS overlay (log #340) and asset sources.
   2. Generalize render and bump `render.STAGE_VERSION`.
   3. Move clips onto the Timeline, with ffprobe asserts that the properties don't change.
   4. Add two-pass loudnorm.

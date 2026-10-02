@@ -10,4 +10,4 @@ CI deploys (`ci.yml`'s deploy job, once `DEPLOY_ENABLED` is on) aren't listed he
 | 2026-09-28/29 | — | — | owner | plans 4–6 and plans A–C (live 2026-09-29) |
 | 2026-09-30 | — | — | S1 (owner's OK) | restart after the owner stopped the app |
 | 2026-09-30 | — | — | S1 (owner's OK) | PyAV pin in the whisper image (#70) |
-| 2026-10-02 02:10 | dea435d | deploy-20261002-0210 | <your name> | cards 002 + 006 + tzdata: posting_daily, ops alerts, Timeline renderer v4 |
+| 2026-10-02 02:10 | dea435d | deploy-20261002-0210 | owner | cards 002 + 006 + tzdata: posting_daily, ops alerts, Timeline renderer v4 |

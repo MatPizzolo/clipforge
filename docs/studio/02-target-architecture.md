@@ -72,7 +72,7 @@ class AssetSource(Contract):        # one per asset in a Timeline: licensing is 
     kind: Literal["source_video","generated","stock","commons","promo","music_generated"]
     license: str; attribution: str | None; url: str | None; model: str | None
 
-class Timeline(Contract):           # what plays when; the one input to render (S4 spec 2026-10-01)
+class Timeline(Contract):           # what plays when; the one input to render (built in S4, 2026-10-01; loudness_lufs = -14.0)
     width: int = 1080; height: int = 1920; fps: int; duration_s: float
     visual: list[VisualSegment]     # VideoSegment (source | broll | talking_head; crop | cover | blur) | StillSegment (+ken burns)
     audio: list[AudioTrack]         # source | narration | music (ducked); two-pass loudness to -14 LUFS (ADR-47)
@@ -224,7 +224,7 @@ src/clipforge/
   policy/              # gate, claim checks, disclosure mapping
   publish/             # Publisher protocol, upload_post.py, assisted.py (Telegram)
   analytics/           # pulls, winners, programs
-  links/               # /go redirect, click logging, conversion import
+  tracking/            # /go redirect, click logging, conversion import (not `links/`: `links.py` already holds the signed zip links)
   stages/, pipeline/, posting/, bot/, api/  # existing; posting/ migrates to db + publish/
   app.py -> modal_app/ # Modal layer only (functions, Cls media servers, dispatcher cron, web)
 web/                   # Next.js dashboard (own package.json, deployed to Vercel)

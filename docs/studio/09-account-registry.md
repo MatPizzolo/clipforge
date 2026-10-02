@@ -6,7 +6,7 @@ The single list of **what exists or is planned**: every content category and eve
 - **After S3c:** the database is the source of truth, and this file mirrors it (the dashboard's Accounts page lists the same rows).
 - **Rule:** an account is created here first (status `idea`), then gets a blueprint, then `clipforge account create`. Update this file in the same session that changes an account.
 
-Last updated: 2026-09-29.
+Last updated: 2026-10-01 (founder.tapes and hombre.en.construccion are created just before S2, log #135).
 
 ## 1. Categories (content types)
 

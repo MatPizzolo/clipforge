@@ -156,7 +156,7 @@ claude plugin install typesafe@typesafe-ai
 | **Real-ESRGAN** | BSD-3 | Upscale 360–480p sources and AI frames | Adopt, optional (avoid Upscayl: AGPL) |
 | **BiRefNet** (rembg as a wrapper) | MIT | Cutouts for avatar and product composites | Adopt |
 | **python-audio-separator** | MIT (check each checkpoint's license) | Vocal/music split for dubbing (Demucs is archived) | Adopt in S10 |
-| ffmpeg-normalize / pyloudnorm | MIT | Two-pass loudnorm, LUFS checks in tests | Adopt (more accurate than the current single pass) |
+| ffmpeg-normalize / pyloudnorm | MIT | Two-pass loudnorm, LUFS checks in tests | Not needed: S4 built two-pass in-house (`stages/loudness.py`, ADR-47; measured single pass -14.5 to -14.2 LUFS vs two-pass -14.2 to -14.0 on real clips). `pyloudnorm` only if a test needs an independent LUFS check. Note from S4: the Modal image runs Debian bookworm's ffmpeg 5.1 while dev and CI run 6.1, so render changes are tested in a bookworm container before deploying |
 | auto-editor | Unlicense | Silence and filler cutting | Borrow the idea: we already have word timestamps, so cut in ffmpeg |
 | **pycaps** | MIT (alpha) | Animated caption effects | Borrow the presets and port them to ASS tags, plus **Noto Emoji** (Apache/OFL) overlays |
 | Revideo / Motion Canvas | MIT | Code-driven motion graphics | Only if ASS limits us (Remotion needs a company license) |

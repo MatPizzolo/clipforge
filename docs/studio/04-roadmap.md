@@ -46,7 +46,7 @@ graph LR
   S6 -.-> X6
 ```
 
-Two paths leave S0. **Wave 1** (more clip accounts) is S0 → S1, then S2 and S3 in parallel. **founder.tapes and hombre.en.construccion launch only with S2** (ADR-48): assisted posting doesn't fit the owner's ~20-minute daily attention budget, so S2 comes first after S1's rollout. The **hooks card** (HK: the hook library, ADR-50) follows S1's rollout and lands before S6, so the story producer uses hook patterns from its first video. The dashboard shell (S3a) needed nothing; it is built, and its Vercel deploy is card 004. Nothing waits for posting experience: S1 starts once S0's code is finished (owner decision, 2026-09-29). **Wave 2** (the first AI account) is S0 → S4 → S5 → S6 with X1 and X4, and it also needs S2. Run S4, X1 and X4 alongside S1–S3, so S6 can start as soon as S2 is done. X5 needs about 200 labeled verdicts, which only exist after some weeks of S0–S2 review. S3b needs nothing. **S3c** (account workspaces: versioned categories, blueprints and accounts, experiments, notes) starts once S1 is finished and S3's `admin` endpoint exists; its producer contract should land before S6 (dotted edge), and S7 later adds engagement metrics to its results (dotted edge).
+Two paths leave S0. **Wave 1** (more clip accounts) is S0 → S1, then S2 and S3 in parallel. **founder.tapes and hombre.en.construccion launch only with S2** (ADR-48): assisted posting doesn't fit the owner's ~20-minute daily attention budget, so S2 comes first after S1's rollout. The **hooks card** (HK: the hook library, ADR-50) follows S1's rollout and lands before S6, so the story producer uses hook patterns from its first video. The dashboard shell (S3a) needed nothing; it is built, and its Vercel deploy is card 004. Nothing waits for posting experience: S1 starts once S0's code is finished (owner decision, 2026-09-29). **Wave 2** (the first AI account) is S0 → S4 → S5 → S6 with X1 and X4, and it also needs S2. S4 and X1 are done; run X4 (card 012) alongside S1–S3, then S5, so S6 can start as soon as S2 is done. X5 needs about 200 labeled verdicts, which only exist after some weeks of S0–S2 review. S3b needs nothing. **S3c** (account workspaces: versioned categories, blueprints and accounts, experiments, notes) starts once S1 is finished and S3's `admin` endpoint exists; its producer contract should land before S6 (dotted edge), and S7 later adds engagement metrics to its results (dotted edge).
 
 ## S0: Finish what's in flight (S1 starts once this code is finished)
 - [x] Plan C, Telegram posting assistant: Task 4 (taps and commands), Task 5 (cron and docs), Task 6 (ADR-24 Dict keep-alive). Then the final review.
@@ -55,7 +55,7 @@ Two paths leave S0. **Wave 1** (more clip accounts) is S0 → S1, then S2 and S3
 - **Exit:** clips reach the phone on schedule and the taps update the status.
 
 ## S1: Foundations: accounts, database, content items
-The code for the open items below is built (card 002, PR #5). They are ticked at the rollout (Task 22, runbook §4).
+The code for the open items below is built (card 002, PR #5) and deployed Dict-only on 2026-10-02. They are ticked at the rollout: **card 010** (Task 22, runbook §4c).
 - [x] ADR-25, ADR-26 and ADR-35 accepted (2026-09-29 kickoff review).
 - [ ] Neon Postgres with SQLAlchemy 2, psycopg 3 and Alembic. `DATABASE_URL` in the Modal secret. Tests run on a local Postgres (`TEST_DATABASE_URL`, or Docker through testcontainers).
 - [ ] New contracts: `Account`, `PlatformProfile`, `BrandKit`, `Persona`, `AssetSource`, `ContentItem`. `channels.toml` sources move into `sources`, with an import command.
@@ -70,10 +70,11 @@ The code for the open items below is built (card 002, PR #5). They are ticked at
 - [ ] `posting/actions.py`: one backend for posted, skip, reject, reason, pause and next, with an actor on every write, used by the webhook and later by the admin routes (ADR-44).
 - [ ] Ops alerts for silent failures and the daily reconcile `posting_daily` (ADR-45, ADR-46).
 - [ ] Task 21 split: 21a (blueprints mounted, a read-only `db_doctor` Modal check, `.env.example`) before 21b (the database wired into `build_deps`, deployed only at rollout step 4c.2).
-- [ ] Rollout rule: hand-posting stays limited to the 3 wave-1 accounts until S2 (#106).
+- [ ] Rollout rule: only realtalk.clipsdaily is created and hand-posted until S2; founder.tapes and hombre.en.construccion are created just before S2 (#106, refined by #135 and ADR-48).
 - **Exit:** everything from S0 works the same, but state lives in Postgres and any number of accounts can be defined.
 
 ## S2: Publishing: Upload-Post, review tiers, policy gate
+Design and plan: **card 011** (running). The build is a later card, after the rollout.
 - [ ] `Publisher` protocol, with `UploadPostPublisher` (primary) and `AssistedPublisher` (today's Telegram flow).
 - [ ] Media for Upload-Post: a signed, expiring per-file link from the Volume (ADR-13's mechanism). R2 only if that proves unreliable, or when the dashboard needs it (S3).
 - [ ] Signed webhook route updates `posts`. Per-platform AI-disclosure mapping.
@@ -101,6 +102,7 @@ The code for the open items below is built (card 002, PR #5). They are ticked at
 - **Exit:** you log in on the phone and see the live posting progress.
 
 ## S3: Dashboard v1 (Next.js on Vercel; after S1, alongside S2)
+Design: **card 009** (done, PR #20; mockups in `docs/design/dashboard/`). The build card comes after the rollout.
 - [ ] `web/` app: Next.js, Auth.js (one owner), TanStack Query, and a client generated by hey-api from the exported OpenAPI file (CI job).
 - [ ] API additions: accounts, personas, items, posts, calendar, review actions, costs.
 - [ ] Pages (08 §2 and §2c; S3 dashboard spec §7 and §10.2), for phone and laptop: Home ("needs me" with the attention meter, the fleet scoreboard, today's slots), `/act/<kind>/<id>`, review inbox, calendar, sources, produce (with the batch planner and the Jobs tab), Results (Costs; Stats and Money in S7), Settings, Accounts → Compare (a read view), and the account workspace's Overview, Autopilot and Activity tabs. API: `GET /needs` and its actions, the scoreboard, slots, activity, batches, costs, settings. The link-contract test, and ops alerts with Open buttons. The Accounts page (studio map and account workspaces) moved to **S3c** (owner decision, 2026-09-30). Until S2 adds approve-to-publish, posting stays in the Telegram assisted flow and the review inbox is a queue manager (skip, reject, reorder, posted correction through `posting/actions.py`; D8). Decisions comes in S6; Stats, Money and Personas in S7/S8.
@@ -110,7 +112,7 @@ The code for the open items below is built (card 002, PR #5). They are ticked at
 ## S3c: Account workspaces (after S1 and S3's admin endpoint; ADR-42)
 Amended 2026-10-01 by ADR-48 and ADR-50 (S3 dashboard spec §10.3): the review tier and the budget move out of the versioned setup into the `autopilot` table; the actor check allows `system:<component>`; the workspace gains the Style, Hooks and Activity tabs; Accounts gets the Map next to S3's Compare; hook metrics live on the Hooks tab, not in the experiment registry.
 Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../superpowers/specs/2026-09-30-studio-s3-workspaces-design.md). Versioned categories, blueprints and accounts in the database (ADR-42, replacing ADR-35's "blueprints are files"), with notes, experiments and results. The implementation plan is written once S1 is finished.
-- [ ] **S3c-1, versions and workspaces:** migration 0002 (categories, versions, experiments, notes, `content_items.setup_version`, `post_events.actor`), the resolver and field registry, `POST /setup/preview` (the one dry run for saves and experiment starts), `clipforge setup import` / `setup verify` (S1's blueprints and accounts as version 1), the category, blueprint and account workspaces (setup with origins, history, diff, restore), notes, the Accounts page. `SETUP_SOURCE=off`: edit and review only.
+- [ ] **S3c-1, versions and workspaces:** its migration, the next in landing order (S3 dashboard spec §8.7) (categories, versions, experiments, notes, `content_items.setup_version`, `post_events.actor`), the resolver and field registry, `POST /setup/preview` (the one dry run for saves and experiment starts), `clipforge setup import` / `setup verify` (S1's blueprints and accounts as version 1), the category, blueprint and account workspaces (setup with origins, history, diff, restore), notes, the Accounts page. `SETUP_SOURCE=off`: edit and review only.
 - [ ] **S3c-2, wiring into the clip producer** (needs S1 Tasks 14, 15, 17 and 21 live): `create_job` reads and stamps the setup, items and sends record their version, caption preset in the captions key (only when not `default`), prompts from released versions, the language-mismatch hold. `SETUP_SOURCE=db` after `verify` reports 0 differences.
 - [ ] **S3c-3, experiments and results:** the experiment flow and page (the only place to keep or revert) with the re-cut estimate, one running experiment per account, results with the metrics available now (posted, skipped, rejected and reasons, cost, holds), the "too few items" warning, the Experiments nav item, Home's "Needs a decision" card, learnings in the category playbook.
 - [ ] (In S7) views, retention, followers, clicks and revenue join the metric registry.
@@ -140,6 +142,7 @@ Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../supe
 - **Exit (met 2026-10-01, card 006, PR #13, deployed):** one renderer produces both a clip and a synthetic test Timeline at 1080x1920 and under 50 MB, with two-pass loudness (ADR-47).
 
 ## HK: Hook library (after S1's rollout, before S6; ADR-50)
+Its card is written after the rollout.
 - [ ] Pattern versions (append-only), item stamping (`hook_pattern_id@version` and the weights in force), 2–3 variants per item in the clips producer (one Haiku call, about $0.0025 per item; the captions prompt bump opens ADR-49's window), weighted rotation frozen during experiments, ranking before S7 (owner 👍/👎, approval and reject rates) and after S7 (3-second hold, views at 24 h), admin routes and the Hooks tab. Outline: S3 dashboard spec §8.5.
 - **Exit:** every new clip records its hook pattern and version, and the Hooks tab ranks patterns per account.
 
