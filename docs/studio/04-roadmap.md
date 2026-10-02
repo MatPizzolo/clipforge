@@ -12,6 +12,8 @@ This list is mirrored in the root `ROADMAP.md` as "Phase 6 — Studio" (added in
 ```mermaid
 graph LR
   S0 --> S1 --> S2
+  S1 --> HK
+  HK --> S6
   S1 --> S3
   S3a --> S3
   S1 --> S3c
@@ -44,7 +46,7 @@ graph LR
   S6 -.-> X6
 ```
 
-Two paths leave S0. **Wave 1** (more clip accounts) is S0 → S1, then S2 and S3 in parallel. The dashboard shell (S3a) needed nothing; it is built, and its Vercel deploy is card 004. Nothing waits for posting experience: S1 starts once S0's code is finished (owner decision, 2026-09-29). **Wave 2** (the first AI account) is S0 → S4 → S5 → S6 with X1 and X4, and it also needs S2. Run S4, X1 and X4 alongside S1–S3, so S6 can start as soon as S2 is done. X5 needs about 200 labeled verdicts, which only exist after some weeks of S0–S2 review. S3b needs nothing. **S3c** (account workspaces: versioned categories, blueprints and accounts, experiments, notes) starts once S1 is finished and S3's `admin` endpoint exists; its producer contract should land before S6 (dotted edge), and S7 later adds engagement metrics to its results (dotted edge).
+Two paths leave S0. **Wave 1** (more clip accounts) is S0 → S1, then S2 and S3 in parallel. **founder.tapes and hombre.en.construccion launch only with S2** (ADR-48): assisted posting doesn't fit the owner's ~20-minute daily attention budget, so S2 comes first after S1's rollout. The **hooks card** (HK: the hook library, ADR-50) follows S1's rollout and lands before S6, so the story producer uses hook patterns from its first video. The dashboard shell (S3a) needed nothing; it is built, and its Vercel deploy is card 004. Nothing waits for posting experience: S1 starts once S0's code is finished (owner decision, 2026-09-29). **Wave 2** (the first AI account) is S0 → S4 → S5 → S6 with X1 and X4, and it also needs S2. Run S4, X1 and X4 alongside S1–S3, so S6 can start as soon as S2 is done. X5 needs about 200 labeled verdicts, which only exist after some weeks of S0–S2 review. S3b needs nothing. **S3c** (account workspaces: versioned categories, blueprints and accounts, experiments, notes) starts once S1 is finished and S3's `admin` endpoint exists; its producer contract should land before S6 (dotted edge), and S7 later adds engagement metrics to its results (dotted edge).
 
 ## S0: Finish what's in flight (S1 starts once this code is finished)
 - [x] Plan C, Telegram posting assistant: Task 4 (taps and commands), Task 5 (cron and docs), Task 6 (ADR-24 Dict keep-alive). Then the final review.
@@ -81,7 +83,14 @@ The code for the open items below is built (card 002, PR #5). They are ticked at
 - [ ] One claim per (item, platform), so the AssistedPublisher fallback and Upload-Post can never both publish the same item; the fallback runs only after Upload-Post's final failure.
 - [ ] Policy gate v1, pure checks only: disclosure flags, #ad, credits, license manifest, cross-account duplicates. (The banned-claims check comes with the Judge in S6: clips make no product claims.)
 - [ ] Tracking links: `GET /go/<slug>`, click logging, and sub-ids per item and platform.
-- **Exit:** the wave-1 accounts (realtalk.clipsdaily, founder.tapes, hombre.en.construccion) post automatically to 4 platforms from their profiles, and every post and click is recorded.
+- [ ] Autopilot (ADR-48): the `autopilot` table with its append-only change history (one writer, `accounts/autopilot.py`), the Review dial and the Publish switch per account, presets, the graduation ladder (suggest; the owner taps), automatic demotions, the spot-check floor (at least 1 in 10 and 3 a week).
+- [ ] Review windows: the first 10 items after a format change, the first 5 per account after a `producer_version` change (ADR-49), the first 10 dubs in a pair (read by S10).
+- [ ] The brake's scope: `/pause <account>` and `/pause all` as one Dict key with a scope (the item above).
+- [ ] Telegram one-tap only for review items due within 2 h (approve or reject) and the brake (#427); every other message carries Open → `/act/<kind>/<id>`.
+- [ ] Publishing-failure rows (`publish_failed`, `publisher_disconnected`, `strike` where Upload-Post reports it) as instant alerts and "needs me" rows.
+- [ ] One dispatcher cron (ADR-27, accepted with this card) replaces `posting_tick` and runs the 09:00 digest and the alert fold (S3 dashboard spec §8.1); `sweeper` and `posting_daily` stay: 3 crons.
+- [ ] Migrations follow the landing-order rule (S3 dashboard spec §8.7): the first new migration also carries `jobs.error`, the `post_events.actor` column and the pause actor.
+- **Exit:** realtalk.clipsdaily auto-posts to 4 platforms from its profile on its rung; founder.tapes and hombre.en.construccion are created just before S2 (O3) and start Hands-on on S2's flow; every post and click is recorded.
 
 ## S3a: Dashboard shell (built; the Vercel deploy is card 004)
 - [x] `web/` app: Next.js App Router, TypeScript, Auth.js (one owner), TanStack Query, UI kit, mobile layouts.
@@ -94,11 +103,12 @@ The code for the open items below is built (card 002, PR #5). They are ticked at
 ## S3: Dashboard v1 (Next.js on Vercel; after S1, alongside S2)
 - [ ] `web/` app: Next.js, Auth.js (one owner), TanStack Query, and a client generated by hey-api from the exported OpenAPI file (CI job).
 - [ ] API additions: accounts, personas, items, posts, calendar, review actions, costs.
-- [ ] Pages (08 §2), for phone and laptop: Home, review inbox, calendar, sources, produce (with the batch planner), costs. The Accounts page (studio map and account workspaces) moved to **S3c** (owner decision, 2026-09-30). Until S2 adds approve-to-publish, posting stays in the Telegram assisted flow and the review inbox is a queue manager (skip, reject, reorder, posted correction through `posting/actions.py`; D8). Decisions comes in S6; Stats, Money and Personas in S7/S8.
+- [ ] Pages (08 §2 and §2c; S3 dashboard spec §7 and §10.2), for phone and laptop: Home ("needs me" with the attention meter, the fleet scoreboard, today's slots), `/act/<kind>/<id>`, review inbox, calendar, sources, produce (with the batch planner and the Jobs tab), Results (Costs; Stats and Money in S7), Settings, Accounts → Compare (a read view), and the account workspace's Overview, Autopilot and Activity tabs. API: `GET /needs` and its actions, the scoreboard, slots, activity, batches, costs, settings. The link-contract test, and ops alerts with Open buttons. The Accounts page (studio map and account workspaces) moved to **S3c** (owner decision, 2026-09-30). Until S2 adds approve-to-publish, posting stays in the Telegram assisted flow and the review inbox is a queue manager (skip, reject, reorder, posted correction through `posting/actions.py`; D8). Decisions comes in S6; Stats, Money and Personas in S7/S8.
 - [ ] Vercel Pro project. Modal proxy auth plus bearer token from server route handlers, to `admin`: a second `@modal.asgi_app(requires_proxy_auth=True)` that reuses `create_app` with an admin router and its own `ADMIN_API_TOKEN` (D9).
-- **Exit:** the owner runs realtalk.clipsdaily entirely from the dashboard and phone, and the laptop is needed only for `clipforge fetch`.
+- **Exit:** the owner runs the daily check-in from the phone in under 20 minutes, every Telegram alert opens its row in `/act`, and the laptop is needed only for `clipforge fetch`.
 
 ## S3c: Account workspaces (after S1 and S3's admin endpoint; ADR-42)
+Amended 2026-10-01 by ADR-48 and ADR-50 (S3 dashboard spec §10.3): the review tier and the budget move out of the versioned setup into the `autopilot` table; the actor check allows `system:<component>`; the workspace gains the Style, Hooks and Activity tabs; Accounts gets the Map next to S3's Compare; hook metrics live on the Hooks tab, not in the experiment registry.
 Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../superpowers/specs/2026-09-30-studio-s3-workspaces-design.md). Versioned categories, blueprints and accounts in the database (ADR-42, replacing ADR-35's "blueprints are files"), with notes, experiments and results. The implementation plan is written once S1 is finished.
 - [ ] **S3c-1, versions and workspaces:** migration 0002 (categories, versions, experiments, notes, `content_items.setup_version`, `post_events.actor`), the resolver and field registry, `POST /setup/preview` (the one dry run for saves and experiment starts), `clipforge setup import` / `setup verify` (S1's blueprints and accounts as version 1), the category, blueprint and account workspaces (setup with origins, history, diff, restore), notes, the Accounts page. `SETUP_SOURCE=off`: edit and review only.
 - [ ] **S3c-2, wiring into the clip producer** (needs S1 Tasks 14, 15, 17 and 21 live): `create_job` reads and stamps the setup, items and sends record their version, caption preset in the captions key (only when not `default`), prompts from released versions, the language-mismatch hold. `SETUP_SOURCE=db` after `verify` reports 0 differences.
@@ -125,9 +135,13 @@ Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../supe
 - **Exit:** 03 is updated with measured costs, and each primary model is confirmed or swapped.
 
 ## S4: Timeline renderer
-- [ ] `Timeline` contract. `render` is generalized to visual segments (source crop, still with Ken Burns, video clip, talking head), audio tracks (narration, source, music bed with ducking) and captions/title card.
-- [ ] The clip producer is moved onto the Timeline, and its output properties must stay identical (ffprobe asserts).
-- **Exit:** one renderer produces both a clip and a synthetic test Timeline at 1080x1920 and under 50 MB.
+- [x] `Timeline` contract. `render` is generalized to visual segments (source crop, still with Ken Burns, video clip, talking head), audio tracks (narration, source, music bed with ducking) and captions/title card.
+- [x] The clip producer is moved onto the Timeline, and its output properties must stay identical (ffprobe asserts).
+- **Exit (met 2026-10-01, card 006, PR #13, deployed):** one renderer produces both a clip and a synthetic test Timeline at 1080x1920 and under 50 MB, with two-pass loudness (ADR-47).
+
+## HK: Hook library (after S1's rollout, before S6; ADR-50)
+- [ ] Pattern versions (append-only), item stamping (`hook_pattern_id@version` and the weights in force), 2–3 variants per item in the clips producer (one Haiku call, about $0.0025 per item; the captions prompt bump opens ADR-49's window), weighted rotation frozen during experiments, ranking before S7 (owner 👍/👎, approval and reject rates) and after S7 (3-second hold, views at 24 h), admin routes and the Hooks tab. Outline: S3 dashboard spec §8.5.
+- **Exit:** every new clip records its hook pattern and version, and the Hooks tab ranks patterns per account.
 
 ## S5: Media servers and producer registry
 - [ ] `media/` protocols plus `registry.toml` with a license-allowlist test. A `clipforge-models` Volume with one-off weight download functions.
@@ -144,7 +158,8 @@ Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../supe
 - [ ] Persona voice per account (VoiceDesign, then a stored reference clip).
 - [ ] An eval set for scripts: 20 topics with an LLM-judge rubric plus owner ratings (docs/EVALS.md style).
 - [ ] Weekly trend job per blueprint (xAI X Search plus YouTube `mostPopular` and comments), feeding topic lists.
-- [ ] Two-pass loudnorm, RIFE to 30 fps for generated video, caption presets (pycaps effects ported to ASS, Noto Emoji).
+- [ ] RIFE to 30 fps for generated video, caption presets (pycaps effects ported to ASS, Noto Emoji). (Two-pass loudnorm shipped with S4, ADR-47.)
+- [ ] The queue filler (the Produce switch, ADR-48) as a generic `produce/filler.py` with a clips adapter, and the hard spend caps in `service.create_job` if no earlier card creates jobs automatically. Story hook variants through the hooks card's interface (ADR-50).
 - **Exit:** wave 2, **untold.archive + historias.ocultas**, posts 1–2 videos a day each at 61–90 s, in `review` tier, costing under $0.10 per video.
 
 ## S7: Analytics and money
@@ -152,8 +167,8 @@ Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../supe
 - [ ] `programs` table (YPP, TikTok Rewards, Facebook CMP, Skool, …) with editable thresholds. Progress per account.
 - [ ] Conversion import: ClickBank and Hotmart APIs, CSV upload for Skool, Amazon and TikTok Shop.
 - [ ] Dashboard: stats, monetization progress, revenue vs cost per account, winners.
-- [ ] Budget enforcement before job start. Sentry wired in.
-- [ ] One **dispatcher cron** replaces the separate crons (ADR-27), since the analytics pull is the 4th and digests the 5th. It touches Postgres only when a task is due.
+- [ ] Spend reporting per account and stage, and budget burn-down (the hard caps are enforced in `create_job` from the first automatic job creator, ADR-48). Sentry wired in.
+- [ ] The analytics pull, program progress and view-collapse checks run as dispatcher tasks (the dispatcher arrives with S2, ADR-27). Hook ranking adds the 3-second hold and views at 24 h (ADR-50).
 - **Exit:** the owner sees cost, views, clicks and revenue per account and per video.
 
 ## S8: Avatar producer + personas
@@ -166,7 +181,7 @@ Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../supe
 - **Exit:** wave 4, **neverheard.from** and **radar.indie.latino**, posts daily, and every asset has a license record.
 
 ## S10: Dub winners (EN ↔ ES)
-- [ ] Winner detection feeds the `dub` producer: translation within a timing budget, the target persona's voice, re-timed captions, and a re-rendered talking head for avatars. The result posts to the paired account.
+- [ ] Winner detection feeds the `dub` producer: translation within a timing budget, the target persona's voice, re-timed captions, and a re-rendered talking head for avatars. The result posts to the paired account. Rules (ADR-48): only to a paired account, only when the source permission allows translation, under the target account's dial and budget, and the first 10 dubs in a pair go to review.
 - **Exit:** the top-decile videos of one EN account appear on its ES partner account within 48 h.
 
 ## S11: Local fetch helper (small; can land any time after S0)

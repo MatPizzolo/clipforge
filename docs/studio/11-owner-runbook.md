@@ -160,7 +160,7 @@ git worktree remove ../clipForge-x0     # after its branch is merged
    STATE_READS=dict
    ```
    `DATABASE_URL_UNPOOLED` is what migrations use. `STATE_READS=dict` keeps the Dict as the source of truth until step 4c.7. Two more settings exist with defaults you don't need to set: `POSTING_ACCOUNT_ID` (default `realtalk-clips-en`, the account Dict mode serves) and `BLUEPRINTS_DIR`.
-4. **Decisions to have ready** (10 → Open): the final handles for founder.tapes and hombre.en.construccion (O3), and Billy Garton Jr.'s permission facts (O5): when it was granted, by whom, a link to where the agreement is stored, whether monetization and translations are allowed, and any expiry.
+4. **Decisions to have ready** (10 → Open): Billy Garton Jr.'s permission facts (O5): when it was granted, by whom, a link to where the agreement is stored, whether monetization and translations are allowed, and any expiry. (O3, the handles for founder.tapes and hombre.en.construccion, is needed only before S2: those accounts are created then, ADR-48, log #135.)
 
 ### 4b. During the build
 Approve each checkpoint the S1 session reports. A checkpoint is a commit on the card's branch, reviewed in its PR (§3.2).
@@ -179,9 +179,12 @@ Approve each checkpoint the S1 session reports. A checkpoint is a commit on the 
    Also first, set `DEPLOY_DB_CHECK=on` in `.env` (card 008, log #391). From this deploy on, `scripts/deploy.sh` refuses when the database is behind the code's newest migration; it reads `alembic_version` read-only through `DATABASE_URL_UNPOOLED`. Before deploying, `scripts/deploy.sh --dry-run` should show `ok   database at the migration head: database and code at 0001`.
 
    **From this deploy until step 5's import, expect ops alerts.** The Dict still writes everything, and each write is copied to Postgres, which has no account or source rows yet, so the copies fail. You get "Posting mirror write (…) failed" alerts (at most one per write kind an hour) and a `posting verify` alert from the daily run. They stop after step 5. Run steps 3–6 in one sitting to keep the window short.
-3. Create the three accounts:
+3. Create the live account:
    ```
    uv run clipforge account create --blueprint realtalk-clips --lang en --handle realtalk.clipsdaily --posting-from-env
+   ```
+   founder.tapes and hombre.en.construccion are created just before S2, with O3's handles (ADR-48, log #135):
+   ```
    uv run clipforge account create --blueprint founder-tapes --lang en --handle <final handle>
    uv run clipforge account create --blueprint hombre-en-construccion --lang es --handle <final handle>
    ```

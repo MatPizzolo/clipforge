@@ -36,8 +36,8 @@ Platforms: TT = TikTok, IG = Instagram Reels, YT = YouTube Shorts, FB = Facebook
 | # | Account id | Handle | Lang | Code | Blueprint | Primary | Enabled | Money | Sources / permission | Pair | Wave | Status |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `realtalk-clips-en` | realtalk.clipsdaily | en | clips | `realtalk-clips` | TT | all four | Creator deal, CRP, Skool affiliate | Billy Garton Jr. (`creator_agreement`) | — | 1 | **live** (assisted posting since 2026-09-29) |
-| 2 | `founder-tapes-en` | founder.tapes | en | clips | `founder-tapes` | TT | all four | Whop business and finance campaigns, CRP | none yet: Whop campaigns or a creator agreement | — | 1 | planned |
-| 3 | `hombre-en-construccion-es` | hombre.en.construccion | es | clips | `hombre-en-construccion` | TT | all four | CRP (US and MX only), retainers from Spanish-language hosts | none yet: Spanish-language podcast agreements | — | 1 | planned |
+| 2 | `founder-tapes-en` | founder.tapes | en | clips | `founder-tapes` | TT | all four | Whop business and finance campaigns, CRP | none yet: Whop campaigns or a creator agreement | — | 1 | planned (created just before S2, ADR-48) |
+| 3 | `hombre-en-construccion-es` | hombre.en.construccion | es | clips | `hombre-en-construccion` | TT | all four | CRP (US and MX only), retainers from Spanish-language hosts | none yet: Spanish-language podcast agreements | — | 1 | planned (created just before S2, ADR-48) |
 | 4 | `untold-archive-en` | untold.archive | en | story | `untold-archive` | TT | all four | CRP, YouTube long-form later | original scripts, sources stored | #5 | 2 | idea |
 | 5 | `untold-archive-es` | historias.ocultas | es | story | `untold-archive` | TT | all four | CRP (MX, US Hispanic) | original scripts, sources stored | #4 | 2 | idea |
 | 6 | `money-autopsy-en` | money.autopsy | en | story | `money-autopsy` | TT | all four | CRP at finance rates, newsletter or Hotmart later | original scripts, sources stored; stories, never advice | #7 | 5 | idea |

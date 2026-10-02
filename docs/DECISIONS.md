@@ -212,7 +212,7 @@ Decision:
 Consequences: A vendor dependency that can be swapped. Official YouTube and Instagram publishers can be added later behind the same protocol.
 
 ## ADR-29: Tiered review with an always-on policy gate
-Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S2)
+Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S2); the tier becomes the Review dial of ADR-48's autopilot model, and ADR-49 sets the producer-version window (2026-10-01)
 Context: At 20+ accounts, approving every post by hand is 100+ taps a day. Platforms punish undisclosed AI, mass-produced content and false claims.
 Decision:
 - Each account has a review tier: `review` (every item), `sample` (auto-post, ~10% spot checks, daily digest) or `auto`.
@@ -285,7 +285,7 @@ Decision:
 Consequences: Two writes per posting action until Task 23, with drift visible in the daily verify. The Telegram buttons keep their format, so messages sent before the switch keep working. Spec: docs/superpowers/specs/2026-09-29-studio-s1-design.md.
 
 ## ADR-42: Versioned categories, blueprints and accounts in the database
-Date: 2026-09-30 · Status: Accepted (2026-09-30, the owner's review after card 003; built in S3c; supersedes ADR-35's "blueprints are files" part)
+Date: 2026-09-30 · Status: Accepted (2026-09-30, the owner's review after card 003; built in S3c; supersedes ADR-35's "blueprints are files" part); refined by ADR-48 (the review tier and the budget leave the versioned setup) and ADR-50 (the hook library lives outside it), 2026-10-01
 Context: Each account type is very different, and the owner wants to improve every category and every account from the dashboard: edit the setup, keep notes, run experiments and see results. ADR-35 keeps blueprints as files (`blueprints/<name>.toml`), and S1 copies blueprint values into each account row and updates accounts in place, so there is no history, no way to tie a video to the setup that made it, and no dashboard editing. Spec: docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md.
 Decision:
 - The database is the source of truth for three versioned levels: **category** (the 5 fixed codes: playbook, rules = compliance profile, production defaults), **blueprint** (pillars, series formats, briefs, money, prompts) and **account** (overrides plus identity fields). Effective setup = category, overridden by blueprint, overridden by account; the dashboard shows each value's origin.
@@ -300,7 +300,7 @@ Decision:
 Consequences: Every video can be traced to the exact setup that made it, and experiments can isolate their accounts. The accounts table becomes a projection of the current version with one writer (ADR-41). Blueprint changes are reviewed as version diffs in the dashboard instead of file diffs. A `SETUP_SOURCE=db|off` switch lets producers fall back to today's constants. Updates ADR-35: channels are still blueprint instances, but blueprints live in the database. `setup_version` (which setup) stays separate from `producer_version` (which code, derived per ADR-43); per ADR-44, setup edits and experiment decisions are dashboard tasks, and Telegram only deep-links to them (the 08 §2b formats, plus `/categories/<code>` and `/blueprints/<name>`); per ADR-45, "experiments need a decision" is a digest line, never an instant alert. ADR-46's daily reconcile is unchanged.
 
 ## ADR-43: Producer version is derived; the build SHA is separate
-Date: 2026-09-30 · Status: Accepted (2026-09-30; refines ADR-29; replaces the rule in decision-log #85)
+Date: 2026-09-30 · Status: Accepted (2026-09-30; refines ADR-29; replaces the rule in decision-log #85); a version change opens ADR-49's 5-item review window (2026-10-01)
 Context: ADR-29 starts a new producer version in `review`. A git SHA changes on every deploy, docs-only ones included, and is "unknown" when deploying from a folder without git.
 Decision: `producer_version = "<producer>:" + sha256(sorted STAGE_VERSIONs, prompt names, model ids)[:8]`, computed in code. The git SHA is recorded as `build` on jobs and in metadata only, and never compared. Items read back from the Dict keep `"plan-c"`.
 Consequences: Review restarts only when the output logic changes. S1's current code stamps `settings.git_sha or "unknown"` (#85) and must be changed (a card after the 2026-09-30 pause).
@@ -334,3 +334,27 @@ Date: 2026-10-01 · Status: Accepted (2026-10-01, the owner's review of the S4 s
 Context: ADR-20 normalizes every clip with a single-pass `loudnorm` (I=-14, TP=-1.5, LRA=11), which estimates loudness on the fly and applies dynamic gain. ADR-31 makes one Timeline renderer serve every producer, and from S6 on many Timelines mix narration over a ducked music bed, where a dynamic gain can work against the ducking. Measured on 2026-10-01 (S4 spec §6): single pass lands at -14.5 to -14.2 LUFS on five real clips and -14.1/-13.8 on two synthetic mixes; two passes land at -14.2 to -14.0. On the real clips, ffmpeg falls back to dynamic mode in pass 2 because the sources already peak near the true-peak limit; linear mode applies to the mixes.
 Decision: Every render measures first (pass 1: the audio graph only, `loudnorm` with `print_format=json`) and normalizes in the encode with the measured values and `linear=true`; ffmpeg itself falls back to dynamic gain when linear gain would break the true-peak limit. Silence or an unparseable measurement falls back to the single-pass filter, and loudness never fails a render. The targets stay ADR-20's. The mode and the measured input values are recorded in `RenderedVideo.loudness`. One code path for clips and mixes; no per-producer switch.
 Consequences: Mixed Timelines get one constant gain that keeps the ducking intact. Clips change by 0.1–0.3 LU (not audible) and cost about 2 s more CPU each. True peak after the AAC encode stays -0.9 to -1.3 dBTP, as today; if a platform ever flags clipping, TP=-2.0 is the knob.
+
+## ADR-48: Autopilot per account
+Date: 2026-10-01 · Status: Accepted (2026-10-01, the owner's review of card 009's spec, docs/superpowers/specs/2026-10-01-studio-s3-dashboard-design.md; refines ADR-29; log #421, #422, #425, #428, #437)
+Context: ADR-29 gives each account a review tier. The owner wants each account to run as automatically as it has earned, across production, review, publishing and scaling, within a daily attention budget of about 20 minutes and spend limits, with the owner stepping in only where judgment pays off.
+Decision:
+- Each account has three switches (Produce, Publish, Scale) and the Review dial (ADR-29's `review`, `sample`, `auto`), set together by presets Hands-on, Supervised and Autopilot; any one can be overridden. Controls never block each other; each shows what it waits on.
+- Rails no control lifts: the policy gate; the batch line, account cap and fleet cap; new accounts start Hands-on; the review windows (format change: 10; producer version: 5, ADR-49; first dubs in a pair: 10).
+- Always the owner's: spend over the line, sponsored and #ad items (first 30 days; brand deals always), new sources and new series formats.
+- A graduation ladder: the system suggests promotions on 01's criteria (Hands-on → Supervised) and on ≥ 30 days, ≥ 12 spot checks with ≤ 1 rejected, no gate failure or strike in 30 days and runway ≥ 14 days (Supervised → Autopilot); the owner taps. Demotions are automatic: one step after 2 rejects in the last 5 spot checks, to Hands-on after a strike. On `sample`, spot checks are at least 1 in 10 and at least 3 a week per account.
+- The settings are operating state in an `autopilot` table with one writer (`accounts/autopilot.py`) and an append-only change history (who, when, from → to, why), not part of ADR-42's versioned setup; every change records the person who tapped (`web:<login>` or `telegram:<id>`, promotions included, with the reason "promotion suggested by the ladder: <criteria>"), and `system:<component>` only for changes nobody tapped (`system:demotion`, `system:filler`). The Activity tab and "what ran without me" read the history.
+- Hard spend caps are enforced in `service.create_job` for every caller from the first automatic job creator on (S6's queue filler, or an earlier card that creates jobs automatically). Until then only owner-started jobs exist, and the per-batch line still asks first. The dashboard only shows caps.
+Consequences: owner time scales with how new each account is. ADR-29's tier becomes the Review dial and leaves S3c's "rules" class. Two new tables. Wave-2 clip accounts wait for S2 because assisted posting doesn't fit the attention budget.
+
+## ADR-49: Producer-version review window
+Date: 2026-10-01 · Status: Accepted (2026-10-01, the owner's review of card 009's spec, docs/superpowers/specs/2026-10-01-studio-s3-dashboard-design.md; refines ADR-29 and ADR-43; log #423)
+Context: ADR-29 says a new producer version starts in `review`. With ADR-43, a `producer_version` changes whenever stage versions, prompts or models change (for example S4's `render.STAGE_VERSION` 3 → 4: Timeline input and ADR-47's two-pass loudness), which would put every account back in full review.
+Decision: after a `producer_version` change, the first 5 items per account made under the new version go to `review`; then the account's dial applies again. The account's rung doesn't change. A format change keeps S3c's 10.
+Consequences: about 5 reviews per account per producer change (about 95 across 19 accounts), against a full return to Hands-on. S2 enforces it from `content_items.producer_version`.
+
+## ADR-50: Hook library versioned outside the account setup
+Date: 2026-10-01 · Status: Accepted (2026-10-01, the owner's review of card 009's spec, docs/superpowers/specs/2026-10-01-studio-s3-dashboard-design.md; refines ADR-42; log #426)
+Context: hooks are the lever the owner wants to improve most. Rotating hook patterns per item and ranking them by results is continuous, while ADR-42's setup experiments change one account version at a time and block other setup edits while they run.
+Decision: each account has a hook library (patterns shareable to its blueprint) in its own tables, outside the versioned setup. Patterns are immutable versions; an edit writes v+1; every item stamps `hook_pattern_id@version` and the rotation weights in force. Producers write 2–3 variants per item from approved patterns and ship the best-ranked one. While the account runs a setup experiment, its rotation weights are frozen. Hook rotation is never an S3c experiment.
+Consequences: an item's setup is `(account_id, account_version)` plus its hook stamp, so ADR-42's traceability holds. About $0.0025–0.0035 of Haiku per item. A separate hooks card builds it after S1's rollout and before S6.

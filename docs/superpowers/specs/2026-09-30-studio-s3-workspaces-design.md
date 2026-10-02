@@ -1,6 +1,6 @@
 # Studio S3c: account workspaces (design)
 
-Date: 2026-09-30 · Status (revised by card 003, 2026-09-30; **accepted by the owner on 2026-09-30**, with ADR-42, decision log #131):
+Date: 2026-09-30 · Status (revised by card 003, 2026-09-30; **accepted by the owner on 2026-09-30**, with ADR-42, decision log #131). **Amended 2026-10-01 by ADR-48 and ADR-50:** apply the S3 dashboard spec §10.3 when planning (the review tier and the budget leave the versioned setup; `system:<component>` actors; Style, Hooks and Activity tabs; the Map next to Compare; hook metrics on the Hooks tab):
 - §0 goal and scope, §1 data model: **approved** (given by the owner before this design). §1.1 now states D1.
 - §2 pages: **approved** (with the Experiments nav item, added only when S3c is built). Revised for D7 (§2.6, §2.7, §2.8) and D10 (§2.3, §2.4 paths, new §2.9).
 - §3 producers, §4 results, §5 API/data/migration/rollback, §6 roadmap: **approved** in chat, one section at a time. Revised for D3 (§5.3, §5.5, §5.6) and D4 (§3.4 rewritten, §5.1); §6's phases list the new pieces.

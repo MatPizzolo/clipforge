@@ -1,6 +1,6 @@
 # Card 009: S3 — the dashboard as the studio's control room (brainstorm and design)
 
-Status: proposed
+Status: done 2026-10-01 (report: docs/reports/009-s3-2026-10-01.md; PR #20; ADR-48 to ADR-50)
 Stream: S3 · Branch: `s3/dashboard-design` · Worktree: `../clipForge-s3` (created with `scripts/worktree.sh s3/dashboard-design`)
 Decision-log range: #420–#439 (append only, in this range)
 Model: most capable (product and design judgment across the whole studio)

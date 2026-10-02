@@ -121,9 +121,9 @@ Implementation notes:
 
 **Telegram after S2.** It keeps review cards, alerts, the brake, the digest and the AssistedPublisher fallback. `/clip` retires when Produce ships; `/status <job_id>` and typed `/resume` retire when the job page has Resume; the ✅ taps stay only for accounts on the fallback.
 
-### 2c. Proposed by card 009 (pending the owner's review)
+### 2c. Accepted changes from card 009 (2026-10-01; ADR-48 to ADR-50)
 
-> **Proposed, not accepted.** These changes come from the S3 dashboard design ([spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), log #420–#439). §2 and §2b above stay as they are until the owner accepts them; the coordinator then folds them in.
+> **Accepted on 2026-10-01** (the owner's review of card 009; log #134). Where §2 and §2b above differ, this section wins. Design: [S3 dashboard spec](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md), mockups in [docs/design/dashboard/](../design/dashboard/index.html), log #420–#439.
 
 **Pages (§2).** The structure is inbox-first (#430):
 - **Home** becomes "needs me" (one prioritized list across the fleet, one decision per row, with an attention meter against a ~20-minute daily budget), then the fleet scoreboard, then today's slots.

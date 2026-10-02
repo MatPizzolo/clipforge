@@ -100,6 +100,8 @@ The channels feed a funnel (bio page → email → own course or community). It'
 | `sample` | After 30 days and 50+ approved videos with a reject rate under 10% | Auto-post; Telegram shows ~1 in 10 for a spot check, plus a daily digest |
 | `auto` | Owner sets it explicitly | Auto-post, digest only |
 
+Since 2026-10-01 the tier is the **Review dial** of each account's autopilot (ADR-48): the system suggests moving up the ladder and the owner taps; demotions are automatic. A new producer version sends only the **first 5 items** per account to `review` (ADR-49); a format change, the first 10.
+
 The **automated policy gate runs in every tier**. It checks disclosure flags, #ad on affiliate videos, credits, license manifests, duplicates across accounts, and banned claims (health or earnings). A failure always drops the video back to `review`.
 
 ## Languages and translation

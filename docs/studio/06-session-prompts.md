@@ -239,9 +239,10 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 - **Cost:** $3.
 
 ### S2: Publishing, review tiers, policy gate, ledger
+- **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** 04's S2 list is the source: autopilot (`autopilot` table and history, the Review dial, the Publish switch, presets, ladder, demotions), the review windows (format 10, producer version 5 per ADR-49, first dubs 10), the brake's scope, one-tap only for items due within 2 h, publishing-failure rows, the dispatcher (accept ADR-27 here), the migration landing-order rule. founder.tapes and hombre.en.construccion are created just before this card (O3); the exit is realtalk auto-posting on its rung and the other two starting Hands-on. Read the S3 dashboard spec §8.6.
 - **Depends:** S1, and ADR-28, ADR-29 and ADR-33 accepted.
 - **Owner:**
-  - Upload-Post Professional plan; connect realtalk.clipsdaily, founder.tapes and hombre.en.construccion on TikTok, IG, YT and FB;
+  - create founder.tapes and hombre.en.construccion first (O3's handles; `clipforge account create`), then the Upload-Post Professional plan; connect the three accounts on TikTok, IG, YT and FB;
   - `UPLOAD_POST_API_KEY` and the webhook secret;
   - a Whop account for campaigns.
 - **Read:** 02 §5, §5b and §6, 08 §1, 03 (Upload-Post, media hosting).
@@ -260,12 +261,13 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
   7. Tracking links: `GET /go/<slug>`, click logging, sub-ids.
   8. Tests: fake Publisher and golden cases for the gate. (Judge, ledger, lanes and the morning message move to S6.)
 - **Done when:**
-  - the 3 wave-1 accounts auto-post to 4 platforms from their profiles;
+  - realtalk.clipsdaily auto-posts to 4 platforms on its rung; founder.tapes and hombre.en.construccion start Hands-on on S2's flow;
   - a gate failure lands in review;
   - the daily digest arrives.
 - **Cost:** $5 (plus real posts).
 
 ### S3: Dashboard v1 (Next.js on Vercel)
+- **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** the pages, API and data are in the S3 dashboard spec §7 and §10.2 and 04's S3 list (inbox-first Home with "needs me" and the attention meter, `/act`, Results, Settings, Accounts → Compare, the Overview/Autopilot/Activity tabs, the link-contract test); mockups in `docs/design/dashboard/`. Caps are shown, not enforced. Its exit is the 20-minute phone check-in.
 - **Depends:** S1 and S3a, and ADR-38 accepted. Runs alongside S2; approve-to-publish in the inbox lands when S2 does.
 - **Owner:**
   - Vercel Pro;
@@ -285,6 +287,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 - **Cost:** $2.
 
 ### S3c: Account workspaces (versioned categories, blueprints and accounts; experiments; notes)
+- **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** apply the S3 dashboard spec §10.3: the review tier and budget leave the versioned setup (ADR-48), `system:<component>` actors, the Style/Hooks/Activity tabs, the Map next to Compare, hook metrics on the Hooks tab (ADR-50).
 → card 003 (the design revision, done 2026-09-30, PR #6). No build card yet.
 - **Depends:** S1 finished (all tasks; 0001 frozen) and S3's `admin` endpoint (S3 action 4). ADR-42 accepted. S3c-2 needs S1 Tasks 14, 15, 17 and 21 live. Soft: land S3c-2 before S6, so the story producer reads `EffectiveSetup` from its first version.
 - **Owner:** none beyond S1 and S3 (Neon and Vercel already set up). Edit the drafted category playbooks in the dashboard after S3c-1.
@@ -352,6 +355,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 - **Cost:** $10.
 
 ### S6: Story producer (wave 2: untold.archive + historias.ocultas)
+- **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** add the queue filler (`produce/filler.py`, clips adapter) and, if no earlier card did, the hard caps in `service.create_job` (ADR-48); story hook variants use the hooks card's interface (ADR-50). Two-pass loudnorm already shipped in S4 (ADR-47).
 - **Depends:** S5, S2 and X1, and ADR-36 and ADR-37 accepted. **Owner:** confirm the niche, a Pexels key, and create both accounts in Upload-Post.
 - **Actions:**
   1. Write the blueprints (EN and ES) with 4+ series formats and the retention script structure from 07.
@@ -367,6 +371,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 - **Cost:** $15.
 
 ### S7: Analytics and money
+- **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** the hard caps are enforced in `create_job` (ADR-48), so S7 keeps reporting and burn-down; its pull and checks run on S2's dispatcher; hook ranking adds the 3-second hold and views at 24 h (ADR-50).
 - **Depends:** S2 and S3. **Owner:** a Sentry DSN, YouTube OAuth for the Analytics API, ClickBank and Hotmart API credentials.
 - **Actions:**
   1. A daily analytics pull (Upload-Post plus YouTube Analytics) into metrics tables.
@@ -405,6 +410,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 - **Cost:** $10.
 
 ### S10: Dub winners (EN ↔ ES)
+- **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** dubs only to a paired account, only when the source permission allows translation, under the target account's dial and budget, the first 10 in a pair to review (ADR-48).
 - **Depends:** S7, S6 (and S8 for avatars). **Owner:** the ES partner accounts exist.
 - **Actions:**
   1. Winner → translate within a timing budget → target persona voice → align → re-time → (re-run the talking head for avatars) → render → gate → item for the paired account.
