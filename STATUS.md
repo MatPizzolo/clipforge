@@ -20,7 +20,7 @@ Last updated: 2026-10-01 (card 009 merged, PR #20; ADR-48 to ADR-50 accepted).
 
 ## Waiting on the owner (most important first)
 
-1. **O5, Billy Garton Jr.'s permission record: the only blocker for S1's rollout** (granted when and by whom, where the agreement is stored, monetization yes/no, translations yes/no, any expiry). The rollout now creates only realtalk (log #135). Then the coordinator writes the rollout card.
+1. ✅ O5 collected (2026-10-01). You type the facts into `clipforge source edit` at rollout step 4; they live only in the database.
 2. **Deploy cards 002 + 006 + tzdata,** outside a blackout: `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "cards 002 + 006 + tzdata: posting_daily, ops alerts, Timeline renderer v4"`. Then check `uv run modal app logs clipforge`.
 3. **Answer the waiting clips in Telegram** (✅ per platform, ⏭ or 🗑), then the rest of the **S0 checks**: `/status`, `/next`, ✅ on and off, ⏭, 🗑 + reason, `/pause`, `/go`, one scheduled slot end to end, and tomorrow's 07:00 UTC `posting_daily` log line.
 4. **O3, the handles for founder.tapes and hombre.en.construccion** (checked free on TikTok, Instagram, YouTube and Facebook): now needed **before S2**, not before the rollout.
@@ -35,7 +35,7 @@ Last updated: 2026-10-01 (card 009 merged, PR #20; ADR-48 to ADR-50 accepted).
 
 | Card | What | Can start | Runs alongside |
 |---|---|---|---|
-| rollout (to write) | S1 Task 22, run with the owner: migrate, deploy, realtalk's account, sources, import, verify, switch reads | after O5 | — |
+| [010](docs/cards/010-s1-rollout.md) | S1 rollout (Task 22) with the owner: two small fixes, then runbook §4c step by step, then evidence | after tonight's deploy and one clean night (O5 ✅) | — |
 | hooks (to write) | HK: the hook library (ADR-50): pattern versions, item stamps, clip hook variants, rotation, ranking, the Hooks tab | after the rollout | S3c plan |
 | S2 (to write) | Publishing through Upload-Post, the autopilot model (ADR-48, 49), the dispatcher (ADR-27), the gate, tracking links; founder.tapes and hombre launch | after the rollout and O3 | hooks, S3 |
 | S3 (to write) | Dashboard v1 from card 009's spec: Home "needs me", `/act`, Review, Produce, Results, Settings, Compare | after the rollout | S2 |
@@ -68,8 +68,8 @@ Done: [001](docs/cards/001-x0-tooling.md) X0 tooling (PR #3) · [002](docs/cards
 
 | Item | Goes to |
 |---|---|
-| A manual `clipforge status --rebuild` isn't blocked by the outage flag | the rollout card |
-| `DEPLOY_DB_CHECK` in `.env.example` (`s1/`'s file) | the rollout card |
+| A manual `clipforge status --rebuild` isn't blocked by the outage flag | card 010, checkpoint A |
+| `DEPLOY_DB_CHECK` in `.env.example` (`s1/`'s file) | card 010, checkpoint A |
 | The first new migration carries `jobs.error`, the `post_events.actor` column (backfilled from `data.actor`) and a pause actor on `posting_state` | whichever of S2, hooks or S3c writes the first migration |
 | The `keywords_v1` comments in captions code and tests (the code loads `keywords_v2`) | the hooks card (it changes the captions prompt) |
 | S4's deferred minors: the filter check doesn't run inside the Modal image; a `%` in a still's path reads as an image-sequence pattern; short b-roll padding; 1 ms string rounding; a loudness-mode label boundary | S5/S6 (stills and b-roll) |
