@@ -26,10 +26,10 @@ Research date: 2026-09-29. **Estimates** are marked (est.). Everything is to be 
 | Transcription | faster-whisper large-v3-turbo (existing) | — | MIT | L4 | ~$0.05 per source hour |
 | Voice (TTS), EN + ES | **Qwen3-TTS 1.7B** (VoiceDesign creates a persona's voice from text; Base clones that synthetic reference). Run **unbatched, behind a guard** (token cap from text length, duration check, WER check, one retry): batched, it ran away once in 10 scripts | **Kokoro-82M** (bulk narration; preset voices only, 3 in Spanish; uses espeak-ng, GPL-3.0). **Chatterbox Multilingual**: not recommended, 2 of 15 Spanish files dropped or invented text | Apache-2.0 / Apache-2.0 (+ GPL-3.0 espeak-ng) / MIT | L4 (Kokoro: CPU is enough) | Measured in X1, 2026-09-30, on L4: Qwen **$0.033 per 60 s** unbatched (RTF 2.5; batched $0.009, not usable until guarded), Chatterbox $0.014, Kokoro $0.0002 (CPU $0.0013). Cold start 35–40 s / 56–59 s / ~30 s. WER in Spanish 0.6% / 4.0% / 0.6%. Owner's blind rating EN/ES: Qwen 4.0/5.0, Kokoro 4.5/4.0, Chatterbox 4.5/3.5 |
 | Word timing for captions | faster-whisper word timestamps on the TTS output, snapped to the known script. The same pass is the TTS guard's WER check, so production transcribes once (S5/S6 build it as one step) | WhisperX alignment (wav2vec2; check each language model's license) | MIT | L4 | ~$0.001 |
-| Music beds | **ACE-Step 1.5** | DiffRhythm | MIT / Apache-2.0 | L4 | < $0.005 per bed |
+| Music beds | **ACE-Step 1.5**, no "thinking" (DiT only), as an owner-approved **bank of beds per mood per account**, reused across items (X4) | a royalty-free library | MIT (ACE-Step 1.5; v1 was Apache-2.0) | L4 | Measured in X4, 2026-10-01: **$0.0031 per 60 s bed** (13.9 s; with the LM's thinking $0.0079, 35.4 s). Cold start ~115 s. Owner's blind rating: all 8 beds OK, both modes. Normalize before mixing: as generated they range -12.5 to -21.8 LUFS |
 | Persona face | **Z-Image-Turbo** + one **LoRA per persona** (20–40 curated synthetic shots) | Qwen-Image-Edit-**2509** for pose and outfit changes (pin the version; 2.1 is non-commercial); PuLID-FLUX **FaceNet variant** only | Apache-2.0 | L40S (LoRA training: H100) | one-off, ~$1–3 per persona (est.) |
-| B-roll stills | **Z-Image-Turbo** (8 steps) | Qwen-Image-2512 + Lightning (images with text); FLUX.2 klein **4B** | Apache-2.0 | L40S (or L4 in FP8) | ~$0.002–0.006 per image |
-| B-roll video (5 s) | **Wan2.2 A14B + lightx2v 4-step LoRA** | Wan2.2 TI2V-5B (L40S) | Apache-2.0 | H100 | ~$0.07–0.13 per clip |
+| Stills | **Qwen-Image-2512 + Lightning 8-step LoRA** (transformer stored in FP8, 928x1664), one model and one style suffix per video and account (X4) | Z-Image-Turbo, 9 steps (faster cold start, a more illustrated look; never mixed with Qwen in one video); FLUX.2 klein **4B** | Apache-2.0 | L40S (L4 in FP8 is slower and dearer: dropped) | Measured in X4, 2026-10-01/02: Qwen **$0.0041 per image** (7.5 s), Z-Image $0.0049 (9.0 s at 1088x1920), Z-Image on L4 FP8 $0.0070 (31.4 s). Cold start Qwen ~160–350 s, Z-Image ~55–160 s. Owner preferred Qwen (more realistic) blind. Neither model spells uncommon words reliably: check text by OCR or put it in the overlay |
+| B-roll video (5 s) | **Wan2.2 I2V-A14B + lightx2v 4-step LoRAs**, image-to-video from the line's still, 720x1280 at 16 fps | Wan2.2 TI2V-5B, 50 steps, with VAE tiling (L40S) | Apache-2.0 | H100 | Measured in X4: A14B **$0.09–0.10 per clip** (82–94 s) plus ~$0.30 per cold start (~250–330 s: 126 GB of fp32 weights; store bf16); 5B $0.24 (436 s). Owner preferred A14B in 2 of 3 blind pairs. 16 fps in a 30 fps Timeline was acceptable; no interpolation |
 | Talking head | **InfiniteTalk** (Wan2.1-I2V-14B + audio adapter; head, body and lips; 480p then upscale; audio encoder chinese-wav2vec2-base is MIT, no InsightFace in its requirements). InfiniteTalk and EchoMimic Flash use chinese-wav2vec2-base, pretrained on non-commercial WenetSpeech: open question O7 in 10, so prefer LongCat unless X2 shows a wav2vec model clearly better (log #121, spikes/x2-talking-head.md) | **LongCat-Video-Avatar 1.5** (MIT; no InsightFace; Whisper audio encoder) in a bake-off; **EchoMimicV3** Flash (1.3B, cheap) | Apache-2.0 / MIT / Apache-2.0 | H100 or A100-80 | ~$0.35–0.55 per 30 s at 480p; use it only for presenter segments |
 | Face detection | YuNet (existing, MIT) or MediaPipe | — | MIT / Apache | CPU | — |
 
@@ -61,14 +61,15 @@ Before changing a model on any quality-level stage, run an eval (ADR-4, docs/EVA
 | Band photos | **Wikimedia Commons** (CC-BY or CC-BY-SA, with attribution) | Band-supplied press material with written permission | $0 | No photoreal generated images of real people |
 | Downloads (local) | **yt-dlp** + Deno + bgutil PO-token plugin | yoinks (interactive only, no script mode) | $0 | Only from home internet. Only permitted content |
 
-## Monthly cost model (recomputed 2026-09-29 with verified prices; voice measured in X1 on 2026-09-30; the rest are estimates until X2–X4 measure them)
+## Monthly cost model (recomputed 2026-09-29 with verified prices; voice measured in X1 on 2026-09-30, stills, b-roll and music in X4 on 2026-10-02; talking heads are estimates until X2 measures them)
 
 **Per video, variable cost** (GPU, CPU and LLM; cold starts spread over a daily batch per account):
 
 | Producer | Cost per video | Where it goes |
 |---|---|---|
 | Podcast clip | ~$0.02 | transcribe + highlights per source hour, split over its clips (measured) |
-| Story or band (60–90 s, 6–8 stills, voice, music) | ~$0.09–0.13 | TTS ~190 L4-s for ~75 s of unbatched Qwen ($0.042, measured in X1), 7 stills ~20 L40S-s ($0.011), music ~$0.004, script and copy on Haiku ~$0.01, CPU render ~$0.002, plus cold starts |
+| Story (60–90 s, one still per line, voice, music, 0–2 b-roll shots) | ~$0.09 / **~$0.19** / ~$0.29 with 0 / 1 / 2 b-roll shots | TTS ~190 L4-s for ~75 s of unbatched Qwen ($0.042, X1), 8 Qwen-Image stills ($0.033, X4), each Wan2.2 A14B b-roll shot ~$0.10 (X4), music from the account's bed bank (~$0), script, copy and caption key words on Haiku ~$0.011, CPU render ~$0.002, plus cold starts |
+| Band (60–90 s, 6–8 stills or licensed art, voice, no music) | ~$0.09 | as a story without b-roll or music |
 | Avatar (presenter ~8 s plus b-roll) | ~$0.19–0.34 | ~8 s of talking head on H100 (~$0.10–0.15) plus the story costs |
 | AI-model carousel / reel | ~$0.03 / ~$0.15 | stills only / plus one Wan2.2 motion clip |
 | Dub | ~$0.08 (story), ~$0.33 (avatar) | new narration on unbatched Qwen (X1) |
@@ -79,7 +80,7 @@ Cold starts dominate at low volume. That's why GPU work is batched per account p
 
 | Item | $/month |
 |---|---|
-| Modal: 360 clips ≈ $7, 90 stories ≈ $10, crons ≈ $1 | ~$18, **inside the $30 Starter credit → $0** |
+| Modal: 360 clips ≈ $7, 90 stories × $0.19 ≈ $17, crons ≈ $1 | ~$25, **inside the $30 Starter credit → $0** |
 | Upload-Post Basic (5 profiles) | $24 ($15 billed yearly) |
 | Vercel Pro | $20 |
 | Neon | $0 if it can scale to zero; ~$20 on Launch if a 5-minute cron keeps it awake |
@@ -91,16 +92,16 @@ Cold starts dominate at low volume. That's why GPU work is batched per account p
 
 | Item | $/month |
 |---|---|
-| Modal: clips 360 × $0.02 ≈ $7, stories 270 × $0.11 ≈ $30, bands 90 × $0.11 ≈ $10, avatars 120 × $0.29 ≈ $35, AI-model 90 × $0.15 ≈ $14, dubs ≈ $8, +30% cold starts ≈ $135 | **~$105** after the $30 credit |
+| Modal: clips 360 × $0.02 ≈ $7, stories 270 × $0.19 ≈ $51, bands 90 × $0.09 ≈ $8, avatars 120 × $0.29 ≈ $35, AI-model 90 × $0.15 ≈ $14, dubs ≈ $8, +30% cold starts ≈ $160 | **~$130** after the $30 credit |
 | Upload-Post Professional (25 profiles) | $50 ($33 billed yearly) |
 | Vercel Pro | $20 |
 | Neon Launch | ~$20 |
 | Claude API | ~$20–30 |
 | R2 (only if Volume links prove unreliable) | ~$1–2 |
 | xAI X Search trend job (optional, ~4K posts a month) | ~$20 |
-| **Total** | **~$215–245** (~$195–225 without X Search) |
+| **Total** | **~$240–270** (~$220–250 without X Search) |
 
-The $100+/month budget covers scenario 1 with room to spare. Scenario 2 needs about $215–245 (up from ~$200 once X1 measured the voice cost), so waves 3–6 should wait for revenue. Budgets per account are enforced in code.
+The $100+/month budget covers scenario 1 with room to spare. Scenario 2 needs about $240–270 (up from ~$200: X1 measured the voice cost, and X4 priced one A14B b-roll shot per story at ~$0.10), so waves 3–6 should wait for revenue. Stories without b-roll bring it back to about $215–245. Budgets per account are enforced in code.
 
 ## Structured judgments: TypeSafe Jev (early access, launched 2026-09-15)
 
