@@ -23,3 +23,4 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [007](007-cleanup-docs.md) | Docs: audit and refresh every Markdown file to match main; propose removing unused files | done 2026-10-01 (PR #11) | 002 merged |
 | [008](008-x0-followups.md) | X0: `deploy.py` checks the migration head, CI deploys tagged, Stop hook on main/coord | done 2026-10-01 (PR #14) | 002 merged |
 | [009](009-s3-dashboard-design.md) | S3: the dashboard as the studio's control room (brainstorm, IA, autopilot model, mockups, spec; design only) | done 2026-10-01 (PR #20) | — |
+| [010](010-s1-rollout.md) | S1: the rollout (Task 22) with the owner: two small fixes, then runbook §4c step by step, then evidence | proposed | 002 + 006 deployed, one clean night, O5 |
