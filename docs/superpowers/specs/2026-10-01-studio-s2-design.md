@@ -3,8 +3,8 @@
 Date: 2026-10-01 · Card: [011](../../cards/011-s2-design.md) · Status:
 - §1–§9 approved by the owner section by section at checkpoint A (2026-10-01).
 - Revised the same day after the coordinator's review ("approve with changes": 2 blocking, 9 should-fix, the minors, and 5 owner rulings, §0.1).
-- Decision log #440–#457.
-- For the owner's review as a whole before the plan (checkpoint B).
+- Revised again after the coordinator's re-review (2026-10-02: the re-send window, the brake repair, the Dict markers, the retry check). **Approved by the coordinator with these changes in**; the plan follows (checkpoint B).
+- Decision log #440–#459.
 
 **What S2 is.** S2 is the step that replaces the owner's hand posting with publishing through Upload-Post, reviewed where it pays off. founder.tapes and hombre.en.construccion launch on it (ADR-48, #428). [04's S2 list](../../studio/04-roadmap.md) is the source. Every item in that list maps to a section here (§10).
 
@@ -53,7 +53,7 @@ Date: 2026-10-01 · Card: [011](../../cards/011-s2-design.md) · Status:
 | Q2 | Order inside S2 | **Rails first, then the publisher:** S2a (rails, assisted flow unchanged), S2b (Upload-Post for realtalk on Hands-on), S2c (the rest of autopilot, digest, links, the two launches). §1 |
 | Q3 | The review lane before S3's Review page | **A morning batch, then 2 h cards:** at 09:00 one review card per undecided item in the plan's horizon; anything still undecided gets its card 2 h before its slot. A bridge behind `REVIEW_BATCH=on`, an exception to #427 that ends when S3's Review page ships. §7.1 |
 | Q4 | The digest | **One message at 09:00, then the cards.** Anomalies first; lines with nothing to say are left out. §7.2 |
-| Q5 | Accounts with Publish off | **Today's assisted flow, where sending is the review.** The gate still holds failing items. The fallback reuses the same card for the failed platforms only. §6.5 |
+| Q5 | Accounts with Publish off | **Today's assisted flow, where sending is the review.** The gate still holds failing items. The fallback reuses the same card for the failed platforms only. §6.6 |
 | Q6 | When an approved item goes to Upload-Post | **30 minutes before its slot,** with `scheduled_date = slot`. A late approval goes at once. §4, §6 |
 | Q7 | Where publishing state lives | **Approach A: on the `posts` rows** (one per item × platform), with the claim as a conditional update. A separate `publications` table (B) and Dict state (C) were rejected. §3 |
 
@@ -65,7 +65,8 @@ Date: 2026-10-01 · Card: [011](../../cards/011-s2-design.md) · Status:
 | R2 | Assisted ✅ taps don't count toward the ladder or the producer-version window: a ✅ means "posted", not "reviewed". Counting starts at S2b | §5.2, §5.5 |
 | R3 | Planning and the digest run in the owner's time zone for every account | §4.2, §7.2 |
 | R4 | ADR-33 is accepted as tracking links only; conversion import becomes draft ADR-51 | §11.2, §11.3 |
-| R5 | S2b's build is blocked until one real Upload-Post call confirms the idempotency-key retention and Basic's rate limit; the results go in the S2 build's report | §1, §9 |
+| R5 | S2b's build is blocked until one real Upload-Post call confirms the idempotency-key retention and Basic's rate limit; the results go in the S2 build's report. Re-review (2026-10-02): a third check, that a scheduled async upload is visible by `request_id` within seconds; until R5 confirms keys are kept at least 10 minutes, crash recovery never re-sends (`RECOVERY_WINDOW_S=0`) | §1, §6.3, §9 |
+| R6 | Re-review (2026-10-02): assisted-card taps (✅, ⏭ and 🗑) don't count toward the ladder, the spot checks or the producer window; only review-card decisions count, from S2b on (confirms the reading of R2) | §5.2, §5.5 |
 
 ## 1. Shape and build order
 
@@ -108,7 +109,7 @@ ADR-48's presets all have Publish on, and controls never block each other: each 
 | `publishing/upload_post.py` | `UploadPostPublisher` over httpx (no SDK, so one fake transport tests it) | — |
 | `publishing/assisted.py` | `AssistedPublisher`: wraps today's `bot/posting.py` delivery for a platform subset | through `posting/` as today |
 | `publishing/media.py` | signed per-item media links | — |
-| `publishing/state.py` | **the one writer of the `posts` publish columns** and the Dict in-flight markers: every transition of §6.2 | `posts` (publish columns), `post_events`, `publishing:inflight:*` |
+| `publishing/state.py` | **the one writer of the `posts` publish columns** and of both Dict publishing keys: every transition of §6.2 | `posts` (publish columns), `post_events`, `publishing:inflight:<ref>`, `publish:last_handoff` |
 | `publishing/handoff.py` | the hand-off sequence (claim, publish, record, brake re-check) | through `state.py` |
 | `publishing/webhook.py` | signature check, delivery idempotency, event handling | `webhook_deliveries`; posts through `state.py` |
 | `publishing/reconcile.py` | crash recovery, retries, status and history polling, unmatched deliveries | through `state.py` |
@@ -233,6 +234,7 @@ class SlotPlan(Contract):
 
 class Brake(Contract):
     scope: str                            # "all" or an account id
+    on: bool                              # /go writes on=False; the key is never deleted
     at: datetime; actor: str; reason: str | None = None
 
 class Link(Contract):
@@ -293,7 +295,10 @@ One expand-only migration. Its number is the next after the head on `main`: 0002
 
 S2 assumes ADR-41's Dual writes stay on until S1 Task 23. S2 is **not** Postgres-only for anything the Dict already holds:
 - **"Posted" goes through the PostingRepo.** When the webhook or reconcile learns that a platform published, `publishing/state.py` records `published` (with `external_id` and `url`), then calls `posting.repo.set_posted(ref, platform, True, at, actor="system:upload-post")`. That is the same Dual write a ✅ tap uses: the primary (Postgres) sets `posted_at` and its event, and the mirror writes the Dict's `post:<ref>:posted:<platform>`. `posting verify` therefore stays at 0 differences while Upload-Post posts.
-- **In-flight markers for the Dict side.** `state.py` writes a Dict key `publishing:inflight:<ref>` when a platform of the item is claimed, and deletes it when no platform of the item is `claimed`, `scheduled` or `retrying`. In `dict` mode (the rollback), the assisted pick (`_tick_account` and `/next`) excludes every item that has such a key, so an item Upload-Post may still publish can't also go to the phone. The markers live minutes to hours, far below the 7-day expiry, and reconcile rewrites a missing one from the rows.
+- **Two Dict publishing keys, both written only by `publishing/state.py`** (one writer, ADR-14):
+  - **`publishing:inflight:<ref>`, per item.** It is set when a platform of the item is first claimed. It is deleted only when **every** platform the item was claimed on has reached `published`, `fallback` or `cancelled`. A row in `failed` or `retrying` keeps it, because Upload-Post may still publish it until the fallback check settles it. In `dict` mode (the rollback), the assisted pick (`_tick_account` and `/next`) excludes every item that has the key, so an item Upload-Post may still publish can't also go to the phone. Reconcile rewrites a missing one from the rows.
+  - **`publish:last_handoff`, fleet-wide.** The UTC time of the last hand-off. It is never deleted, only overwritten by each hand-off. Reconcile is due while it is under 26 hours old (§4.3).
+  - **`posting_daily`'s keep-alive touch doesn't read either key, and needn't.** The per-item marker lives as long as its item is unsettled: minutes to a few hours, at worst about a day. That's far under the 7-day expiry, and while a marker exists, reconcile runs and rewrites it from the rows. The fleet key is rewritten at every hand-off, and once it's older than 26 hours nothing depends on it: the daily reconcile run covers the rest from the rows.
 - **What stays Postgres-only:** the publish columns, the slot plan, review stamps, autopilot, links and clicks. With `STATE_READS=dict`, the dispatcher runs today's assisted tick only, with the exclusion above; planning, cards and hand-off don't run. The webhook and reconcile keep running while Neon is up, so posts already handed off still reach `posted`.
 - **At S1 Task 23** (the Dict writes retire), the in-flight markers and the Dict side of `set_posted` go with them; nothing else in S2 changes.
 
@@ -303,7 +308,7 @@ S2 assumes ADR-41's Dual writes stay on until S1 Task 23. S2 is **not** Postgres
 
 `dispatcher` runs every 5 minutes (`*/5`, the same slot as `posting_tick`) and replaces it. That keeps 3 crons: `sweeper`, `dispatcher` and `posting_daily`. Each tick:
 1. `ops.flush(now)`: the alert fold, as the old tick did.
-2. Reads **only the Dict**: `brake:*`, `posting:outage`, the `posting:schedule:*` copies (which gain the account's publish path, `upload_post` or `assisted`, and its profile; §1.1, §6.7), `publish:inflight` and the task markers.
+2. Reads **only the Dict**: `brake:*`, `posting:outage`, the `posting:schedule:*` copies (which gain the account's publish path, `upload_post` or `assisted`, and its profile; §1.1, §6.7), `publish:last_handoff` (the time of the last hand-off, §3.1) and the task markers. The schedules come from `Posting.all_schedules()` (`posting/backend.py`): the Dict copies in `postgres` mode, and the env account's `POSTING_*` schedule in `dict` mode with no `DATABASE_URL` (production today). `posting_tick`'s `posting.problem` alert ("Posting is off: …") and its outage guard are kept, unchanged.
 3. Works out what is due from those reads alone. **Postgres is opened only when a task is due**, so Neon can still scale to zero between due times.
 4. Runs each due task within its budget. A slow task (the morning batch of review cards, the digest) is spawned as `dispatch_task(name, key)`, and the tick moves on.
 
@@ -323,14 +328,14 @@ For each account whose schedule copy says `upload_post`:
 
 - **A late approval,** between S − 30 min and S + 30 min (today's `SLOT_WINDOW`), hands off at once. It still sends `scheduled_date = S` while S is in the future, and no `scheduled_date` once S has passed. After S + 30 min the slot is `missed`, and the approved item leads the next plan.
 - **An account on the assisted path** (Publish off, or no connected profile) runs today's `_tick_account` at S, unchanged: the pause rule (`PAUSE_AFTER`), the outage guard, the #202 slot guard and the claim. It has no plan and no review cards: sending is the review (Q5).
-- **The gate still runs on the assisted path:** an item with violations is held, never sent, and shows in the digest.
+- **The gate still runs on the assisted path:** with `GATE_ENFORCE` on, an item with violations is held, never sent, and shows in the digest. In S2a the setting is off (the default): violations are only logged and stamped, so the live assisted flow can't change at the deploy. Items imported from the Dict could otherwise be held, for `license_unrecorded` without a source or `missing_credit`. The owner turns it on in S2b, once `clipforge policy dry-run` reports "0 items would be held" (plan Task 8).
 
 ### 4.3 Fleet tasks
 
 | Task | Due | Notes |
 |---|---|---|
 | `digest` | 09:00 owner time (`digest:<date>`) | Spawned. Sends the digest (§7.2), then the review cards for the undecided review-lane items in the plan's horizon (§7.1), paced |
-| `publish_reconcile` | every 15 min while the Dict marker `publish:inflight` is set; once a day regardless | Runs crash recovery for rows stuck in `claimed` (§6.3), deliberate retries for rows in `retrying`, status lookups for rows still `scheduled` 10 min after their slot, and the unmatched webhook deliveries (§6.4). The daily run also reads history for the last 2 days, catching deliveries dropped during Upload-Post's 30-minute pauses. It rewrites missing Dict in-flight markers, and clears `publish:inflight` when no row is `claimed`, `scheduled` or `retrying` |
+| `publish_reconcile` | every 15 min while `publish:last_handoff` is under 26 h old; once a day regardless (which covers rows still in flight after that) | Runs crash recovery for rows stuck in `claimed` (§6.3), the retry check and deliberate retries for rows in `retrying` (§6.2), status lookups for rows still `scheduled` 10 min after their slot, the fallback check (§6.6), and the unmatched webhook deliveries (§6.4). The daily run also reads history for the last 2 days, catching deliveries dropped during Upload-Post's 30-minute pauses. It rewrites missing per-item markers from the rows. Its writes go through `state.py` |
 | alert fold | every tick | `ops.flush`, moved from the tick |
 | (later) queue filler, analytics pull, program checks, weekly report | daily/weekly | S6, S7 and S3b register their tasks here; no new cron |
 
@@ -473,11 +478,18 @@ pending ─claim─► claimed ─publish accepted─► scheduled ─webhook / 
    - The Dict in-flight marker is written in the same step (§3.1).
    - Disconnected platforms go straight to the fallback (§6.6).
 3. **Commit, then call** `publisher.publish(...)` with the key.
-4. **Record the receipt:** accepted platforms move to `scheduled` (`upload_job_id`, `scheduled_for`, `handed_off_at`). Rejected platforms move to `retrying` (retryable codes) or `failed` (final codes). Set `publish:inflight` in the Dict.
+4. **Record the receipt:** accepted platforms move to `scheduled` (`upload_job_id`, `scheduled_for`, `handed_off_at`). Rejected platforms move to `retrying` (retryable codes) or `failed` (final codes). `state.py` overwrites `publish:last_handoff`.
 5. **Re-check the brake.** If a brake now covers the account, cancel at once (§6.7): `/pause` may have run between steps 1 and 4.
 6. **Ask `plan.py` to move the slot** `approved → handed_off`.
 
-**A deliberate retry** (reconcile, for rows in `retrying`) is a new claim, never a re-send:
+**The retry check.** A row in `retrying` that has an `upload_job_id` (Upload-Post accepted it, then reported a retryable failure) first gets the fallback check's two calls on that job: `cancel(upload_job_id)`, then `lookup(job_id=…)`.
+- If the lookup says `published`, the row is recorded as published (and `set_posted`), with no retry.
+- If the status is still pending and the cancel failed, the row waits for the next reconcile.
+- Only a successful cancel, or a lookup that says `failed`, lets the retry claim run.
+
+A row rejected at submit (no `upload_job_id`) skips the check.
+
+**A deliberate retry** (reconcile, for rows in `retrying` that passed the retry check) is a new claim, never a re-send:
 ```sql
 UPDATE posts SET state='claimed', claimed_at=:now, attempts=attempts+1, request_id=:new_key
 WHERE item_id=:item AND platform=:platform AND publisher='upload_post'
@@ -507,8 +519,10 @@ It uses httpx (timeouts 10 s connect, 30 s total) and logs only the host, the st
 A row still `claimed` more than 2 minutes after `claimed_at` means hand-off stopped between the claim and the receipt. Recovery **never re-claims**:
 1. `lookup(request_id=<stored key>)`.
 2. **Upload-Post has a job:** record it as the receipt (`scheduled`, with `upload_job_id`) and apply any per-platform results it already carries (`published`, `retrying`, `failed`).
-3. **No job, and the claim is under `RECOVERY_WINDOW` (10 minutes):** re-send once with the **stored** key (steps 3–5 of hand-off). The key is still well inside any plausible retention, and R5 measures the real one.
-4. **No job, and the claim is older:** mark the row `failed` with `error="lost hand-off"`. The fallback check (§6.6) then decides; a lookup that later finds a job would have found it in step 2.
+3. **No job, and the claim is under `RECOVERY_WINDOW_S`:** re-send once with the **stored** key (steps 3–5 of hand-off).
+   - **The default is 0, so there is no re-send** until R5's real call confirms that Upload-Post keeps a key for at least 10 minutes. Then it becomes 600.
+   - If the 10-minute repeat fails, the rule stays "no re-send". The window is never lowered to fit, because a re-send with a forgotten key could post twice.
+4. **No job, and no re-send:** mark the row `failed` with `error="lost hand-off"`. The fallback check (§6.6) then decides, and for a row without a job it waits longer before any fallback.
 
 ### 6.4 The webhook (`publishing/webhook.py`, `POST /webhooks/upload-post` on `web`)
 
@@ -544,7 +558,15 @@ A row still `scheduled` 10 minutes after its slot gets `lookup(job_id=…)`. Its
 - **The fallback.** Before any fallback claim, the **fallback check**:
   1. If the row has an `upload_job_id`, call `cancel(job_id)`, then `lookup(job_id=…)`.
   2. If the lookup says `published`: record it as published (and `set_posted`); there is no fallback.
-  3. The fallback proceeds **only if** the cancel succeeded, or the lookup says that platform `failed`, or the row has no job at all (§6.3 step 4, after its lookup).
+  3. The fallback proceeds **only if** one of these holds:
+     - the cancel succeeded;
+     - the lookup says that platform `failed`;
+     - the row has no job at all (§6.3 step 4), and all three of the following are true:
+       - it is now at least 60 minutes after the slot;
+       - `publisher.scheduled(profile)` shows no job;
+       - `lookup(request_id=<stored key>)`, which reads status and then history, still finds nothing.
+
+     An async upload that is slow to appear therefore gets the full hour before the phone is asked to post by hand.
   4. Otherwise (the cancel failed and the status is still pending) the row stays as it is; the next reconcile repeats the check, and after 3 inconclusive checks an ops alert asks the owner to look.
 
   Then:
@@ -560,22 +582,24 @@ A row still `scheduled` 10 minutes after its slot gets `lookup(job_id=…)`. Its
 **`/pause`:**
 1. **Write the Dict key `brake:<scope>`** (`Brake` JSON) first. That's the part that must survive a Neon outage.
 2. **Then write `posting_state`** for each account in scope (`paused`, `changed_by`, `reason`), through the PostingRepo as today (Dual). If Neon is down, the reply says "Paused. The database is unavailable, so this is recorded in the brake only."
-3. **Effect:** every dispatcher phase skips a braked scope (`brake:all`, or `brake:<account>`). Hand-off checks before claiming and again after recording the receipt (§6.2 steps 1 and 5).
+3. **Effect:** every dispatcher phase skips a braked scope (`brake:all` or `brake:<account>` with `on=true`). Hand-off checks before claiming and again after recording the receipt (§6.2 steps 1 and 5).
 4. **Cancel what's already scheduled.** `posts` rows in `scheduled` with `scheduled_for > now`, in scope, get `publisher.cancel(job_id)` and move to `cancelled`.
    - With Neon down, the job ids come from Upload-Post's own list (`publisher.scheduled(profile)`; the profile is in the account's Dict schedule copy). Reconcile then fixes the rows.
    - Hand-off happens 30 min ahead, so there are at most a few posts per account to cancel.
 5. **The reply counts the result:** "Paused realtalk-clips-en: 1 scheduled post cancelled, 0 already out."
 
 **`/go`:**
-1. Deletes the key.
+1. Overwrites the key with `on=false` and the time (never deletes it, so the time of every `/go` survives a Neon outage). Then it writes `posting_state` (`paused=false`, `changed_by`, `reason`) through `posting/actions.pause`, as `/pause` does.
 2. Moves `cancelled` rows back to `pending`. Their items lead the next plan; a slot whose time has passed is `missed`.
 3. Clears `posting:outage`, as today (#217).
+4. `/go <account>` while `brake:all` is on records the account's `on=false`, but the fleet brake still covers it. The reply says "still braked by /pause all; send /go all to resume".
 
 **Expiry and repair.**
-- A brake key must never expire into "go". Every dispatcher tick reads every `brake:*` key with `get`, which counts as activity (ADR-24).
-- `posting_daily` compares the brake keys with `posting_state`. Where they differ, it repairs through `posting/actions.pause` with actor `system:daily`, so pausing keeps one writer:
-  - a missing key where `posting_state` says paused → the key is restored;
-  - a key that the database never recorded (written during an outage) → `posting_state` is written.
+- A brake key must never expire into "go". Every dispatcher tick reads every `brake:*` key (on and off) with `get`, which counts as activity (ADR-24).
+- `posting_daily` compares each brake key with `posting_state`. Where they differ, **the newer one wins**, comparing `Brake.at` with `posting_state.changed_at`. It repairs through `posting/actions.pause` with actor `system:daily`, so pausing keeps one writer.
+  - A key newer than the row (a `/pause` or `/go` during a Neon outage) → `posting_state` is written to match the key.
+  - A row newer than the key → the key is rewritten to match the row.
+  - **A missing key is never restored blindly.** A key can only be missing if it expired (impossible while the dispatcher reads it every tick) or was never written. Then the row is written to the Dict only if the row says paused, and the repair raises an ops alert so the owner sees it.
 
 The brake is one of the two one-tap actions Telegram keeps (#427).
 
@@ -658,11 +682,11 @@ Every item has its tests in the same task, written first. DB tests use the local
 | Routing | One case per reason. Several reasons together. **R2:** only review-service decisions by people count; a `system:autopilot` approval and assisted ✅/🗑 taps don't close a window. Spot checks over a 30-item sequence give ≥ 1 in 10 and ≥ 3 a week, the same picks on every run |
 | Autopilot and ladder | Presets and overrides (`custom`). History rows per changed field. The trigger rejecting UPDATE and DELETE. A reason required for any owner change to the dial. A missing row reads as Hands-on. The seed's `monthly_cap_usd` from the budget or the type default. A Publish change rewrites the schedule copy. Ladder criteria from fixtures, at and just below each threshold. The second reject in the last 5 spot checks demotes inline (`system:demotion`). A strike drops to Hands-on |
 | Claim per (item, platform) | Two connections race the first claim and exactly one wins. A row in `claimed` is never re-claimed. The retry claim works only from `retrying` and below 3 attempts, with a new key. The fallback claims only after the fallback check. Upload-Post and the assisted path never both hold one row. A disconnected platform goes straight to the fallback |
-| Crash recovery and keys | A crash after `publish` and before the receipt, three ways: lookup finds the job (recorded, no second call); no job inside `RECOVERY_WINDOW` (one re-send with the stored key); no job after it (`failed`, then the fallback check). A deliberate retry mints a new key, never reuses one. Keys are 32 hex characters and deterministic per (item, platforms, attempt) |
+| Crash recovery and keys | A crash after `publish` and before the receipt: lookup finds the job (recorded, no second call); no job with `RECOVERY_WINDOW_S=0` (no re-send: `failed`, then the fallback check, which waits until slot + 60 min and checks `scheduled(profile)` and the lookup again); no job with the window at 600 and inside it (one re-send with the stored key); no job after it (`failed`). The retry check on a `retrying` row with a job: published → no retry; pending with a failed cancel → waits; cancelled or failed → retry claim. A deliberate retry mints a new key, never reuses one. Keys are 32 hex characters and deterministic per (item, platforms, attempt) |
 | No double send (#202) | Overlapping ticks. A lost Dict claim. A renamed claim key (`dispatch:` prefix changed). A late approval racing the hand-off phase. The brake set between claim and receipt (cancelled after the receipt). The assisted path's existing guard tests keep passing |
-| Dict mirror (§3.1) | A webhook success writes `posted_at` in Postgres and `post:<ref>:posted:<platform>` in the Dict through Dual; `posting verify` reports 0 differences after a day of Upload-Post posts in a test. In-flight markers are set at the claim and cleared at the last terminal state. In `dict` mode the assisted pick skips an item with a marker |
+| Dict mirror (§3.1) | A webhook success writes `posted_at` in Postgres and `post:<ref>:posted:<platform>` in the Dict through Dual; `posting verify` reports 0 differences after a day of Upload-Post posts in a test. The per-item marker is set at the first claim and kept through `failed` and `retrying`, then deleted only when every claimed platform is `published`, `fallback` or `cancelled`. `publish:last_handoff` is overwritten, never deleted, and reconcile stops being due 26 h after it. Only `state.py` writes either key (an import check). In `dict` mode the assisted pick skips an item with a marker |
 | Dispatcher | `due()` from the Dict alone: a tick with nothing due runs against a database stub that fails if touched. Planning at 08:50 owner time for accounts in other time zones, with the horizon to the next plan plus 2.5 h. Each phase at S − 2 h, S − 30 min and S. Planning skips held, planned and in-flight items. Substitution and `missed`. Only `plan.py` writes `slot_plans` (an import check). A failed task releases its claim and alerts. Spawned tasks run once |
-| Brake under a Neon outage | With the database raising `DatabaseUnavailable`: `/pause realtalk-clips-en` and `/pause all` set the Dict key and reply honestly; the dispatcher skips the scope; cancel uses `publisher.scheduled(profile)`; `posting_daily` later repairs `posting_state` through `actions.pause` (`system:daily`); a missing key is restored. `/go` moves `cancelled` rows to `pending` |
+| Brake under a Neon outage | With the database raising `DatabaseUnavailable`: `/pause realtalk-clips-en` and `/pause all` set the Dict key and reply honestly; the dispatcher skips the scope; cancel uses `publisher.scheduled(profile)`; `posting_daily` later repairs `posting_state` through `actions.pause` (`system:daily`). Newer wins both ways: a `/go` written to the Dict during the outage beats an older paused row, and a missing key is never restored blindly. `/go` writes `on=false` (never deletes) and moves `cancelled` rows to `pending` |
 | Webhook | A valid delivery. **The same delivery replayed twice** (200, one event, one state change). **Two concurrent copies** (the row lock: one processes, one sees `processed_at`). A crash before the commit (reprocessed next time). A bad signature, a stale timestamp, a missing secret (503). An unknown job id (stored unprocessed, then matched by reconcile). The disconnect and connect events |
 | Fallback | Cancel succeeds → fallback. Cancel fails, lookup `failed` → fallback. Cancel fails, lookup `published` → published, no card. Cancel fails, lookup pending → no fallback, re-checked, alert after 3 |
 | Media links | Signature and expiry. The `media:` prefix (a zip-link signature is refused, and the reverse). A path escaping `/jobs`. Range requests |
@@ -679,7 +703,7 @@ Every item has its tests in the same task, written first. DB tests use the local
 
 **Secrets:** `UPLOAD_POST_API_KEY` and `UPLOAD_POST_WEBHOOK_SECRET` (the `whsec_…` value), in `clipforge-secrets` and `.env`. Both are optional: without them, publishing is off with the reason in `/status` (like `Settings.posting_problem`), and the webhook answers 503.
 
-**New settings:** `REVIEW_BATCH` (`on`/`off`, default `on`), `MEDIA_LINK_TTL_S` (default 86400), `RECOVERY_WINDOW_S` (default 600) and `UPLOAD_POST_PROFILE_LIMIT` (default 5). Account create warns when the profiles in use would exceed `UPLOAD_POST_PROFILE_LIMIT` (O4: upgrade at the 6th).
+**New settings:** `GATE_ENFORCE` (`on`/`off`, default `off`; on from S2b, after the dry run), `REVIEW_BATCH` (`on`/`off`, default `on`), `MEDIA_LINK_TTL_S` (default 86400), `RECOVERY_WINDOW_S` (default 0 = no re-send; 600 after R5 confirms key retention) and `UPLOAD_POST_PROFILE_LIMIT` (default 5). Account create warns when the profiles in use would exceed `UPLOAD_POST_PROFILE_LIMIT` (O4: upgrade at the 6th).
 
 **Cost:**
 - **Upload-Post Basic** is $24/month, a fixed subscription.
@@ -698,9 +722,13 @@ Nothing else changes for the owner.
 
 **Before S2b's build (R5):** one real Upload-Post call, by the S2 build card's session with the owner, on a test profile with a private or self-only post. It must confirm:
 - that a repeated `Idempotency-Key` returns the same job, and for how long (repeat after 10 minutes and after 24 h);
-- Basic's rate limit, from the `X-RateLimit-*` headers.
+- Basic's rate limit, from the `X-RateLimit-*` headers;
+- that a scheduled async upload is visible by `request_id` (status, then history) within seconds of the call.
 
-The results go in the S2 build's report. If key retention turns out shorter than `RECOVERY_WINDOW`, the window is lowered to fit before S2b is built.
+The results go in the S2 build's report.
+- If the 10-minute repeat returns the same job, `RECOVERY_WINDOW_S` becomes 600.
+- If not, it stays 0 (no re-send) and crash recovery relies on the lookup and the fallback check (§6.3).
+- If the third check fails (the upload is not visible within seconds), recovery's "no job" answer can't be trusted early. The 2-minute threshold for a row stuck in `claimed` (§6.3) is raised to the measured delay before S2b is built.
 
 **S2b:**
 1. Buy Upload-Post Basic (monthly). Create the profile `realtalk-clips-en`. Connect TikTok (set to public posting), Instagram (Professional, linked to the Facebook Page), YouTube and Facebook. Note the Facebook Page id.
