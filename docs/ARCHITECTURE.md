@@ -143,11 +143,10 @@ Per account (S1, ADR-41): the tick loops over accounts in id order, each with it
 
 ## Studio direction (accepted, not built yet)
 
-The multi-account studio is planned in [docs/studio/](studio/README.md), and its build order is Phase 6 in ROADMAP.md. S1 built ADR-25 (`ContentItem`, accounts, sources as database rows), ADR-26 (Postgres for durable state) and ADR-35 (blueprints, mounted from `blueprints/`); they are described above. ADR-42 moves blueprints into versioned database rows later (S3c). The accepted decisions that will change this document when they're built:
+The multi-account studio is planned in [docs/studio/](studio/README.md), and its build order is Phase 6 in ROADMAP.md. S1 built ADR-25 (`ContentItem`, accounts, sources as database rows), ADR-26 (Postgres for durable state) and ADR-35 (blueprints, mounted from `blueprints/`), and S4 built ADR-31 (the Timeline); they are described above. ADR-42 moves blueprints into versioned database rows later (S3c). The accepted decisions that will change this document when they're built:
 - **ADR-28:** a `Publisher` protocol with Upload-Post as the primary and today's Telegram flow as the fallback. Media goes out by signed Volume links first, R2 only if needed. Webhooks are HMAC-checked (S2).
 - **ADR-29:** review tiers per account (`review`, `sample`, `auto`) and a pure policy gate on every item (S2). The LLM claim check comes with the Judge in S6.
 - **ADR-30:** open media models as `modal.Cls` servers, license-gated by `media/registry.toml` (S5).
-- **ADR-31:** one `Timeline` contract is the only render input. Clips move onto it first, with identical output (S4).
 - **ADR-34:** `clipforge fetch` runs yt-dlp locally into `videos/<channel>/` for permitted sources (S11).
 - **ADR-38:** the Next.js dashboard on Vercel is the operational UI. It calls a separate `admin` Modal endpoint with proxy auth and the bearer token, because the public `web` endpoint must stay reachable for webhooks, download links and `/go`. Notion is a one-way mirror (S3).
 - **ADR-39:** AI-persona accounts keep provenance metadata and platform AI labels, and use synthetic-only training data (S13).

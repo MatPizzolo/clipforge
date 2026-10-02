@@ -55,7 +55,7 @@ Add `STATE_READS=dict` to `clipforge-secrets` too (dashboard edit), so both plac
 
 **Deploy blackout** (decision log #108), until S1's slot guard is verified in production: **don't deploy from each posting slot until 30 minutes after it.** `scripts/deploy.sh` enforces it from `POSTING_SLOTS` and `POSTING_TIMEZONE` in `.env`, and has no override. With the default slots (New York time) that means no deploys during 08:00–08:30, 10:30–11:00, 13:00–13:30, 16:00–16:30, 19:00–19:30 and 21:30–22:00. If you changed `POSTING_SLOTS`, use your own times. Reason: a claim-key change can send the same slot twice (#77).
 
-⏳ **Still open:** the phone test that the S0 session asked for: `/status`, `/next`, ✅ on and off, ⏭ Skip, 🗑 Reject with a reason, `/pause`, `/go`. Report the result to the S0 session. It then checks the next scheduled slot and the 07:00 UTC daily run after the 2026-09-30 redeploy. That deploy still runs the cron under its old name, `posting_keepalive`; from the next deploy it is `posting_daily` (ADR-46, same slot), which also runs the rebuild every day (log #211).
+⏳ **Still open:** the phone test that the S0 session asked for: `/status`, `/next`, ✅ on and off, ⏭ Skip, 🗑 Reject with a reason, `/pause`, `/go`. Report the result to the S0 session. It then checks the next scheduled slot and the 07:00 UTC daily run after the 2026-09-30 redeploy. The 2026-10-02 deploy renamed the cron: the 07:00 UTC run now logs `posting_daily:` (ADR-46, same slot) and also runs the rebuild every day (log #211).
 
 ## 2. Every day (until S2 publishes automatically)
 
@@ -94,7 +94,7 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 
 1. `STATUS.md`: what's running now (production, open PRs), what waits on the owner, the next cards, every workstream, and the open follow-ups.
 2. `docs/cards/README.md` and the cards it lists; `docs/templates/` (card, report, stop card, checkpoint).
-3. `CLAUDE.md` (project rules 1–9), `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (accepted ADRs are binding; ADR-41 to ADR-46 accepted on 2026-09-30).
+3. `CLAUDE.md` (project rules 1–9), `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (accepted ADRs are binding; ADR-41 to ADR-50 accepted on 2026-09-30 and 2026-10-01).
 4. `docs/studio/10-decision-log.md` (every owner decision and the Open table), `docs/studio/04-roadmap.md` (the Phase 6 source of truth), `docs/studio/08-dashboard-and-operations.md` §2 and §2b, `docs/studio/09-account-registry.md`, `docs/ops/secrets.md`.
 5. The rest of this runbook: the owner's steps and commands.
 
@@ -138,7 +138,7 @@ git worktree remove ../clipForge-x0     # after its branch is merged
 
 - `docs/studio/10`: append only, in the branch's range; re-read before editing; superseded rows get `superseded by N`.
 - `docs/studio/04` is the Phase 6 source of truth; `ROADMAP.md` mirrors it and is ticked in the same change.
-- ADRs: accepted ones only in `docs/DECISIONS.md`. 05 holds the drafts and the next free number (ADR-47). ADR-41 (S1) and ADR-42 (S3c) are accepted and live in `docs/DECISIONS.md`.
+- ADRs: accepted ones only in `docs/DECISIONS.md`. 05 holds the drafts and the next free number (ADR-51). ADR-41 (S1) and ADR-42 (S3c) are accepted and live in `docs/DECISIONS.md`.
 - `STATUS.md`: the coordinator's; sessions don't edit it except S1's plan-status line if its card says so.
 - Specs and plans are marked historical after their build (`docs/superpowers/README.md`).
 
@@ -165,7 +165,7 @@ git worktree remove ../clipForge-x0     # after its branch is merged
 ### 4b. During the build
 Approve each checkpoint the S1 session reports. A checkpoint is a commit on the card's branch, reviewed in its PR (§3.2).
 
-### 4c. Rollout ⬜ (after the build; each deploy only with your OK; the session runs these with you)
+### 4c. Rollout ⬜ (run as card 010; each deploy only with your OK; the session runs these with you)
 1. Migrate the database:
    ```
    uv run alembic upgrade head
