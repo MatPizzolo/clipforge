@@ -115,7 +115,7 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 4. CI runs `scripts/check.sh` and the scope check (`scripts/scopes.toml`) on the PR. The owner squash-merges when it's green, with the card number in the title.
 5. The coordinator reviews the PR with the `review-pr` skill (`gh pr view`/`gh pr diff`, the card and report, then the `pr-reviewer` agent), gives a verdict, and after the merge updates `STATUS.md` and the card's status line. It writes the next card with the `write-card` skill.
 
-Decision-log number ranges per branch prefix are in each card and in `scripts/scopes.toml` (`coord/` #1–199, S1 #200–249, S3c #250–299, S3a #300–319, X2 #320–339, S4 #340–379, X0 #380–399, cleanup #400–419, S3 #420–439). A conflict in `docs/studio/10` is two blocks added at the end: keep both, in number order; gaps are fine.
+Decision-log number ranges per branch prefix are in each card and in `scripts/scopes.toml` (`coord/` #1–199, S1 #200–249, S3c #250–299, S3a #300–319, X2 #320–339, S4 #340–379, X0 #380–399, cleanup #400–419, S3 #420–439, S2 #440–469, X4 #470–479). A conflict in `docs/studio/10` is two blocks added at the end: keep both, in number order; gaps are fine.
 
 ### 3.3 Worktrees
 

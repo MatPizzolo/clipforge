@@ -31,10 +31,11 @@ Since the S1 plan was written:
 
 ## Actions
 
-### Checkpoint A: two small fixes before going live (code, on this branch)
+### Checkpoint A: three small fixes before going live (code, on this branch)
 1. **A manual rebuild during an outage:** `clipforge status --rebuild` (and `POST /posting/rebuild`) must respect the `posting:outage` flag, like `posting_daily` does (#217). It refuses with the outage line and how to clear it. Add a test that fails first.
 2. **`DEPLOY_DB_CHECK` in `.env.example`**, with a comment (off until rollout step 2; card 008, #391).
-3. `scripts/check.sh` green, report, stop. The owner merges this before step 1 below.
+3. **A time-zone check in `doctor`:** a pure function in `doctor.py` tries `ZoneInfo` for `POSTING_TIMEZONE`, `OWNER_TIMEZONE` (if set) and `UTC`; the local `doctor` and `gpu_doctor` (in the GPU image) both report it, and `doctor` fails when it fails. Tests for both paths. (The GPU image had no time-zone data until `tzdata` became a dependency, PR #21; nothing checks it yet.)
+4. `scripts/check.sh` green, report, stop. The owner merges this before step 1 below.
 
 ### Checkpoint B: the rollout, live, one step at a time
 Before starting, confirm with the owner:
@@ -65,7 +66,7 @@ Then step 7, which can be the same day or the next, outside a blackout: the owne
 5. List for the coordinator anything in runbook §4c that was wrong or missing.
 
 ## Checkpoints
-- A: the two fixes. Suggested commit: `010: s1: rebuild respects the outage flag; DEPLOY_DB_CHECK in .env.example`
+- A: the three fixes. Suggested commit: `010: s1: rebuild respects the outage flag; DEPLOY_DB_CHECK in .env.example; time-zone check in doctor`
 - B: the rollout through step 6b, then step 7 (the report records each step's output; no code changes)
 - C: measurements, ticks, plan status. Suggested commit: `010: s1: rollout evidence, Neon measurements, S1 ticked`
 

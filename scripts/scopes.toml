@@ -143,3 +143,22 @@ allow = [
     "docs/design/dashboard/**",
     "docs/studio/08-dashboard-and-operations.md",
 ]
+
+# Card 011 (S2 design): the spec and the plan only; the build card widens this.
+[prefix."s2/"]
+stream = "s2"
+log = [440, 469]
+allow = [
+    "docs/superpowers/specs/*-studio-s2-*",
+    "docs/superpowers/plans/*-studio-s2*",
+]
+
+# Card 012 (X4 spike): the report, measured numbers and the roadmap line; probe code in scratch/x4/ (ignored).
+[prefix."x4/"]
+stream = "x4"
+log = [470, 479]
+allow = [
+    "docs/studio/03-tools-and-models.md",
+    "docs/studio/04-roadmap.md",
+    "docs/studio/spikes/**",
+]

@@ -8,7 +8,7 @@ Last updated: 2026-10-01 (card 009 merged, PR #20; ADR-48 to ADR-50 accepted).
 
 **Production.** The `clipforge` Modal app runs the code deployed on 2026-09-30, Dict-only (`STATE_READS=dict`, no database wired). `posting_tick` runs every 5 minutes; deploy blackout in runbook §1. On 2026-10-01 the tick reported "waiting": at least two clips were sent without a tap, so slots hold until the owner answers them in Telegram.
 
-**Merged, deploy pending** (`DATABASE_URL` is out of the secret and `tzdata` is in, so it's ready): cards 002 (S1) and 006 (S4). The next `scripts/deploy.sh`, outside a blackout:
+**Deployed 2026-10-02 02:10 UTC** (`deploy-20261002-0210`, `dea435d`): cards 002 (S1) and 006 (S4), and `tzdata`:
 - replaces the `posting_keepalive` cron with `posting_daily` (same 07:00 UTC slot; a daily idempotent rebuild; the sticky `posting:outage` flag);
 - adds ⚠️ ops alerts (failed channel and CLI jobs, tick and daily errors, within ADR-45's limits) and `db_doctor`, and mounts `blueprints/`;
 - switches render to the Timeline (version 4, two-pass loudness, ADR-47): every clip re-renders on its next job;
@@ -21,7 +21,7 @@ Last updated: 2026-10-01 (card 009 merged, PR #20; ADR-48 to ADR-50 accepted).
 ## Waiting on the owner (most important first)
 
 1. ✅ O5 collected (2026-10-01). You type the facts into `clipforge source edit` at rollout step 4; they live only in the database.
-2. **Deploy cards 002 + 006 + tzdata,** outside a blackout: `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "cards 002 + 006 + tzdata: posting_daily, ops alerts, Timeline renderer v4"`. Then check `uv run modal app logs clipforge`.
+2. ✅ Cards 002 + 006 + tzdata deployed (2026-10-02 02:10 UTC). Check tomorrow's first `posting_daily:` log line (07:00 UTC).
 3. **Answer the waiting clips in Telegram** (✅ per platform, ⏭ or 🗑), then the rest of the **S0 checks**: `/status`, `/next`, ✅ on and off, ⏭, 🗑 + reason, `/pause`, `/go`, one scheduled slot end to end, and tomorrow's 07:00 UTC `posting_daily` log line.
 4. **O3, the handles for founder.tapes and hombre.en.construccion** (checked free on TikTok, Instagram, YouTube and Facebook): now needed **before S2**, not before the rollout.
 5. **O7, WenetSpeech-pretrained models (gates card 005):** **treat as "needs review"; prefer LongCat 1.5 unless a wav2vec model is clearly better in the X2 blind test.**
@@ -37,7 +37,10 @@ Last updated: 2026-10-01 (card 009 merged, PR #20; ADR-48 to ADR-50 accepted).
 |---|---|---|---|
 | [010](docs/cards/010-s1-rollout.md) | S1 rollout (Task 22) with the owner: two small fixes, then runbook §4c step by step, then evidence | after tonight's deploy and one clean night (O5 ✅) | — |
 | hooks (to write) | HK: the hook library (ADR-50): pattern versions, item stamps, clip hook variants, rotation, ranking, the Hooks tab | after the rollout | S3c plan |
-| S2 (to write) | Publishing through Upload-Post, the autopilot model (ADR-48, 49), the dispatcher (ADR-27), the gate, tracking links; founder.tapes and hombre launch | after the rollout and O3 | hooks, S3 |
+| [011](docs/cards/011-s2-design.md) | S2 design and plan (no code): publishing, autopilot (ADR-48, 49), the dispatcher (ADR-27), the gate, tracking links | **now** | 010, 012, 013 |
+| [012](docs/cards/012-x4-visuals-music.md) | X4 spike: stills, b-roll, music beds ($15 cap); feeds S5 → S6 | **now** | 010, 011, 013 |
+| [013](docs/cards/013-x0-small-fixes.md) | X0: scope check aware of merges in progress ($0) | **now** | 010, 011, 012 |
+| S2 build (to write) | From card 011's plan; founder.tapes and hombre launch | after the rollout, card 011 and O3 | hooks, S3 |
 | S3 (to write) | Dashboard v1 from card 009's spec: Home "needs me", `/act`, Review, Produce, Results, Settings, Compare | after the rollout | S2 |
 | S3c plan (to write) | S3c implementation plan, with the S3 dashboard spec §10.3 applied | now (card to write) | hooks |
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | any |
@@ -73,7 +76,7 @@ Done: [001](docs/cards/001-x0-tooling.md) X0 tooling (PR #3) · [002](docs/cards
 | The first new migration carries `jobs.error`, the `post_events.actor` column (backfilled from `data.actor`) and a pause actor on `posting_state` | whichever of S2, hooks or S3c writes the first migration |
 | The `keywords_v1` comments in captions code and tests (the code loads `keywords_v2`) | the hooks card (it changes the captions prompt) |
 | S4's deferred minors: the filter check doesn't run inside the Modal image; a `%` in a still's path reads as an image-sequence pattern; short b-roll padding; 1 ms string rounding; a loudness-mode label boundary | S5/S6 (stills and b-roll) |
-| `gpu_doctor` should confirm `ZoneInfo` loads in the GPU image | the next X0 card |
+| `gpu_doctor` should confirm `ZoneInfo` loads in the GPU image | card 010, checkpoint A |
 | `web/scripts/pin-versions.mjs` undocumented; 4 high `npm audit` findings | card 004 |
 | `--rollout-step 4c.7` dropped from `deploy.py` once Postgres reads are permanent | an X0 card at S1 Task 23 |
-| The scope check reports `main`'s files as out of scope during an uncommitted merge | the next X0 card |
+| The scope check reports `main`'s files as out of scope during an uncommitted merge | card 013 |
