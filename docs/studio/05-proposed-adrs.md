@@ -1,6 +1,6 @@
 # 05: Proposed ADRs
 
-Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39. Accepted later: ADR-41 (S1, written into `docs/DECISIONS.md` by card 002 on 2026-09-30) and ADR-42 to ADR-46 (2026-09-30), ADR-47 (two-pass loudness, 2026-10-01), and ADR-48 to ADR-50 (autopilot, the producer-version window, the hook library; 2026-10-01). Accepted ADRs live only in `docs/DECISIONS.md`, which is binding; this file keeps one-line pointers to them, except ADR-43 to ADR-46. The drafts left are ADR-27, 33, 36, 37 and 40 (proposed) and ADR-32 (deferred). The next free number is ADR-51. To accept a draft, copy it into `docs/DECISIONS.md` with `Status: Accepted` and the acceptance date. ADR-24 is already taken by the Dict keep-alive (plan C Task 6).
+Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39. Accepted later: ADR-41 (S1, written into `docs/DECISIONS.md` by card 002 on 2026-09-30) and ADR-42 to ADR-46 (2026-09-30), ADR-47 (two-pass loudness, 2026-10-01), ADR-48 to ADR-50 (autopilot, the producer-version window, the hook library; 2026-10-01), and ADR-27 (the dispatcher) and ADR-33 (tracking links only) with card 011's S2 spec (2026-10-02). Accepted ADRs live only in `docs/DECISIONS.md`, which is binding; this file keeps one-line pointers to them, except ADR-43 to ADR-46. The drafts left are ADR-36, 37, 40 and 51 (proposed) and ADR-32 (deferred). The next free number is ADR-52. To accept a draft, copy it into `docs/DECISIONS.md` with `Status: Accepted` and the acceptance date. ADR-24 is already taken by the Dict keep-alive (plan C Task 6).
 
 ---
 
@@ -8,11 +8,7 @@ Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 3
 
 **ADR-26: Postgres (Neon) for durable state; Dict only for hot step state**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-26-postgres-neon-for-durable-state-dict-only-for-hot-step-state).
 
-## ADR-27: One dispatcher cron
-Date: 2026-09-29 · Status: Proposed
-Context: Modal Starter allows 5 deployed crons. Today there is 1 (sweeper); plan C makes it 3. Analytics pulls, digests and budget checks would exceed 5.
-Decision: When a 5th periodic task is needed (S7), one `dispatcher` function runs every 5 minutes and calls each periodic task when it's due. Last-run markers live in the Dict, and the dispatcher opens a database connection only when a task is due, so Neon can still scale to zero.
-Consequences: Adding a periodic task needs no new cron. One slow task can delay the others, so each task has a time budget and heavy work is spawned.
+**ADR-27: One dispatcher cron**: accepted 2026-10-02 with card 011's S2 spec; the text is only in [DECISIONS.md](../DECISIONS.md#adr-27-one-dispatcher-cron).
 
 **ADR-28: Publishing through Upload-Post behind a Publisher protocol**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-28-publishing-through-upload-post-behind-a-publisher-protocol).
 
@@ -31,13 +27,7 @@ Decision:
 - Only public content goes to free tiers.
 Consequences: Small savings with no quality risk where it matters. The router is one small module behind `LLMClient`.
 
-## ADR-33: Tracking links and conversion import
-Date: 2026-09-29 · Status: Proposed
-Context: Affiliate money needs attribution per video, and a single link in the bio can't provide it. Vercel Hobby forbids affiliate use.
-Decision:
-- `GET /go/<slug>` on the Modal web app logs the click (item, platform, time, coarse country) and returns a 302 to the affiliate URL with a sub-id.
-- Conversions are imported from APIs where they exist (ClickBank, Hotmart) and from CSV otherwise (Skool, Amazon, TikTok Shop).
-Consequences: Revenue per video and per account in the dashboard, which is the "scale the winners" loop.
+**ADR-33: Tracking links**: accepted 2026-10-02 with card 011's S2 spec, as tracking links only; the text is only in [DECISIONS.md](../DECISIONS.md#adr-33-tracking-links). Its conversion-import half is draft ADR-51 below.
 
 **ADR-34: Local download helper**: accepted 2026-09-29; the text is only in [DECISIONS.md](../DECISIONS.md#adr-34-local-download-helper).
 
@@ -75,3 +65,9 @@ Consequences: The architecture reserves `funnel/` and the dashboard reserves a F
 **ADR-41: Moving to Postgres by writing to both stores, and posting per account**: accepted with S1, written into DECISIONS.md by card 002 on 2026-09-30; the text is only in [DECISIONS.md](../DECISIONS.md#adr-41-moving-to-postgres-by-writing-to-both-stores-and-posting-per-account).
 
 **ADR-42: Versioned categories, blueprints and accounts in the database**: accepted 2026-09-30; the text is only in [DECISIONS.md](../DECISIONS.md#adr-42-versioned-categories-blueprints-and-accounts-in-the-database).
+
+## ADR-51: Conversion import
+Date: 2026-10-01 · Status: Proposed (split from ADR-33 on 2026-10-01; build in S7)
+Context: ADR-33's tracking links count clicks; money per video and per account also needs the sales those clicks produced.
+Decision: Import conversions from programs with APIs (ClickBank, Hotmart) on a daily dispatcher task, and from CSV uploads otherwise (Skool, Amazon, TikTok Shop), matching each sale to a link by its sub-id. Store them in a `conversions` table with the program, amount, currency, time and sub-id.
+Consequences: Revenue per video and per account in the dashboard, which is the "scale the winners" loop; the per-program importers are maintained as the programs change.
