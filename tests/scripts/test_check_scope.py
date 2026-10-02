@@ -224,3 +224,44 @@ def test_coord_may_edit_scopes_toml_but_no_other_script(repo: Path) -> None:
     (repo / "scripts" / "check.sh").write_text("#!/bin/sh\n")
     problems, _ = run(repo, "coord/card-007")
     assert problems == ["scripts/check.sh: outside coord/'s scope"]
+
+
+def _merge_main_in_progress(repo: Path) -> None:
+    """The branch changed scripts/; main moved on with a src/ change and a log row; main is
+    merged into the branch but not committed."""
+    (repo / "scripts" / "check.sh").write_text("#!/bin/sh\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "branch work")
+    git(repo, "checkout", "-q", "main")
+    (repo / "src" / "app.py").write_text("x = 3\n")
+    (repo / LOG).write_text(BASE_LOG + "| 200 | 2026-09-30 | an S1 row | current | S1 |\n")
+    git(repo, "commit", "-qam", "main moves on")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(repo, "checkout", "-q", "x0/tooling")
+    git(repo, "merge", "-q", "--no-commit", "--no-ff", "main")
+
+
+def test_uncommitted_merge_of_main_passes(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _merge_main_in_progress(repo)
+    problems, summary = run(repo)
+    assert problems == []
+    assert "1 changed files" in summary
+    assert (
+        "merge in progress: checking against the merge base of HEAD, MERGE_HEAD and origin/main"
+        in capsys.readouterr().out
+    )
+
+
+def test_out_of_scope_edit_during_a_merge_still_fails(repo: Path) -> None:
+    _merge_main_in_progress(repo)
+    (repo / "src" / "app.py").write_text("x = 4\n")
+    (repo / LOG).write_text(
+        BASE_LOG
+        + "| 200 | 2026-09-30 | an S1 row | current | S1 |\n"
+        + "| 201 | 2026-09-30 | out of range | current | x0 |\n"
+    )
+    problems, _ = run(repo)
+    assert problems == [
+        "src/app.py: outside x0/'s scope",
+        f"{LOG}: row #201 is outside x0/'s range #380-#399",
+    ]

@@ -3,6 +3,8 @@
 The allowed paths per branch prefix live in scripts/scopes.toml. Changes are the working tree
 (committed, staged, unstaged and untracked files) against the merge base with `origin/main`, so
 the same check works in a session before the owner commits and in CI on the pull request.
+During an uncommitted merge (MERGE_HEAD exists), the base is the one the merge commit will have
+with `origin/main`, so the files the merge brings in from `main` don't count (card 013).
 
 The decision log (docs/studio/10-decision-log.md) is append-only on every branch: added rows must
 fall in the branch's number range, and an existing row may only change its status to
@@ -206,6 +208,23 @@ def _file_at(repo: Path, rev: str, path: str) -> str:
     return result.stdout if result.returncode == 0 else ""
 
 
+def merge_in_progress(repo: Path) -> bool:
+    merge_head = _git(repo, "rev-parse", "--git-path", "MERGE_HEAD").strip()
+    return (repo / merge_head).exists()
+
+
+def diff_base(repo: Path, base_ref: str) -> str:
+    """The commit to diff the working tree against: the merge base with `base_ref`, or during
+    a merge the merge base of `base_ref` with the merge of HEAD and MERGE_HEAD (git merge-base
+    treats its first argument apart from the rest)."""
+    if merge_in_progress(repo):
+        print(
+            f"merge in progress: checking against the merge base of HEAD, MERGE_HEAD and {base_ref}"
+        )
+        return _git(repo, "merge-base", base_ref, "HEAD", "MERGE_HEAD").strip()
+    return _git(repo, "merge-base", base_ref, "HEAD").strip()
+
+
 def check(repo: Path, branch: str, base_ref: str) -> tuple[list[str], str]:
     """(problems, summary) for `branch` in `repo` against `base_ref`."""
     if branch in EXEMPT_BRANCHES:
@@ -215,7 +234,7 @@ def check(repo: Path, branch: str, base_ref: str) -> tuple[list[str], str]:
     if scope is None:
         known = ", ".join(sorted(scopes))
         return [f"branch {branch!r} has no prefix in scripts/scopes.toml ({known})"], ""
-    base = _git(repo, "merge-base", base_ref, "HEAD").strip()
+    base = diff_base(repo, base_ref)
     files = changed_files(repo, base)
     problems = [
         f"{path}: outside {scope.prefix}'s scope" for path in files if not path_allowed(scope, path)
