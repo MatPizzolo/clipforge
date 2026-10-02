@@ -105,6 +105,7 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 - Every piece of work is a card in `docs/cards/` (template `docs/templates/card.md`). The owner starts a session with `Run card docs/cards/NNN-….md`. Sessions report into `docs/reports/`, never only in chat.
 - Sessions don't commit. The owner commits at checkpoints, pushes, opens a PR, and merges when CI is green (`docs/templates/checkpoint.md`).
 - Deploys: only with the owner's OK, from `main`, outside the blackout (§1). From card 001 on, only through `scripts/deploy.sh`.
+- The coordinator knows what's running before it reports or hands out a prompt: `ListAgents` (sessions named `clipforge-<stream>-xx`, busy or idle), `git worktree list` with each worktree's `git status --short`, `ps -eo pid,lstart,args | grep '[c]laude'` (shows `claude Run card …` and running Modal probes), and `gh pr list`. If it edits a card after that card's session has branched, it sends the change to the session with `SendMessage` and says so; the card file reaches `main` through a coord PR (2026-10-02).
 - Memory holds preferences and pointers only. Facts that change live in `STATUS.md` and the docs; the coordinator reviews memory at each pause.
 
 ### 3.2 How a card runs
