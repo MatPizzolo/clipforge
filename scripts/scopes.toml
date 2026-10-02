@@ -18,6 +18,11 @@ allow = [
     "tests/test_docs.py",
     "tests/scripts/**",
     ".github/workflows/**",
+    # card 017 (CI and repo hygiene): the PR template and dependabot, the scratch/ ignore,
+    # and the flaky test's fix if it lives only in the test
+    ".github/**",
+    ".gitignore",
+    "tests/test_service.py",
     "docs/ops/**",
     "docs/templates/**",
     "docs/cards/README.md",
@@ -241,4 +246,44 @@ allow = [
     "docs/studio/04-roadmap.md",
     "ROADMAP.md",
     "CLAUDE.md",
+]
+
+# Card 019 (S3 dashboard v1 plan, log #141): s3/'s range #420–#439 is full, so the plan gets its
+# own prefix with the same documents.
+[prefix."s3p/"]
+stream = "s3p"
+log = [610, 629]
+allow = [
+    "docs/superpowers/specs/*s3-dashboard*",
+    "docs/superpowers/plans/*s3-dashboard*",
+    "docs/design/dashboard/**",
+    "docs/studio/08-dashboard-and-operations.md",
+]
+
+# Card 020 (HK hook library, spec and plan; ADR-50): documents only; the build card widens this.
+[prefix."hk/"]
+stream = "hk"
+log = [550, 579]
+allow = [
+    "docs/superpowers/specs/*studio-hooks*",
+    "docs/superpowers/plans/*studio-hooks*",
+    "docs/studio/04-roadmap.md",
+    "docs/studio/05-proposed-adrs.md",
+    "docs/studio/08-dashboard-and-operations.md",
+]
+
+# Card 021 (S5 media servers and producer registry, spec and plan; ADR-30): documents only,
+# plus measurement probes in scratch/s5d/ (ignored once card 017 lands). Named `s5d/`, not `s5/`:
+# tests/scripts/test_check_scope.py appends a fake `s5/` prefix (card 017 renames it). The build
+# cards get their own prefixes (s5a/, …).
+[prefix."s5d/"]
+stream = "s5d"
+log = [580, 609]
+allow = [
+    "docs/superpowers/specs/*studio-s5*",
+    "docs/superpowers/plans/*studio-s5*",
+    "docs/studio/03-tools-and-models.md",
+    "docs/studio/04-roadmap.md",
+    "docs/studio/05-proposed-adrs.md",
+    "scratch/s5d/**",
 ]
