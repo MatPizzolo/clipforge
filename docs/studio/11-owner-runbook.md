@@ -4,7 +4,7 @@ Every step **you** do, in order, with the exact command. Sessions write code; yo
 
 Last updated: 2026-10-02. Status: ✅ done · ⏳ now · ⬜ later.
 
-Commands run from the project root (`~/code/clipForge`) unless they start with `cd web`.
+Commands run from the project root (`~/code/clipforge/main`; worktrees sit beside it as `~/code/clipforge/clipForge-<stream>`, layout A, 2026-10-02) unless they start with `cd web`.
 
 ## 0. Where secrets and settings go
 
@@ -143,7 +143,7 @@ scripts/worktree.sh --remove s1/finish   # after its PR is merged (refuses other
 By hand, if the script can't be used:
 
 ```
-cd ~/code/clipForge && git fetch origin
+cd ~/code/clipforge/main && git fetch origin
 git worktree add ../clipForge-x0 -b x0/tooling origin/main
 cp .env ../clipForge-x0/ && (cd ../clipForge-x0 && uv sync)
 # a web worktree also needs: cp web/.env.local ../clipForge-web/web/ && (cd ../clipForge-web/web && npm ci)
@@ -341,7 +341,7 @@ Order: the baseline now → pause every session → the pause commit and tag →
 
 **1. Gate the CI deploy job before the first push** (decision log #109). `ci.yml` deploys on every push to `main`, and the Actions secrets don't exist yet, so the first push would go red. S1 owns `ci.yml` (§3); this one-line edit is agreed with it:
 ```
-cd ~/code/clipForge
+cd ~/code/clipforge/main
 python3 - <<'PY2'
 import pathlib
 p = pathlib.Path(".github/workflows/ci.yml"); t = p.read_text()
@@ -356,7 +356,7 @@ grep -n "DEPLOY_ENABLED" .github/workflows/ci.yml
 
 **2. Create the repo and the baseline commit:**
 ```
-cd ~/code/clipForge
+cd ~/code/clipforge/main
 rm -rf scratch                                   # optional: X1's throwaway files (ignored anyway)
 gh --version && gh auth status                   # if needed: gh auth login (GitHub.com, HTTPS, browser)
 git init -b main
@@ -392,7 +392,7 @@ Send the coordinator the output of `git status`, `git log --oneline -1`, `git ls
 
 **5. At the pause** (after every session has reported and the coordinator's check is clean). First regenerate the dashboard's API contract, which S1's new routes made stale:
 ```
-cd ~/code/clipForge
+cd ~/code/clipforge/main
 uv run python scripts/export_openapi.py
 cd web && npm run gen && npm run gen:check && npm test && cd ..
 uv run python scripts/export_openapi.py --check          # must say "up to date"
