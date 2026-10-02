@@ -2,7 +2,7 @@
 
 The one page that says where things stand. The coordinator updates it after every merged PR and every report. Detail lives in the linked files; this page only summarizes, and closed items move out (their record is in `docs/reports/` and the decision log).
 
-Last updated: 2026-10-02 (cards 017–021 written for today's parallel wave, log #141; card 011 merged, PR #27: ADR-27 and ADR-33 accepted, S2 build cards 014–016 written; cards 002 + 006 + tzdata deployed; Dict-only restart at 03:14 UTC; card 013 merged; 012 running).
+Last updated: 2026-10-02 evening (cards 010 checkpoint A (PR #31) and 012 (PR #28, #33) merged; repo moved to `~/code/clipforge/main`, layout A; cards 017–021 ready to start, log #141).
 
 ## Now
 
@@ -18,7 +18,7 @@ Last updated: 2026-10-02 (cards 017–021 written for today's parallel wave, log
 
 **Decided today (card 009):** the dashboard is the studio's control room, inbox-first, for a ~20-minute daily phone check-in. Each account runs on autopilot as far as it has earned: three switches and a review dial, a graduation ladder where promotions are always the owner's tap (ADR-48). A new producer version opens only a 5-item review window (ADR-49). Hooks get a versioned library with rotation (ADR-50). founder.tapes and hombre.en.construccion launch with S2, which is now the next big step after S1's rollout.
 
-**Open PRs:** #28 (card 012, X4 checkpoint A; merges after checkpoint B) · card 010 checkpoint A: to commit.
+**Open PRs:** none. Card 010's live steps (checkpoint B) start after 22:00 New York time.
 
 ## Waiting on the owner (most important first)
 
@@ -40,20 +40,19 @@ Last updated: 2026-10-02 (cards 017–021 written for today's parallel wave, log
 |---|---|---|---|
 | [010](docs/cards/010-s1-rollout.md) | S1 rollout (Task 22) with the owner: two small fixes, then runbook §4c step by step, then evidence | **ready**: clean night and slot sends on 2026-10-02 (O5 ✅); start checkpoint A now, the live steps outside a blackout | — |
 | [020](docs/cards/020-hk-hooks-design.md) | HK: the hook library (ADR-50), spec and plan (no code) | **now** (its build after the rollout, migration after 014's) | 010 (don't touch production), 017, 018, 019, 021 |
-| [012](docs/cards/012-x4-visuals-music.md) | X4 spike: stills, b-roll, music beds ($15 cap); feeds S5 → S6 | **running** (`../clipForge-x4`) | 010 |
 | [014](docs/cards/014-s2a-dispatch-gate.md) | S2a: rails (migration 0002, the dispatcher, the brake, autopilot on Hands-on, the gate log-only, routing; plan Tasks 1–8) | after card 010 is fully done: step 7 (`STATE_READS=postgres`) verified, `posting verify` at 0, `db_doctor` schedule copies, Neon head `0001` | hooks, S3 (one migration at a time) |
 | [015](docs/cards/015-s2b-publishing.md) | S2b: Upload-Post for realtalk on Hands-on (R5's real call first; plan Tasks 9–20) | after 014 is deployed and one clean day; Basic bought for R5; the deploy needs the profile, webhook and both secrets | S3 |
 | [016](docs/cards/016-s2c-ladder-launch.md) | S2c: ladder, digest, failure rows, tracking links; founder.tapes and hombre launch (plan Tasks 21–26) | after 015 is deployed and a day on Hands-on with verify 0; O3, one permitted source each, two more profiles | S3 |
 | [019](docs/cards/019-s3-dashboard-plan.md) | S3: dashboard v1, the spec delta after S2's plan and the build plan (no code; branch `s3p/plan`) | **now** (its build after the rollout and 014; online after 004) | 010 (don't touch production), 017, 018, 020, 021 |
 | [018](docs/cards/018-s3c-plan.md) | S3c: spec revised (S3 dashboard spec §10.3, ADR-48, ADR-50, migration order), then the plan (no code) | **now** (its build after the rollout and S3's `admin` endpoint) | 010 (don't touch production), 017, 019, 020, 021 |
 | [017](docs/cards/017-x0-ci-speed.md) | X0: one CI run per commit, docs-only fast path, caches, timeouts, xdist measured, the flaky service test, PR template, dependabot, `scratch/` | **now** | 010 (no deploy or secrets), 018–021 |
-| [021](docs/cards/021-s5-media-design.md) | S5: media servers and producer registry, spec and plan (no code; up to $5 of measurement) | after PR #33 (card 012) merges | 010 (don't touch production), 017–020 |
+| [021](docs/cards/021-s5-media-design.md) | S5: media servers and producer registry, spec and plan (no code; up to $5 of measurement) | **now** (card 012 merged) | 010 (don't touch production), 017–020 |
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps | any |
 | [005](docs/cards/005-x2-resume.md) | X2 talking-head spike, resume | after O7 is ruled | any |
 
 Migration-writing cards (S2, hooks, S3c) take migrations in landing order, one at a time (S3 dashboard spec §8.7). Cards 017–021 run in parallel today while card 010 waits for its 22:00 New York window: none deploys, touches `clipforge-secrets` or runs Alembic, and their plans number migrations at landing (S2a's 0002 first, then hooks, then S3c; log #141).
 
-Done: [001](docs/cards/001-x0-tooling.md) X0 tooling (PR #3) · [002](docs/cards/002-s1-finish.md) S1 code (PR #5) · [003](docs/cards/003-s3c-revision.md) S3c design (PR #6) · [006](docs/cards/006-s4-timeline.md) S4 Timeline renderer (PR #13) · [007](docs/cards/007-cleanup-docs.md) docs refresh (PR #11) · [008](docs/cards/008-x0-followups.md) X0 follow-ups (PR #14) · [009](docs/cards/009-s3-dashboard-design.md) dashboard design (PR #20) · [011](docs/cards/011-s2-design.md) S2 design and plan (PR #27) · [013](docs/cards/013-x0-small-fixes.md) X0 merge-aware scope check (PR #26). Full list: [docs/cards/](docs/cards/README.md).
+Done: [001](docs/cards/001-x0-tooling.md) X0 tooling (PR #3) · [002](docs/cards/002-s1-finish.md) S1 code (PR #5) · [003](docs/cards/003-s3c-revision.md) S3c design (PR #6) · [006](docs/cards/006-s4-timeline.md) S4 Timeline renderer (PR #13) · [007](docs/cards/007-cleanup-docs.md) docs refresh (PR #11) · [008](docs/cards/008-x0-followups.md) X0 follow-ups (PR #14) · [009](docs/cards/009-s3-dashboard-design.md) dashboard design (PR #20) · [011](docs/cards/011-s2-design.md) S2 design and plan (PR #27) · [012](docs/cards/012-x4-visuals-music.md) X4 visuals and music spike (PR #28, #33) · [013](docs/cards/013-x0-small-fixes.md) X0 merge-aware scope check (PR #26). Full list: [docs/cards/](docs/cards/README.md).
 
 ## Workstreams
 

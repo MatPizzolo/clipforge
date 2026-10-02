@@ -1,6 +1,6 @@
 # Card 012: X4 — visuals and music spike
 
-Status: proposed
+Status: done 2026-10-02 (PR #28, #33)
 Stream: X4 · Branch: `x4/visuals-music` · Worktree: `../clipForge-x4` (created with `scripts/worktree.sh x4/visuals-music`)
 Decision-log range: #470–#479 (append only, in this range)
 Model: most capable
