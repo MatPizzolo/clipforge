@@ -8,7 +8,7 @@ Every decision the owner has made about ClipForge and the studio, in date order,
 
 Status: `current`, `superseded` (by entry N), `open` (waiting for the owner).
 
-Last updated: 2026-09-30.
+Last updated: 2026-10-02.
 
 ## Platform and architecture
 
@@ -237,6 +237,7 @@ Last updated: 2026-09-30.
 | 134 | 2026-10-01 | Owner accepts card 009's design (PR #20): ADR-48 (autopilot per account), ADR-49 (producer-version review window) and ADR-50 (hook library outside the account setup) are in `docs/DECISIONS.md`; 08 §2c is accepted and wins over §2/§2b where they differ; 04 and 06 carry the follow-ups (S2 grows, HK added before S6, caps in `create_job`, the dispatcher with S2) | current | owner; card 009; S3 dashboard spec |
 | 135 | 2026-10-01 | S1's rollout creates only realtalk.clipsdaily; founder.tapes and hombre.en.construccion are created just before S2 (ADR-48: they launch on S2's flow). O3 moves from rollout blocker to S2 prerequisite, so the rollout needs only O5 | current | owner; coordinator |
 | 136 | 2026-10-01 | O5 closed: the owner has Billy Garton Jr.'s permission facts and enters them at rollout step 4 (`clipforge source edit billy-garton`). The facts and the evidence link live only in the database, never in the repo, reports or chat. The rollout is card 010 | current | owner; coordinator |
+| 137 | 2026-10-02 | Production deploy of cards 002 + 006 + tzdata (`dea435d`, tag `deploy-20261002-0210`): `posting_daily` replaces `posting_keepalive`, ops alerts are live, render is v4 on the Timeline with two-pass loudness, every image has time-zone data. Still Dict-only (no `DATABASE_URL`); the rollout is card 010 | current | owner; `docs/ops/deploys.md` |
 | 403 | 2026-10-01 | With the git repo (#123), each session works on its card's branch in its own worktree (`scripts/worktree.sh`). A checkpoint is a commit the owner makes from the session's suggested message, reviewed in the branch's PR. Sessions still never run git writes; the hooks block them. Replaces the no-git workflow of #81 and #112 | current | `CLAUDE.md` Sessions; runbook §3; card 007 |
 
 ## Open

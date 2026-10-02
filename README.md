@@ -23,7 +23,7 @@ Everything runs serverless on [Modal](https://modal.com), with a Next.js dashboa
 
 | Step | What happens | Where it stands |
 |---|---|---|
-| **Produce** | A producer turns a source or a brief into a `ContentItem`: the video, per-platform copy, credits, licenses, AI and sponsorship flags, cost. Every producer describes its video as a `Timeline`, and one renderer turns any Timeline into the final mp4 (captions, -14 LUFS, under 50 MB). | The clip producer is live. The Timeline renderer is being built (S4). The other producers are planned. |
+| **Produce** | A producer turns a source or a brief into a `ContentItem`: the video, per-platform copy, credits, licenses, AI and sponsorship flags, cost. Every producer describes its video as a `Timeline`, and one renderer turns any Timeline into the final mp4 (captions, -14 LUFS, under 50 MB). | The clip producer is live, on the Timeline renderer (S4). The other producers are planned. |
 | **Review** | A pure policy gate checks every item (disclosure, #ad, credits, licenses, banned claims). Then the account's review tier decides: approve every item, spot-check about 10%, or post automatically. A new account, format or producer version always starts in full review. | Planned (S2). Today every clip is checked by hand on the phone. |
 | **Publish** | Each item goes to every platform the account has enabled, at the account's posting slots, through a posting API (Upload-Post), with the AI labels each platform requires. | Today: the Telegram posting assistant sends each clip to the owner's phone at its slot, and the owner posts it by hand. API publishing is S2. |
 | **Measure** | Daily analytics per post and account, tracked links for clicks and sales, cost per item and per account, and progress toward each platform's payout program. | Cost is logged per job today. The rest is planned (S7). |
@@ -51,7 +51,7 @@ Today's accounts and the planned launch waves: [docs/studio/09-account-registry.
 
 | Built and in use | Built, not live yet | In progress | Planned |
 |---|---|---|---|
-| The clip producer · batch clipping by channel · the Telegram posting assistant (one clip per slot, ✅ per platform) · cost logging per job | Postgres for accounts, sources, the posting queue and job records (S1; rollout pending) · accounts from blueprints · ops alerts · the dashboard shell (S3a; Vercel deploy pending) | The Timeline renderer (S4) | Review tiers and API publishing (S2) · the dashboard (S3) and per-account workspaces with experiments (S3c) · media servers (S5) · the story, avatar, band, dub and model producers (S6, S8–S10, S13) · analytics, money and budgets (S7) |
+| The clip producer, on the Timeline renderer (S4) · batch clipping by channel · the Telegram posting assistant (one clip per slot, ✅ per platform) · ops alerts to the phone · cost logging per job | Postgres for accounts, sources, the posting queue and job records (S1; rollout: card 010) · accounts from blueprints · the dashboard shell (S3a; Vercel deploy pending) | S2 design (card 011) · the visuals and music spike (card 012) | Review tiers and API publishing (S2) · the dashboard (S3) and per-account workspaces with experiments (S3c) · media servers (S5) · the story, avatar, band, dub and model producers (S6, S8–S10, S13) · analytics, money and budgets (S7) |
 
 Week-to-week progress: [STATUS.md](STATUS.md). The build order: [ROADMAP.md](ROADMAP.md) and [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md).
 

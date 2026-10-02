@@ -91,7 +91,7 @@ blueprints/         # account blueprints (ADR-35), mounted into the images
 tests/              # mirrors src/ layout; fixtures in tests/fixtures/
 web/                # Next.js dashboard (S3a): a client of the job API
 scripts/            # check.sh (the gate), deploy.sh, worktree.sh, scopes.toml
-docs/               # architecture, ADRs, studio plan, cards, reports, templates
+docs/               # architecture, usage, ADRs, studio plan, cards, reports, ops, design, templates
 ```
 
 `evals/` (eval sets and results) is planned, not built (ROADMAP Phase 5).
