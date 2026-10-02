@@ -1,6 +1,6 @@
 # Card 006: S4 — Timeline renderer
 
-Status: sent 2026-10-01 (PR #13)
+Status: done 2026-10-01 (report: docs/reports/006-s4-2026-10-01.md; PR #13)
 Stream: S4 · Branch: `s4/timeline` · Worktree: `../clipForge-s4`
 Decision-log range: #340–#379
 Model: most capable for the design, mid-tier for the build
