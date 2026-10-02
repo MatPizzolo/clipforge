@@ -74,23 +74,31 @@ The code for the open items below is built (card 002, PR #5) and deployed Dict-o
 - **Exit:** everything from S0 works the same, but state lives in Postgres and any number of accounts can be defined.
 
 ## S2: Publishing: Upload-Post, review tiers, policy gate
-Design and plan: **card 011** (running). The build is a later card, after the rollout.
+Design and plan: **card 011**, done 2026-10-02 (PR #27): the spec `docs/superpowers/specs/2026-10-01-studio-s2-design.md` and the plan `docs/superpowers/plans/2026-10-02-studio-s2.md`. The build is three cards, each one PR or more and deployable alone: **014** (S2a), **015** (S2b) and **016** (S2c), after card 010's rollout. ADR-27 (the dispatcher) and ADR-33 (tracking links) are accepted.
+
+**S2a: rails** (card 014, plan Tasks 1–8; the assisted flow is unchanged):
+- [ ] Migrations follow the landing-order rule (S3 dashboard spec §8.7): migration 0002 also carries `jobs.error`, the `post_events.actor` column (backfilled from `data.actor`) and the pause actor on `posting_state`.
+- [ ] One dispatcher cron (ADR-27) replaces `posting_tick`; it runs the alert fold now, and the slot phases and the 09:00 digest as S2b and S2c add them (S3 dashboard spec §8.1); `sweeper` and `posting_daily` stay: 3 crons.
+- [ ] The brake (`/pause`) survives a Neon outage: a Dict key checked by every tick and publish. Its scope: `/pause <account>` and `/pause all` as one Dict key with a scope (`brake:<scope>`).
+- [ ] Autopilot (ADR-48), first part: the `autopilot` table with its append-only change history (one writer, `accounts/autopilot.py`), the Publish switch and presets; every account starts Hands-on. `clipforge autopilot show|set|preset`.
+- [ ] Policy gate v1, pure checks only: disclosure flags, #ad, credits, license manifest, cross-account duplicates. (The banned-claims check comes with the Judge in S6: clips make no product claims.) Log-only behind `GATE_ENFORCE=off` until S2b's `clipforge policy dry-run` reports 0 items held (#461).
+- [ ] Routing and review windows: the first 10 items after a format change, the first 5 per account after a `producer_version` change (ADR-49), the first 10 dubs in a pair (read by S10).
+
+**S2b: Upload-Post for realtalk on Hands-on** (card 015, plan Tasks 9–20). Its build starts after one real Upload-Post call confirms the idempotency-key retention, Basic's rate limit and how soon a scheduled upload is visible (R5, plan Task 9, #458):
 - [ ] `Publisher` protocol, with `UploadPostPublisher` (primary) and `AssistedPublisher` (today's Telegram flow).
 - [ ] Media for Upload-Post: a signed, expiring per-file link from the Volume (ADR-13's mechanism). R2 only if that proves unreliable, or when the dashboard needs it (S3).
 - [ ] Signed webhook route updates `posts`. Per-platform AI-disclosure mapping.
-- [ ] Review tiers per account (`review`, `sample`, `auto`). Batch review in the dashboard; Telegram review cards (✅ / 🗑 / Open) only for items due within 2 h; copy fixes only in the dashboard (ADR-44).
-- [ ] Notification policy and the 09:00 digest, quiet hours 23:00–08:00, deduped alerts (ADR-45).
-- [ ] The brake (`/pause`) survives a Neon outage (a Dict key checked by every tick and publish) and cancels posts already scheduled at Upload-Post.
-- [ ] One claim per (item, platform), so the AssistedPublisher fallback and Upload-Post can never both publish the same item; the fallback runs only after Upload-Post's final failure.
-- [ ] Policy gate v1, pure checks only: disclosure flags, #ad, credits, license manifest, cross-account duplicates. (The banned-claims check comes with the Judge in S6: clips make no product claims.)
-- [ ] Tracking links: `GET /go/<slug>`, click logging, and sub-ids per item and platform.
-- [ ] Autopilot (ADR-48): the `autopilot` table with its append-only change history (one writer, `accounts/autopilot.py`), the Review dial and the Publish switch per account, presets, the graduation ladder (suggest; the owner taps), automatic demotions, the spot-check floor (at least 1 in 10 and 3 a week).
-- [ ] Review windows: the first 10 items after a format change, the first 5 per account after a `producer_version` change (ADR-49), the first 10 dubs in a pair (read by S10).
-- [ ] The brake's scope: `/pause <account>` and `/pause all` as one Dict key with a scope (the item above).
+- [ ] One claim per (item, platform), so the AssistedPublisher fallback and Upload-Post can never both publish the same item; the fallback runs only after Upload-Post's final failure. Reconcile and crash recovery (no re-send until R5 allows it).
+- [ ] The slot plan and hand-off 30 minutes before the slot; the brake cancels posts already scheduled at Upload-Post.
+- [ ] Review tiers per account (`review`, `sample`, `auto`). Batch review in the dashboard; Telegram review cards (✅ / 🗑 / Open) only for items due within 2 h; copy fixes only in the dashboard (ADR-44). Until S3's Review page ships, a bridge: a 09:00 morning batch of review cards behind `REVIEW_BATCH`, exempt from the hourly cap and paced (R1, #442, #453).
 - [ ] Telegram one-tap only for review items due within 2 h (approve or reject) and the brake (#427); every other message carries Open → `/act/<kind>/<id>`.
-- [ ] Publishing-failure rows (`publish_failed`, `publisher_disconnected`, `strike` where Upload-Post reports it) as instant alerts and "needs me" rows.
-- [ ] One dispatcher cron (ADR-27, accepted with this card) replaces `posting_tick` and runs the 09:00 digest and the alert fold (S3 dashboard spec §8.1); `sweeper` and `posting_daily` stay: 3 crons.
-- [ ] Migrations follow the landing-order rule (S3 dashboard spec §8.7): the first new migration also carries `jobs.error`, the `post_events.actor` column and the pause actor.
+
+**S2c: the rest of autopilot, and the launches** (card 016, plan Tasks 21–26; waits on O3):
+- [ ] Autopilot, second part: the Review dial (`sample` and `auto` end to end), the graduation ladder (suggest; the owner taps, by CLI until S3), automatic demotions, the spot-check floor (at least 1 in 10 and 3 a week). Strikes are entered by hand (`clipforge autopilot strike` in S2, S3's form later): Upload-Post documents no strike event (#450).
+- [ ] Notification policy and the 09:00 digest, quiet hours 23:00–08:00, deduped alerts (ADR-45). Planning and the digest run in the owner's time zone (#455).
+- [ ] Publishing-failure rows (`publish_failed`, `publisher_disconnected`, `strike` entered by hand) as instant alerts and "needs me" rows.
+- [ ] Tracking links (ADR-33): `GET /go/<slug>`, click logging, and sub-ids per item and platform.
+- [ ] founder.tapes and hombre.en.construccion created (O3), with one permitted source each and their own Upload-Post profiles, starting Hands-on.
 - **Exit:** realtalk.clipsdaily auto-posts to 4 platforms from its profile on its rung; founder.tapes and hombre.en.construccion are created just before S2 (O3) and start Hands-on on S2's flow; every post and click is recorded.
 
 ## S3a: Dashboard shell (built; the Vercel deploy is card 004)
@@ -168,7 +176,7 @@ Its card is written after the rollout.
 ## S7: Analytics and money
 - [ ] Daily pull (Upload-Post analytics, plus YouTube Analytics where connected) into metrics tables.
 - [ ] `programs` table (YPP, TikTok Rewards, Facebook CMP, Skool, …) with editable thresholds. Progress per account.
-- [ ] Conversion import: ClickBank and Hotmart APIs, CSV upload for Skool, Amazon and TikTok Shop.
+- [ ] Conversion import (draft ADR-51): ClickBank and Hotmart APIs, CSV upload for Skool, Amazon and TikTok Shop.
 - [ ] Dashboard: stats, monetization progress, revenue vs cost per account, winners.
 - [ ] Spend reporting per account and stage, and budget burn-down (the hard caps are enforced in `create_job` from the first automatic job creator, ADR-48). Sentry wired in.
 - [ ] The analytics pull, program progress and view-collapse checks run as dispatcher tasks (the dispatcher arrives with S2, ADR-27). Hook ranking adds the 3-second hold and views at 24 h (ADR-50).

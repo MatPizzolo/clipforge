@@ -1,6 +1,6 @@
 # Card 011: S2 — publishing and autopilot, design and plan
 
-Status: proposed
+Status: done 2026-10-02 (report: docs/reports/011-s2-2026-10-01.md; PR #27)
 Stream: S2 · Branch: `s2/design` · Worktree: `../clipForge-s2` (created with `scripts/worktree.sh s2/design`)
 Decision-log range: #440–#469 (append only, in this range)
 Model: most capable (the next production-facing system; design and plan, no code)

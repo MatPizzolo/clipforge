@@ -62,10 +62,10 @@ Each phase ends with something usable. Tick items as they land; one item ≈ one
 - [ ] Ranker trained on 👍/👎 and, later, platform retention data
 
 ## Phase 6 — Studio (multi-account)
-Full list with exit criteria, dependencies and action cards: [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md) (cards in [06](docs/studio/06-session-prompts.md)). Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28–31, 34, 35, 38, 39; on 2026-09-30: ADR-41–46; on 2026-10-01: ADR-47 to ADR-50. **docs/studio/04 is the source of truth for Phase 6**; this list mirrors it.
+Full list with exit criteria, dependencies and action cards: [docs/studio/04-roadmap.md](docs/studio/04-roadmap.md) (cards in [06](docs/studio/06-session-prompts.md)). Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28–31, 34, 35, 38, 39; on 2026-09-30: ADR-41–46; on 2026-10-01: ADR-47 to ADR-50; on 2026-10-02: ADR-27 (the dispatcher) and ADR-33 (tracking links). **docs/studio/04 is the source of truth for Phase 6**; this list mirrors it.
 - [ ] S0: plan C finished and plans A+B+C deployed (2026-09-29); only the 7-day background check is open
 - [ ] S1: Neon Postgres, accounts, content items, blueprints; queue and job records move off the Dict (code built, card 002; ticked at the rollout)
-- [ ] S2: publishing through Upload-Post, the autopilot model (ADR-48; review dial, windows, ladder), the dispatcher, pure policy gate, tracking links; founder.tapes and hombre.en.construccion launch on it
+- [ ] S2: publishing through Upload-Post, the autopilot model (ADR-48; review dial, windows, ladder), the dispatcher, pure policy gate, tracking links; founder.tapes and hombre.en.construccion launch on it (designed in card 011; built in three cards: S2a rails, card 014; S2b Upload-Post, card 015; S2c autopilot and launches, card 016)
 - [ ] S3a: dashboard shell (`web/`, login, Home over today's API): the shell is built; the Vercel deploy is card 004
 - [ ] S3: Next.js dashboard v1 (separate `admin` Modal endpoint; after S1, alongside S2)
 - [ ] S3b: Notion one-way mirror (connector, no code)

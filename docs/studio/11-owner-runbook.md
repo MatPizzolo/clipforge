@@ -2,7 +2,7 @@
 
 Every step **you** do, in order, with the exact command. Sessions write code; you hold the keys, create the accounts, approve deploys, and do git. Each step says where its values go.
 
-Last updated: 2026-10-01. Status: ✅ done · ⏳ now · ⬜ later.
+Last updated: 2026-10-02. Status: ✅ done · ⏳ now · ⬜ later.
 
 Commands run from the project root (`~/code/clipForge`) unless they start with `cd web`.
 
@@ -59,6 +59,8 @@ Add `STATE_READS=dict` to `clipforge-secrets` too (dashboard edit), so both plac
 
 ## 2. Every day (until S2 publishes automatically)
 
+**From S2b, for accounts on Upload-Post** (a connected profile and Publish on): the 09:00 digest and the review cards that follow it replace answering the clip at each slot. Approve or reject each card (✅ Approve · 🗑 Reject + reason); an approved item goes to Upload-Post 30 minutes before its slot. Anything still undecided gets one more card 2 h before its slot. Accounts on the assisted path (Publish off, or no profile yet) keep the clip-at-the-slot flow below.
+
 | To | Do |
 |---|---|
 | See the queue | `/status` in Telegram, `uv run clipforge status`, or the dashboard's Home |
@@ -66,12 +68,18 @@ Add `STATE_READS=dict` to `clipforge-secrets` too (dashboard edit), so both plac
 | Record a post | Tap ✅ TikTok / Instagram / YouTube under the clip (tap again to undo) |
 | Skip a clip for 24 h | ⏭ Skip (the next clip arrives right away) |
 | Drop a clip | 🗑 Reject, then pick a reason |
-| Stop or restart the slots | `/pause`, `/go` |
+| Stop or restart the slots | `/pause`, `/go`; from S2a also `/pause <account>`, `/pause all`, `/go <account>`, `/go all` (§2a) |
 | Add a new episode | Put the file in `videos/<channel>/` and run `uv run clipforge clip`. Add `--fetch` to also download the clips into `videos/out/` |
 | Check one job | `uv run clipforge status <job_id>` |
 | Continue a failed job | `uv run clipforge resume <job_id>` |
 | Queue finished jobs again | `uv run clipforge status --rebuild` (safe to repeat) |
 | Recover posting state after an outage | `uv run clipforge status --restore` (newest snapshot) or `--restore YYYY-MM-DD`, then check `/status`. Restore never brings back a pause. It also clears the outage flag (below) |
+| See or change an account's autopilot (from S2a) | `uv run clipforge autopilot show <account>`; `uv run clipforge autopilot set <account> <field> <value> --reason "<why>"` or `uv run clipforge autopilot preset <account> hands_on --reason "<why>"` |
+| Promote an account the digest says is ready (from S2c) | `uv run clipforge autopilot promote <account>` (until S3's one tap) |
+| Record a strike or takedown (from S2c) | `uv run clipforge autopilot strike <account> …`: Upload-Post sends no strike event, so you enter it; the account is demoted automatically |
+| Check the gate before turning it on (from S2a) | `uv run clipforge policy dry-run` ("0 items would be held" before `GATE_ENFORCE=on`) |
+| Connect or disconnect an account's Upload-Post profile (from S2b) | `uv run clipforge account edit <account> --publisher-profile <profile> --facebook-page-id <id>`, then `uv run clipforge publisher check <account>` (read-only). Back to assisted: `uv run clipforge account edit <account> --clear-publisher` |
+| Make a tracked bio or affiliate link (from S2c) | `uv run clipforge link add <account> <url> --kind bio` (prints the `/go/<slug>` link), `uv run clipforge link list <account>` |
 
 **Posting after an outage** (the `posting:outage` flag, log #217). If the newest posting snapshot is more than 2 days old when `posting_daily` runs (07:00 UTC), it sets the flag to that snapshot's date. Expired Dict keys could then make a clip go out twice, so while the flag is set:
 - the slots send nothing, for every account, and `posting_daily` skips its rebuild;
@@ -86,6 +94,13 @@ uv run clipforge status --restore <date from the alert>
 
 **After S1 is deployed**, `channels.toml` is no longer read. Sources are managed with `clipforge source` (§4), and `videos/<source-id>/` is the only local mapping.
 
+## 2a. The brake (from S2a)
+
+- **`/pause <account>`** stops one account; **`/pause all`** (or `/pause` alone) stops every account. **`/go <account>`** and **`/go all`** restart. `/go <account>` while `/pause all` is on says "still braked by /pause all; send /go all to resume".
+- **What a brake stops:** every dispatcher phase for that scope (no plan, no review card, no hand-off, no assisted clip). From S2b it also **cancels posts already scheduled at Upload-Post** for that scope; the reply counts them ("Paused realtalk-clips-en: 1 scheduled post cancelled, 0 already out"). `/go` puts cancelled items back: they lead the next plan, and a slot whose time has passed is missed.
+- **"Recorded in the brake only":** the reply when Neon is down. The brake lives first in a Dict key (`brake:<scope>`), which works without the database; the database copy (`posting_state`) is written later, and `posting_daily` repairs any difference (the newer one wins).
+- **How to check:** `/status` in Telegram or `uv run clipforge status` shows which scopes are braked; `uv run clipforge autopilot show <account>` shows the account's state.
+
 ## 3. Sessions and hand-off
 
 From the 2026-09-30 pause on, work runs as **cards → worktree branches → pull requests**. A new coordinator starts here, from `main` (the pause is the tag `pause-2026-09-30`), and needs nothing else.
@@ -94,7 +109,7 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 
 1. `STATUS.md`: what's running now (production, open PRs), what waits on the owner, the next cards, every workstream, and the open follow-ups.
 2. `docs/cards/README.md` and the cards it lists; `docs/templates/` (card, report, stop card, checkpoint).
-3. `CLAUDE.md` (project rules 1–9), `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (accepted ADRs are binding; ADR-41 to ADR-50 accepted on 2026-09-30 and 2026-10-01).
+3. `CLAUDE.md` (project rules 1–9), `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` (accepted ADRs are binding; ADR-41 to ADR-50 accepted on 2026-09-30 and 2026-10-01, ADR-27 and ADR-33 on 2026-10-02).
 4. `docs/studio/10-decision-log.md` (every owner decision and the Open table), `docs/studio/04-roadmap.md` (the Phase 6 source of truth), `docs/studio/08-dashboard-and-operations.md` §2 and §2b, `docs/studio/09-account-registry.md`, `docs/ops/secrets.md`.
 5. The rest of this runbook: the owner's steps and commands.
 
@@ -116,7 +131,7 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 4. CI runs `scripts/check.sh` and the scope check (`scripts/scopes.toml`) on the PR. The owner squash-merges when it's green, with the card number in the title.
 5. The coordinator reviews the PR with the `review-pr` skill (`gh pr view`/`gh pr diff`, the card and report, then the `pr-reviewer` agent), gives a verdict, and after the merge updates `STATUS.md` and the card's status line. It writes the next card with the `write-card` skill.
 
-Decision-log number ranges per branch prefix are in each card and in `scripts/scopes.toml` (`coord/` #1–199, S1 #200–249, S3c #250–299, S3a #300–319, X2 #320–339, S4 #340–379, X0 #380–399, cleanup #400–419, S3 #420–439, S2 #440–469, X4 #470–479). A conflict in `docs/studio/10` is two blocks added at the end: keep both, in number order; gaps are fine.
+Decision-log number ranges per branch prefix are in each card and in `scripts/scopes.toml` (`coord/` #1–199, S1 #200–249, S3c #250–299, S3a #300–319, X2 #320–339, S4 #340–379, X0 #380–399, cleanup #400–419, S3 #420–439, S2 design #440–469, X4 #470–479, S2a #480–499, S2b #500–529, S2c #530–549). A conflict in `docs/studio/10` is two blocks added at the end: keep both, in number order; gaps are fine.
 
 ### 3.3 Worktrees
 
@@ -139,7 +154,7 @@ git worktree remove ../clipForge-x0     # after its branch is merged
 
 - `docs/studio/10`: append only, in the branch's range; re-read before editing; superseded rows get `superseded by N`.
 - `docs/studio/04` is the Phase 6 source of truth; `ROADMAP.md` mirrors it and is ticked in the same change.
-- ADRs: accepted ones only in `docs/DECISIONS.md`. 05 holds the drafts and the next free number (ADR-51). ADR-41 (S1) and ADR-42 (S3c) are accepted and live in `docs/DECISIONS.md`.
+- ADRs: accepted ones only in `docs/DECISIONS.md`. 05 holds the drafts and the next free number (ADR-52). ADR-41 (S1), ADR-42 (S3c), and ADR-27 and ADR-33 (S2) are accepted and live in `docs/DECISIONS.md`.
 - `STATUS.md`: the coordinator's; sessions don't edit it except S1's plan-status line if its card says so.
 - Specs and plans are marked historical after their build (`docs/superpowers/README.md`).
 
@@ -276,12 +291,42 @@ uv run python scripts/export_openapi.py --check
 
 ## 6. S2: publishing ⬜ (prepare now, because warm-up takes days)
 
+The build is three cards: 014 (S2a, rails), 015 (S2b, Upload-Post for realtalk) and 016 (S2c, autopilot and the two launches). Every deploy: `scripts/deploy.sh --dry-run` first, then the deploy outside the blackout (§1). New secrets: add **only** the new keys in the Modal dashboard (§0), never `modal secret create --force`; then add them to `.env`.
+
+**Prepare now:**
 1. Create the TikTok, Instagram (a Professional account linked to a Facebook Page), YouTube and Facebook accounts for founder.tapes and hombre.en.construccion, with the handles from O3. Use them normally for 3–5 days; no fake engagement. Record the handles in `docs/studio/09-account-registry.md`.
-2. Get source permissions for them: a creator agreement, or a Whop account for campaigns.
-3. **Upload-Post:**
-   - buy a paid plan (Free has no TikTok): Basic, $24 for 5 profiles;
-   - connect every account on all four platforms, and set the TikTok accounts to public;
-   - the S2 session gives the exact secret names. The expected ones are `UPLOAD_POST_API_KEY`, and a webhook secret created when you first save the webhook URL. Both go in `clipforge-secrets` and `.env`.
+2. Get source permissions for them: one permitted source each (a creator agreement), or a Whop account only if a campaign source is planned.
+
+**S2a (card 014), after card 010's rollout** (`STATE_READS=postgres` verified, `posting verify` at 0, `db_doctor` showing a schedule copy for every account, Neon's head at `0001`):
+1. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "S2a: dispatcher replaces posting_tick"`, outside the posting slots. CI runs migration 0002 before the deploy.
+2. `uv run modal run src/clipforge/app.py::db_doctor`: the head is `0002`.
+3. For one day: the `dispatcher:` log lines show the same sends as the previous day's `posting_tick:` lines, and `uv run clipforge posting verify` reports 0 differences.
+4. In Telegram: `/pause realtalk-clips-en`, `/go realtalk-clips-en`, `/pause all`, `/go all`. Then `uv run clipforge autopilot show realtalk-clips-en`: Hands-on, "Publish: on, waiting for a connected profile".
+5. `uv run clipforge policy dry-run` (the gate is still log-only). Note the count for S2b.
+
+**Before S2b's code (card 015, plan Task 9, R5):**
+1. Buy Upload-Post **Basic** (monthly; $24 for 5 profiles; Free has no TikTok). Upgrade to Professional ($50, 25 profiles) when the 6th account is created (O4, #440).
+2. Create a **test** profile `s2-probe` and connect one test TikTok (or YouTube) account. Put `UPLOAD_POST_API_KEY` (from Upload-Post's dashboard) in `.env` only.
+3. Run the probe with the session (`uv run python scratch/s2/r5_probe.py`), again after 10 minutes and after 24 h. Its post is scheduled 2 or more days out and cancelled, so nothing is published. The session writes the results in its report; read them before it goes on.
+
+**S2b (card 015) deploy:**
+1. In Upload-Post: create the profile `realtalk-clips-en` and connect TikTok (allow public posts), Instagram (Professional, linked to the Page), YouTube and Facebook. Note the Facebook Page id.
+2. Register the webhook URL `<API_URL>/webhooks/upload-post` for `upload_completed`, `social_account_disconnected`, `social_account_reauth_required` and `social_account_connected`. Saving it creates the `whsec_…` secret.
+3. Add `UPLOAD_POST_API_KEY` and `UPLOAD_POST_WEBHOOK_SECRET` to `clipforge-secrets` (dashboard edit, only these two keys) and `.env` (`docs/ops/secrets.md`).
+4. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "S2b: publishing"`.
+5. `uv run clipforge policy dry-run`. When it reports "0 items would be held", set `GATE_ENFORCE=on` in `clipforge-secrets` and `.env`, then redeploy (dry run first).
+6. `uv run clipforge account edit realtalk-clips-en --publisher-profile realtalk-clips-en --facebook-page-id <id>`, then `uv run clipforge publisher check realtalk-clips-en`: no problems.
+7. The next morning at 09:00: approve one card. After its slot: `uv run clipforge status`, `uv run clipforge posting verify` (0 differences), and the post on each platform.
+8. With one item scheduled: `/pause realtalk-clips-en` (the reply says 1 cancelled), then `/go realtalk-clips-en`. Run a day on Hands-on.
+
+**S2c (card 016) launch:**
+1. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "S2c: autopilot, digest, links"`.
+2. `uv run clipforge account create --blueprint founder-tapes --lang en --handle <O3 handle>` and `uv run clipforge account create --blueprint hombre-en-construccion --lang es --handle <O3 handle>`. Both start Hands-on.
+3. One permitted source each: `uv run clipforge source add …` with its permission record, then clip at least one episode (`uv run clipforge clip videos/<source>/<file> --fetch`).
+4. One Upload-Post profile each (`founder-tapes-en`, `hombre-en-construccion-es`; 3 of Basic's 5), connected as in S2b; then `uv run clipforge account edit <id> --publisher-profile <id> --facebook-page-id <id>` and `uv run clipforge publisher check <id>`.
+5. Optional: `uv run clipforge link add realtalk-clips-en <bio url> --kind bio`, and put the printed `/go/<slug>` link in the bio.
+
+**Rollback:** one account: `uv run clipforge account edit <id> --clear-publisher` (cancels its scheduled Upload-Post posts; assisted from the next slot). The gate: `GATE_ENFORCE=off` and a redeploy. A promotion: `uv run clipforge autopilot preset <id> hands_on --reason "<why>"`. A whole step: a revert on `main`, then `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "revert S2<x>"`; 0002 is expand-only, so older code runs on it.
 
 ## 7. Spikes
 
