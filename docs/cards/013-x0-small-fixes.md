@@ -1,6 +1,6 @@
 # Card 013: X0 — the scope check during merges
 
-Status: proposed
+Status: done 2026-10-02 (PR #26)
 Stream: X0 (tooling) · Branch: `x0/merge-scope` · Worktree: `../clipForge-x0` (created with `scripts/worktree.sh x0/merge-scope`)
 Decision-log range: #380–#399 (append only; #380–#394 are taken, re-read the log)
 Model: mid-tier

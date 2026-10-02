@@ -31,15 +31,17 @@ Since the S1 plan was written:
 
 ## Actions
 
-### Checkpoint A: three small fixes before going live (code, on this branch)
+### Checkpoint A: four small fixes before going live (code, on this branch)
 1. **A manual rebuild during an outage:** `clipforge status --rebuild` (and `POST /posting/rebuild`) must respect the `posting:outage` flag, like `posting_daily` does (#217). It refuses with the outage line and how to clear it. Add a test that fails first.
 2. **`DEPLOY_DB_CHECK` in `.env.example`**, with a comment (off until rollout step 2; card 008, #391).
 3. **A time-zone check in `doctor`:** a pure function in `doctor.py` tries `ZoneInfo` for `POSTING_TIMEZONE`, `OWNER_TIMEZONE` (if set) and `UTC`; the local `doctor` and `gpu_doctor` (in the GPU image) both report it, and `doctor` fails when it fails. Tests for both paths. (The GPU image had no time-zone data until `tzdata` became a dependency, PR #21; nothing checks it yet.)
-4. `scripts/check.sh` green, report, stop. The owner merges this before step 1 below.
+4. **Telegram videos show squeezed into a square** (owner, 2026-10-02): the files on the Volume are correct (1080x1920, square pixels, `moov` first), but `TelegramSender.send_video` (`bot/telegram.py`) never passes `width`, `height` or `duration`, so Telegram guesses the frame and some clients draw a square. Pass them from the clip's ffprobe info (`ffmpeg.probe_info`, or the `RenderedVideo` info already recorded), for both the posting assistant and the notifier. A test that fails first checks the arguments reach `send_video`. The owner confirms on the phone after step 2's deploy.
+5. `scripts/check.sh` green, report, stop. The owner merges this before step 1 below.
 
 ### Checkpoint B: the rollout, live, one step at a time
 Before starting, confirm with the owner:
 - it's outside a blackout, and there's at least an hour before the next slot;
+- `DATABASE_URL` is **not** in `clipforge-secrets` yet (the owner checks the key list in the Modal dashboard; the value never goes in chat). It goes in only at step 2, after step 1's migration: on 2026-10-02, with the key set before the tables existed, every `sources` read failed and `GET /posting` answered 500 (`docs/ops/deploys.md`);
 - last night's deploy is healthy: `modal app logs clipforge` shows `posting_tick` lines without "posting is off", and one `posting_daily:` run.
 
 Then walk runbook §4c's steps 1 → 6b in one sitting (step 2's deploy opens the mirror-alert window, which closes at step 5). After each step, check the result before giving the next command:
@@ -66,7 +68,7 @@ Then step 7, which can be the same day or the next, outside a blackout: the owne
 5. List for the coordinator anything in runbook §4c that was wrong or missing.
 
 ## Checkpoints
-- A: the three fixes. Suggested commit: `010: s1: rebuild respects the outage flag; DEPLOY_DB_CHECK in .env.example; time-zone check in doctor`
+- A: the four fixes. Suggested commit: `010: s1: rebuild respects the outage flag; DEPLOY_DB_CHECK in .env.example; time-zone check in doctor; video dimensions on Telegram sends`
 - B: the rollout through step 6b, then step 7 (the report records each step's output; no code changes)
 - C: measurements, ticks, plan status. Suggested commit: `010: s1: rollout evidence, Neon measurements, S1 ticked`
 

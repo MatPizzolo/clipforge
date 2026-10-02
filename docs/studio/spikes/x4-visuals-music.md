@@ -1,6 +1,6 @@
 # X4: visuals and music spike report
 
-Date: 2026-10-01 to 2026-10-02 · Spend: **about $5.4–5.5 of $15** (`modal billing summary`, ephemeral apps: $5.49 on one read, $5.38 after billing settled; plus ~$0.001 of Haiku) · Status: **final** (card 012, checkpoint B). The owner rated every category blind. The last sample (e2e3: captions and transitions) is waiting for its rating; it decides only the transition style, not a model.
+Date: 2026-10-01 to 2026-10-02 · Spend: **about $5.4–5.5 of $15** (`modal billing summary`, ephemeral apps: $5.49 on one read, $5.38 after billing settled; plus ~$0.001 of Haiku) · Status: **final** (card 012, checkpoint B). The owner rated every category blind, e2e3 included: crossfades are S6's default transition (#474), and weak later stills became producer rule 10 (#475).
 
 **Question:** what do stills, 5 s b-roll and 60 s music beds cost on Modal, how fast are they, and are they good enough for the story accounts (untold.archive / historias.ocultas)?
 
@@ -85,7 +85,7 @@ The owner rated all 8 beds (4 moods, both modes) acceptable, so the cheaper mode
 |---|---|---|
 | e2e1 (3 variants: b-roll at 16, 24 and interpolated 30 fps) | the spike's own stills, a montage narration, proportional cue timing, the bed at -4 dB | **"Very poor, all three; I wouldn't watch any of them."** The opening line ran over an unrelated image (a tent); the ship b-roll stopped at 0:17 and froze into its still until 0:22; the music was too loud and grew louder towards the middle |
 | e2e2 (Qwen vs Z-Image, the same producer rules) | one story in 8 lines, one image per line, hook first, one model and one style per variant, per-line narration and exact cuts, b-roll only where the line fits the clip, the bed flattened and ~16 dB under the voice | Hook: "it is better". Images: "do not look like one video, they have the same style, but transition very poorly". B-roll cuts: "B is better than A" (B = **Qwen**). Music level: "yes" |
-| e2e3 (Qwen; A = hard cuts with continued motion, B = 0.4 s crossfades) | e2e2's Qwen variant plus the clip producer's captions (key words in yellow, the hook title card) and smoother transitions | **pending** |
+| e2e3 (Qwen; A = hard cuts with continued motion, B = 0.4 s crossfades) | e2e2's Qwen variant plus the clip producer's captions (key words in yellow, the hook title card) and smoother transitions | **"B is better. We need to check how to improve them though: the very first part is an animated image, so it's better, but then some images are not the best."** B = **0.4 s crossfades**, so crossfades are S6's default transition (#474). The animated hook works; some later stills are weak (rule 10, #475) |
 
 e2e2 cost $1.97 (8 stills on each model, 4 A14B clips, cold starts included); e2e3 cost about $0.001 (one Haiku call; everything else reused or on a CPU).
 
@@ -100,7 +100,7 @@ e2e2 cost $1.97 (8 stills on each model, 4 A14B clips, cold starts included); e2
 | Music | **ACE-Step 1.5, no thinking**, as a **bank of beds** (below) | a royalty-free library | L4 | $0.0031 per 60 s bed |
 | Drop | Z-Image on L4 FP8 (slower and dearer); interpolation until judder is flagged | | | |
 
-**Music: a bank of beds, not one per video** (owner's recommendation, 2026-10-02). S6 generates a bank of beds per mood per account once (for example 4 moods × 5 beds), the owner approves them, and items reuse them. The cost is about the same either way (cents), but a bank gives curation and a consistent sound per account. A royalty-free library stays the fallback.
+**Music: a bank of beds, not one per video** (owner's ruling, 2026-10-02, #472). S6 generates a bank of beds per mood per account once (for example 4 moods × 5 beds), the owner approves them, and items reuse them. The cost is about the same either way (cents), but a bank gives curation and a consistent sound per account. A royalty-free library stays the fallback.
 
 **What S5 builds:** `modal.Cls` media servers for Qwen-Image (L40S), Wan2.2 A14B + Lightning (H100) and ACE-Step 1.5 (L4), registered in `media/registry.toml` with the revisions above. Each batches per account per day to spread the cold starts; A14B and Qwen loads are the slow ones (up to ~5 min), so memory snapshots matter most there.
 
@@ -110,12 +110,17 @@ The first samples failed on these, not on image quality. They are producer rules
 1. **Shot planning:** the script is written in short lines (3–5 s each), and the shot list has **one image per line, drawn for that line**. No montage of unrelated images and no proportional timing.
 2. **The hook frame:** frame 0 is a striking image for the first sentence, ideally something impossible to photograph, and it moves from the start (b-roll or a strong push-in). The first sentence and the first image are one beat.
 3. **Style lock:** one model and one tuned style suffix per video, and per account (a blueprint field). Mixing models gives mixed looks.
-4. **Shot continuity** (the owner's main complaint in e2e2: "they have the same style, but transition very poorly"): consecutive images should share composition cues (horizon, light direction, palette), and transitions should be smoother than hard cuts between unrelated framings. e2e3 tests hard cuts with continued Ken Burns motion vs 0.4 s crossfades; the owner's pick sets the default.
+4. **Shot continuity** (the owner's main complaint in e2e2: "they have the same style, but transition very poorly"): consecutive images should share composition cues (horizon, light direction, palette), and transitions should be smoother than hard cuts between unrelated framings. **The default transition is a 0.4 s crossfade** (the owner picked it over hard cuts with continued Ken Burns motion in e2e3, #474); the renderer needs Timeline transitions for it (below).
 5. **B-roll timing:** a b-roll shot covers exactly its line, cut on a line boundary. A line longer than the clip doesn't get b-roll (or gets a longer clip); a b-roll never turns into its own still mid-sentence.
 6. **Narration timing:** TTS per line (or word timings from the aligner), so every cut lands on a line boundary.
 7. **Captions from the narration's timings:** the clip producer's style (Anton, white with a black border, ≤ 3 words per line, the pop, key words in yellow from `keywords_v2`, the hook title card), from faster-whisper word timings snapped to the known script. This is the same pass as X1's TTS guard and the aligner in 03, so production transcribes once.
 8. **Bed level:** normalize each bed's loudness before mixing (no crescendo), fade it in and out, and sit it about 16 dB under the voice before ducking.
 9. **Text in images:** check rendered text against the script (OCR) or put words in the overlay; never trust a generated headline.
+10. **Every still earns its place** (the owner's e2e3 note: the animated hook works, "but then some images are not the best"). With no new spend per item beyond cents:
+    - generate 2–3 candidates per line and keep the best: a Judge check (S6), or the owner in review while the account is Hands-on;
+    - animate more lines as b-roll where the account's budget allows, since moving shots read better than stills;
+    - check each line's image prompt against the shot list (the line it illustrates, rule 1) before generating;
+    - regenerate any still that breaks the style lock (rule 3).
 
 ## What the renderer needs (S5/S6 changes to `src/`)
 - **Configurable duck depth.** S4's ducking is fixed (`sidechaincompress threshold=0.03 ratio=8`). The owner wants the bed much deeper under the voice (about -15 to -18 dB); the probe got there with a static `gain_db` on a pre-flattened bed. Add a duck-depth (or target bed level) field to the music track, and a bed-normalization step.
@@ -127,7 +132,7 @@ The first samples failed on these, not on image quality. They are producer rules
 1. **Cold starts dominate small batches:** A14B costs ~$0.30 and Qwen ~$0.15 per cold start (more on a slow Volume day). Batch per account per day, and try memory snapshots in S5.
 2. **Cost per story rises with b-roll:** 8 Qwen stills ≈ $0.033; each b-roll shot ≈ $0.10. A story with 1–2 b-roll shots costs about $0.18–0.30 in total (03's cost model is updated).
 3. **Text in images** (above), and unprompted people in empty scenes.
-4. **Small sample:** 10 stills, 3 b-roll pairs and one owner. S6 should re-rate on real story scripts before locking a blueprint's style.
+4. **Small sample:** 10 stills, 3 b-roll pairs and one owner. Candidates per line (rule 10) multiply the still cost: 3 candidates on 8 lines is about $0.10 per story. S6 should re-rate on real story scripts before locking a blueprint's style.
 
 ## Files
 - **Kept on the `clipforge-models` Volume:** `x4/` (about 264 GB): the owner deletes it after this card merges (`uv run modal volume rm -r clipforge-models x4`).

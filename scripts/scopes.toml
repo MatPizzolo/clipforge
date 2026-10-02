@@ -166,3 +166,79 @@ allow = [
     "docs/studio/04-roadmap.md",
     "docs/studio/spikes/**",
 ]
+
+# Cards 014–016 (the S2 build, log #140): one prefix per plan checkpoint, sharing one code scope.
+# The design card keeps `s2/` above. Each adds the docs its checkpoint updates (plan Tasks 8, 17, 20, 26).
+[prefix."s2a/"]
+stream = "s2a"
+log = [480, 499]
+allow = [
+    "src/**",
+    "tests/**",
+    "alembic/**",
+    "alembic.ini",
+    ".env.example",
+    "pyproject.toml",
+    "uv.lock",
+    # the API contract and the generated client, regenerated with the new admin routes
+    "web/openapi.json",
+    "web/lib/api/**",
+    # the two dashboard fixtures typed by the generated client, if an additive field reaches them (as #132)
+    "web/lib/mocks.ts",
+    "web/tests/unit/summaries.test.ts",
+    "docs/ops/secrets.md",
+    "docs/ARCHITECTURE.md",
+    "docs/superpowers/plans/*-studio-s2*",
+    "docs/studio/04-roadmap.md",
+    "ROADMAP.md",
+    "CLAUDE.md",
+]
+
+[prefix."s2b/"]
+stream = "s2b"
+log = [500, 529]
+allow = [
+    "src/**",
+    "tests/**",
+    "alembic/**",
+    "alembic.ini",
+    ".env.example",
+    "pyproject.toml",
+    "uv.lock",
+    "web/openapi.json",
+    "web/lib/api/**",
+    "web/lib/mocks.ts",
+    "web/tests/unit/summaries.test.ts",
+    # Task 17: the rows for UPLOAD_POST_API_KEY and UPLOAD_POST_WEBHOOK_SECRET
+    "docs/ops/secrets.md",
+    "docs/ARCHITECTURE.md",
+    "docs/superpowers/plans/*-studio-s2*",
+    # Task 9 (R5): the measured Upload-Post facts (key retention, rate limit, visibility delay)
+    "docs/studio/03-tools-and-models.md",
+    "docs/studio/04-roadmap.md",
+    "ROADMAP.md",
+    "CLAUDE.md",
+]
+
+[prefix."s2c/"]
+stream = "s2c"
+log = [530, 549]
+allow = [
+    "src/**",
+    "tests/**",
+    "alembic/**",
+    "alembic.ini",
+    ".env.example",
+    "pyproject.toml",
+    "uv.lock",
+    "web/openapi.json",
+    "web/lib/api/**",
+    "web/lib/mocks.ts",
+    "web/tests/unit/summaries.test.ts",
+    "docs/ops/secrets.md",
+    "docs/ARCHITECTURE.md",
+    "docs/superpowers/plans/*-studio-s2*",
+    "docs/studio/04-roadmap.md",
+    "ROADMAP.md",
+    "CLAUDE.md",
+]

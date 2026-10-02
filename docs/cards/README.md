@@ -24,6 +24,9 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [008](008-x0-followups.md) | X0: `deploy.py` checks the migration head, CI deploys tagged, Stop hook on main/coord | done 2026-10-01 (PR #14) | 002 merged |
 | [009](009-s3-dashboard-design.md) | S3: the dashboard as the studio's control room (brainstorm, IA, autopilot model, mockups, spec; design only) | done 2026-10-01 (PR #20) | — |
 | [010](010-s1-rollout.md) | S1: the rollout (Task 22) with the owner: two small fixes, then runbook §4c step by step, then evidence | proposed | 002 + 006 deployed, one clean night, O5 |
-| [011](011-s2-design.md) | S2: publishing and autopilot, design and plan (no code) | proposed | — |
+| [011](011-s2-design.md) | S2: publishing and autopilot, design and plan (no code) | done 2026-10-02 (PR #27) | — |
 | [012](012-x4-visuals-music.md) | X4: stills, b-roll and music beds: licenses, cost, quality, one end-to-end Timeline | proposed | — |
-| [013](013-x0-small-fixes.md) | X0: scope check aware of merges in progress | proposed | — |
+| [013](013-x0-small-fixes.md) | X0: scope check aware of merges in progress | done 2026-10-02 (PR #26) | — |
+| [014](014-s2a-dispatch-gate.md) | S2a: rails: migration 0002, the dispatcher, the brake, autopilot on Hands-on, the gate (log-only) and routing (plan Tasks 1–8) | proposed | 010 done (step 7 verified, verify 0, schedule copies, Neon head 0001) |
+| [015](015-s2b-publishing.md) | S2b: Upload-Post publishing for realtalk on Hands-on: R5's real call first, then publish state, webhook, reconcile, review cards, hand-off (plan Tasks 9–20) | proposed | 014 deployed + one clean day; Basic bought; R5 read by the owner |
+| [016](016-s2c-ladder-launch.md) | S2c: the ladder, the digest, failure rows, tracking links; founder.tapes and hombre launch (plan Tasks 21–26) | proposed | 015 deployed + a day on Hands-on; O3; one permitted source each; two more profiles |

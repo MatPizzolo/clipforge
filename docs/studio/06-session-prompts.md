@@ -240,26 +240,21 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 
 ### S2: Publishing, review tiers, policy gate, ledger
 - **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** 04's S2 list is the source: autopilot (`autopilot` table and history, the Review dial, the Publish switch, presets, ladder, demotions), the review windows (format 10, producer version 5 per ADR-49, first dubs 10), the brake's scope, one-tap only for items due within 2 h, publishing-failure rows, the dispatcher (accept ADR-27 here), the migration landing-order rule. founder.tapes and hombre.en.construccion are created just before this card (O3); the exit is realtalk auto-posting on its rung and the other two starting Hands-on. Read the S3 dashboard spec §8.6.
-- **Depends:** S1, and ADR-28, ADR-29 and ADR-33 accepted.
+- **Updated 2026-10-02 (card 011's spec and plan, PR #27):** designed in `docs/superpowers/specs/2026-10-01-studio-s2-design.md` and planned in `docs/superpowers/plans/2026-10-02-studio-s2.md`; built in three cards, 014 (S2a), 015 (S2b) and 016 (S2c). ADR-27 and ADR-33 (tracking links only) are accepted; conversion import is draft ADR-51 (S7).
+- **Depends:** S1's rollout (card 010) finished with Dual writes still on; ADR-28 and ADR-29 accepted; ADR-27 accepted (spec §11.1); ADR-33 accepted as tracking links (spec §11.2).
 - **Owner:**
-  - create founder.tapes and hombre.en.construccion first (O3's handles; `clipforge account create`), then the Upload-Post Professional plan; connect the three accounts on TikTok, IG, YT and FB;
-  - `UPLOAD_POST_API_KEY` and the webhook secret;
-  - a Whop account for campaigns.
-- **Read:** 02 §5, §5b and §6, 08 §1, 03 (Upload-Post, media hosting).
-- **Actions:**
-  1. The `Publisher` protocol, with `UploadPostPublisher` and `AssistedPublisher` (today's Telegram flow).
-  2. Signed, expiring per-file media links from the Volume for Upload-Post (R2 only if these prove unreliable).
-  3. The signed webhook route, which updates `posts` and `post_events`.
-  4. Map AI disclosure per platform (`is_aigc`, `containsSyntheticMedia`, `is_ai_generated`, `facebook_is_ai_generated`).
-  5. Policy gate v1:
-     - disclosure
-     - #ad
-     - credits
-     - license manifest
-     - cross-account duplicates
-  6. Review tiers (review / sample / auto): Telegram approve, fix copy, reject with reason, and a daily digest.
-  7. Tracking links: `GET /go/<slug>`, click logging, sub-ids.
-  8. Tests: fake Publisher and golden cases for the gate. (Judge, ledger, lanes and the morning message move to S6.)
+  - Upload-Post **Basic** ($24/month, 5 profiles; O4, #440), not Professional; upgrade at the 6th account;
+  - the R5 test call, with the S2b session (plan Task 9), before S2b's code;
+  - one profile per account, connected on TikTok (set to allow public posts), Instagram, YouTube and Facebook, and the Facebook Page id per account;
+  - register the webhook URL `<API_URL>/webhooks/upload-post`; add `UPLOAD_POST_API_KEY` and `UPLOAD_POST_WEBHOOK_SECRET` with the `docs/ops/secrets.md` procedure;
+  - create founder.tapes and hombre.en.construccion just before S2c (O3's handles; `clipforge account create`), with one permitted source each;
+  - a Whop account only if a campaign source is planned.
+- **Read:** the S2 spec and plan, 02 §5, §5b and §6, 08 §1, §2b and §2c, 03 (Upload-Post, media hosting).
+- **Actions:** the plan's tasks, by sub-step:
+  - **S2a** (card 014, Tasks 1–8): contracts and settings, migration 0002, the autopilot service, the brake, the policy gate v1 (log-only), routing and windows, the dispatcher, the autopilot CLI and routes.
+  - **S2b** (card 015, Tasks 9–20): R5's real call first; publish state, the publisher, media links, per-platform copy, the slot planner, review cards, hand-off, the webhook, reconcile and the fallback, the brake at Upload-Post, the 09:00 review batch.
+  - **S2c** (card 016, Tasks 21–26): the ladder and demotions, the `sample` and `auto` dials, the digest, failure rows, tracking links, launch support and the docs.
+  - Tests throughout: a fake Publisher, golden cases for the gate. (Judge, ledger, lanes and the morning message move to S6.)
 - **Done when:**
   - realtalk.clipsdaily auto-posts to 4 platforms on its rung; founder.tapes and hombre.en.construccion start Hands-on on S2's flow;
   - a gate failure lands in review;
