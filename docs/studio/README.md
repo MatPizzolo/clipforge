@@ -10,7 +10,7 @@ This folder is the input for new Claude Code sessions. It was written on 2026-09
 | [02-target-architecture.md](02-target-architecture.md) | Target system design: components, contracts, data, flows |
 | [03-tools-and-models.md](03-tools-and-models.md) | Chosen tools and open models, with licenses, GPUs, costs and sources |
 | [04-roadmap.md](04-roadmap.md) | Sub-projects in build order, with exit criteria |
-| [05-proposed-adrs.md](05-proposed-adrs.md) | ADR drafts still open (27, 32 deferred, 33, 36, 37, 40), pointers to the accepted ones, and the next free number (ADR-51) |
+| [05-proposed-adrs.md](05-proposed-adrs.md) | ADR drafts still open (32 deferred, 36, 37, 40, 51), pointers to the accepted ones, and the next free number (ADR-52) |
 | [06-session-prompts.md](06-session-prompts.md) | Prompts A–I plus one action card per roadmap item (S0–S14, X1–X6) and the close-out checklist; the coordinator builds cards in `docs/cards/` from them |
 | [07-channel-portfolio.md](07-channel-portfolio.md) | 15 channel concepts in 5 categories, EN/ES pairs, blueprint scaling model, launch waves |
 | [08-dashboard-and-operations.md](08-dashboard-and-operations.md) | Decision ledger, lanes and audit; dashboard pages; Notion mirror; the Desk; funnel and own products |

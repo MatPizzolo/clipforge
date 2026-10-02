@@ -108,7 +108,7 @@ Implementation notes:
 | Event | Where |
 |---|---|
 | Assisted clip at a slot; review item due within 2 h; a publish failed for a post due today; a job failed with less than 1 day of queue left; `/pause` confirmation; Upload-Post disconnected; budget breach; an expired permission holding clips; the database unavailable at the tick | **instant** |
-| Other job failures, held clips, accounts with under 3 days of queue, permissions expiring within 14 days, experiments needing a decision, sample-tier spot checks, review backlog, cost vs budget, yesterday's posts | **digest** at 09:00 (owner's time zone), anomalies on the first line |
+| Other job failures, held clips, accounts with under 3 days of queue, permissions expiring within 14 days, experiments needing a decision, sample-tier spot checks, review backlog, cost vs budget, yesterday's posts | **digest**: one message at 09:00 in the owner's time zone, then the review cards; its content is §2c's "S2" block below (S2 spec §7.2) |
 | Job done, clips rendered, successful posts, version saves, source edits, stats | **dashboard only**. A Telegram card already sent is edited in place ("Posted ✓ TT·IG·YT"), which uses no budget |
 
 - **Quiet hours:** 23:00–08:00; only brake-worthy events (publishing broken across accounts, spend over 2× the daily budget) break through.
@@ -119,7 +119,7 @@ Implementation notes:
 
 **Identity.** One owner: the Telegram user id in `TELEGRAM_ALLOWED_USER_IDS` and the GitHub account whose verified email is `OWNER_EMAIL`. Every write records which one acted.
 
-**Telegram after S2.** It keeps review cards, alerts, the brake, the digest and the AssistedPublisher fallback. `/clip` retires when Produce ships; `/status <job_id>` and typed `/resume` retire when the job page has Resume; the ✅ taps stay only for accounts on the fallback.
+**Telegram after S2.** It keeps review cards, alerts, the brake, the digest and the AssistedPublisher fallback. `/clip` retires when Produce ships; `/status <job_id>` and typed `/resume` retire when the job page has Resume. The ✅ taps stay for accounts on the assisted path (Publish off, or no connected Upload-Post profile) and for the fallback's failed platforms. A ✅ means "posted", never "reviewed": no assisted-card tap counts toward the ladder, the spot checks or the producer window (R2, R6; #454).
 
 ### 2c. Accepted changes from card 009 (2026-10-01; ADR-48 to ADR-50)
 
@@ -157,6 +157,12 @@ Implementation notes:
   | Instant | due-soon reviews, the brake, platform health (a failed post due today, a disconnected publisher, a strike), spend over a line or a cap, expired permissions holding clips |
   | Digest | runway under 14 days, promotions ready, demotions done, experiments, held clips, other failures, the review backlog, weak hook patterns, "what ran without you" |
   | Dashboard only | everything else |
+
+**S2 (card 011's spec, accepted 2026-10-02; [S2 spec](../superpowers/specs/2026-10-01-studio-s2-design.md) §6.7, §7; log #442, #443, #448, #453–#455).**
+- **Callbacks:** review cards use `r:` callbacks (`r:ok`, `r:rej`, `r:why`); posting cards keep `p:`, so every older message keeps working.
+- **The 09:00 morning batch** is a bridge (Q3), behind `REVIEW_BATCH` (default on): one review card per undecided review-lane item in the plan's horizon, sent after the digest. It is exempt from ADR-45's 20-an-hour cap, counts as one delivery and is paced at most one message per second (R1). When S3's Review page ships it is turned off, and only the 2 h cards remain (#427).
+- **The digest's content:** one message at 09:00 in the owner's time zone, claimed `digest:<date>`; lines with nothing to say are left out. In order: anomalies (an outage, a brake that's on, a disconnected publisher, yesterday's final publish failures, the database unavailable at a tick, unmatched webhook deliveries); yesterday per account (posted, of which automatic, failed, rejected, what ran without you); today per account (slots, approved, need you); the attention arithmetic (about 1 minute per review decision and 7 per assisted clip, against the ~20-minute budget, naming accounts whose ladder criteria are met when over); then the digest-level rows (promotions ready, demotions done, runway under 14 days, held clips, expiring permissions, other job failures, the review backlog, missed slots). Planning (08:50) and the digest run in the owner's time zone for every account; slots keep each account's own (R3).
+- **The brake:** `/pause` and `/go` take `<account>` or `all` (no argument is the fleet). The Dict key `brake:<scope>` is written first and mirrored to `posting_state` (`changed_by`, `reason`); `/go` writes `on=false` and never deletes the key. A pause cancels posts already scheduled at Upload-Post and the reply counts them; with Neon down it says the pause is recorded in the brake only. `posting_daily` repairs a difference between the key and the row: the newer one wins.
 
 ## 3. Notion mirror (one-way)
 
