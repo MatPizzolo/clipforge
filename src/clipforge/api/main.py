@@ -52,6 +52,7 @@ from clipforge.models import (
 from clipforge.pipeline.steps import Deps, JobNotResumable
 from clipforge.posting import migrate
 from clipforge.service import (
+    PostingOutage,
     create_job,
     get_job_view,
     posting_overview,
@@ -234,7 +235,10 @@ def create_app(ctx: ApiContext) -> FastAPI:
     def post_posting_rebuild() -> dict[str, int]:
         deps = ctx.deps()
         reload(deps)
-        return {"added": rebuild_posting(deps, utcnow())}
+        try:
+            return {"added": rebuild_posting(deps, utcnow())}
+        except PostingOutage as exc:
+            raise HTTPException(409, str(exc)) from None
 
     @app.post("/posting/import", dependencies=authorized)
     def post_posting_import(dry_run: bool = False) -> ImportReport:

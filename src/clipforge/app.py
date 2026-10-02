@@ -338,8 +338,9 @@ def db_doctor() -> dict[str, object]:
 
 
 @app.function(image=whisper_image, gpu=GPU, timeout=600)
-def gpu_doctor(audio_wav: bytes) -> dict[str, object]:
-    """Checks CUDA, CTranslate2 and a real transcription of `audio_wav` on the GPU."""
+def gpu_doctor(audio_wav: bytes, zones: list[str] | None = None) -> dict[str, object]:
+    """Checks CUDA, CTranslate2, the time zones `zones` (default UTC) and a real transcription
+    of `audio_wav` on the GPU."""
     import subprocess
     import tempfile
 
@@ -347,7 +348,12 @@ def gpu_doctor(audio_wav: bytes) -> dict[str, object]:
     import ctranslate2
     from faster_whisper import BatchedInferencePipeline, WhisperModel
 
+    from clipforge.doctor import timezone_check
+
+    zone_check = timezone_check(zones or ["UTC"])
     report: dict[str, object] = {
+        "time_zones_ok": zone_check.ok,
+        "time_zones": zone_check.detail,
         "gpu": subprocess.run(
             ["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"],
             capture_output=True,
@@ -381,22 +387,36 @@ def gpu_doctor(audio_wav: bytes) -> dict[str, object]:
 
 @app.local_entrypoint()
 def doctor(audio: str = "", skip_gpu: bool = False) -> None:
-    from clipforge.doctor import DEFAULT_AUDIO_SOURCE, audio_wav_bytes, format_checks, local_checks
+    from clipforge.doctor import (
+        DEFAULT_AUDIO_SOURCE,
+        audio_wav_bytes,
+        configured_zones,
+        format_checks,
+        local_checks,
+        timezone_check,
+    )
 
     print("Local:")
-    checks = local_checks()
-    print(format_checks(checks))
+    zones = configured_zones()  # the same names go to the GPU image (.env matches the secret)
+    zone_check = timezone_check(zones)
+    print(format_checks([*local_checks(), zone_check]))
     if skip_gpu:
+        if not zone_check.ok:
+            raise SystemExit("doctor: time zones failed locally")
         return
 
     source = Path(audio) if audio else DEFAULT_AUDIO_SOURCE
     wav = audio_wav_bytes(source)
     print(f"\nModal ({GPU}, {WHISPER_MODEL}) transcribing {source} ({len(wav) / 1e6:.1f} MB wav):")
     started = time.monotonic()
-    report = gpu_doctor.remote(wav)
+    report = gpu_doctor.remote(wav, zones)
     for key, value in report.items():
         print(f"  {key}: {value}")
     print(f"  round_trip_s: {time.monotonic() - started:.1f} (includes cold start)")
+    results = {"locally": zone_check.ok, "in the GPU image": report.get("time_zones_ok") is True}
+    failed = [where for where, ok in results.items() if not ok]
+    if failed:
+        raise SystemExit(f"doctor: time zones failed {' and '.join(failed)}")
 
 
 @app.local_entrypoint()

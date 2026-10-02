@@ -43,6 +43,9 @@ def test_chain_sends_each_clip_then_the_zip_link(harness: Harness) -> None:
     assert (chat, reply_to) == (CHAT, 3)
     assert path.is_relative_to(harness.root) and path.name == "clip.mp4"
     assert caption.startswith("#") and " · score " in caption
+    size = sender.sizes[0]  # from the render's probe, so Telegram shows the 9:16 frame
+    assert size is not None and (size.width, size.height) == (1080, 1920)
+    assert size.duration_s > 0
 
     chat, text, reply_to = sender.messages[-1]
     assert text.startswith("5 of 5 clips · $")

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from clipforge.bot.deeplinks import job_row
 from clipforge.bot.messages import clip_caption, done_text, failed_text
-from clipforge.bot.telegram import Keyboard, TelegramSender
+from clipforge.bot.telegram import Keyboard, TelegramSender, VideoSize
 from clipforge.config import Settings
 from clipforge.jobs import DictJobStore, merged_cost
 from clipforge.links import LinksNotConfigured, download_url
@@ -29,6 +29,7 @@ class TelegramNotifier:
             self.root / rendered.video_path,
             clip_caption(rendered),
             self.target.reply_to_message_id,
+            size=VideoSize(rendered.probe.width, rendered.probe.height, rendered.probe.duration_s),
         )
 
     def done(self, job: Job) -> None:

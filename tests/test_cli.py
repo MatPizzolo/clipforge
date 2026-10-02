@@ -531,6 +531,19 @@ def test_status_without_id_prints_the_posting_overview(
     assert "restored 0 posting key(s) from the newest snapshot" in capsys.readouterr().out
 
 
+def test_status_rebuild_during_an_outage_exits_1(
+    harness: Harness, api: TestClient, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The API's 409 reaches the owner as the outage line, with how to clear it (#220)."""
+    channel_job(harness)
+    keepalive.set_outage(harness.store.kv, "2026-09-20")
+    assert _run(harness, api, "status", "--rebuild") == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "HTTP 409: Outage: posting_daily didn't run since 2026-09-20" in captured.err
+    assert "clipforge status --restore 2026-09-20" in captured.err
+
+
 def test_status_restore_takes_an_optional_date(
     harness: Harness, api: TestClient, capsys: pytest.CaptureFixture[str]
 ) -> None:

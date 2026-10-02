@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -24,6 +25,8 @@ from telegram import (
 from telegram.constants import ParseMode
 from telegram.request import BaseRequest, HTTPXRequest
 
+from clipforge.ffmpeg import media_info
+
 CAPTION_LIMIT = 1024
 UPLOAD_TIMEOUT_S = 300.0  # a 45 MB clip on a slow uplink
 Button = tuple[str, str]  # (label, callback data), or (label, "https://…") for a URL button
@@ -32,6 +35,30 @@ UPDATE_TYPES = ["message", "callback_query"]
 
 # httpx logs every request URL at INFO, and Bot API URLs contain the bot token (rule 8).
 logging.getLogger("httpx").setLevel(logging.WARNING)
+log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class VideoSize:
+    """The frame and length Telegram is told. Without width and height it guesses, and some
+    clients draw a 9:16 clip squeezed into a square (card 010, A4)."""
+
+    width: int
+    height: int
+    duration_s: float
+
+
+def probe_size(path: Path) -> VideoSize | None:
+    """The display size and duration from ffprobe; None (Telegram guesses, as before) when
+    the file can't be read, so a probe never stops a send."""
+    try:
+        info = media_info(path)
+    except Exception as exc:
+        log.warning("telegram: no video size for %s: %s", path.name, type(exc).__name__)
+        return None
+    if info.width <= 0 or info.height <= 0:
+        return None
+    return VideoSize(info.width, info.height, info.duration_s)
 
 
 class TelegramSender(Protocol):
@@ -46,7 +73,13 @@ class TelegramSender(Protocol):
     ) -> int: ...
 
     def send_video(
-        self, chat_id: int, path: Path, caption: str, reply_to: int | None = None
+        self,
+        chat_id: int,
+        path: Path,
+        caption: str,
+        reply_to: int | None = None,
+        *,
+        size: VideoSize | None = None,
     ) -> int: ...
 
     def edit_buttons(self, chat_id: int, message_id: int, buttons: Keyboard | None) -> None: ...
@@ -132,7 +165,13 @@ class TelegramClient:
         return message.message_id
 
     def send_video(
-        self, chat_id: int, path: Path, caption: str, reply_to: int | None = None
+        self,
+        chat_id: int,
+        path: Path,
+        caption: str,
+        reply_to: int | None = None,
+        *,
+        size: VideoSize | None = None,
     ) -> int:
         async def call(bot: Bot) -> Any:
             with path.open("rb") as video:
@@ -142,6 +181,9 @@ class TelegramClient:
                     caption=caption[:CAPTION_LIMIT],
                     supports_streaming=True,
                     reply_parameters=_reply(reply_to),
+                    width=size.width if size else None,
+                    height=size.height if size else None,
+                    duration=max(1, round(size.duration_s)) if size else None,
                 )
 
         return int(self._run(call).message_id)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -43,6 +44,7 @@ from clipforge.posting.backend import build_posting, dict_posting
 from clipforge.posting.repo import DictPostingRepo
 from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
 from tests.bot.helpers import dict_ctx, two_account_ctx
+from tests.conftest import TALKING_HEAD, requires_ffmpeg
 from tests.dbhelpers import make_account
 from tests.pipeline.harness import Harness
 from tests.posting.builders import ACCOUNT, JOB, T0, item, record, run_channel_job, send
@@ -144,6 +146,27 @@ def _sender(ctx: BotContext) -> FakeSender:
 
 def _store(ctx: BotContext) -> DictPostingRepo:
     return DictPostingRepo(ctx.deps.store.kv, ACCOUNT)
+
+
+@requires_ffmpeg
+def test_send_passes_the_probed_frame_size(ctx: BotContext) -> None:
+    """The slot send probes the clip, so Telegram doesn't squeeze it into a square."""
+    for r in _store(ctx).records(ACCOUNT):
+        assert r.item.video_path is not None
+        shutil.copyfile(TALKING_HEAD, ctx.deps.root / r.item.video_path)  # a real video
+    assert tick(ctx, at(8)).startswith(f"{ACCOUNT}: sent ")
+    [size] = _sender(ctx).sizes
+    assert size is not None and (size.width, size.height) == (480, 854)
+    assert 9.9 < size.duration_s < 10.1
+
+
+def test_send_without_a_readable_probe_still_goes_out(ctx: BotContext) -> None:
+    """A file ffprobe can't read is sent without a size, as before."""
+    for r in _store(ctx).records(ACCOUNT):
+        assert r.item.video_path is not None
+        (ctx.deps.root / r.item.video_path).write_bytes(b"not a video")
+    assert tick(ctx, at(8)).startswith(f"{ACCOUNT}: sent ")
+    assert _sender(ctx).sizes == [None]
 
 
 def test_one_send_per_slot(ctx: BotContext) -> None:

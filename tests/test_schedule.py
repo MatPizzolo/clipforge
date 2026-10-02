@@ -9,6 +9,7 @@ def test_normalize() -> None:
 def test_problems() -> None:
     assert schedule_problem("America/New_York", ["08:00"], ["ok_tag"]) is None
     assert schedule_problem("Mars/Base", ["08:00"], [])[0] == "timezone"  # type: ignore[index]
+    assert schedule_problem("America", ["08:00"], [])[0] == "timezone"  # type: ignore[index]
     assert schedule_problem("UTC", [], [])[0] == "slots"  # type: ignore[index]
     assert schedule_problem("UTC", ["9:5"], [])[0] == "slots"  # type: ignore[index]
     assert schedule_problem("UTC", ["10:00", "09:00"], [])[0] == "slots"  # type: ignore[index]

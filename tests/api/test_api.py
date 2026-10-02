@@ -206,6 +206,13 @@ def test_posting_overview_and_rebuild(harness: Harness) -> None:
     assert client.post("/posting/restore", headers=AUTH).json() == {"restored": 0}
 
 
+def test_posting_rebuild_refuses_during_an_outage(harness: Harness) -> None:
+    keepalive.set_outage(harness.store.kv, "2026-09-20")
+    response = _client(harness).post("/posting/rebuild", headers=AUTH)
+    assert response.status_code == 409
+    assert "clipforge status --restore 2026-09-20" in response.json()["detail"]
+
+
 def test_posting_restore_takes_a_date(harness: Harness) -> None:
     kv = harness.store.kv
     kv.put("post:job_a:clip_01", "{}")

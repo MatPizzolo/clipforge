@@ -11,9 +11,10 @@ from clipforge.db.engine import Database
 from clipforge.db.jobs import JobsRepo
 from clipforge.jobs import utcnow
 from clipforge.models import ContentItem, Job, JobInput, JobStatus, Platform
+from clipforge.posting import keepalive
 from clipforge.posting.backend import build_posting
 from clipforge.posting.repo import DictPostingRepo
-from clipforge.service import create_job, rebuild_posting
+from clipforge.service import PostingOutage, create_job, rebuild_posting
 from tests.bot.fakes import make_settings
 from tests.dbhelpers import BILLY_SOURCE, make_account, seed
 from tests.pipeline.harness import Harness
@@ -58,6 +59,23 @@ def test_rebuild_queues_old_channel_jobs_once(
     assert DictPostingRepo(harness.store.kv, ACCOUNT).records(ACCOUNT) == []
     assert rebuild_posting(harness.deps, utcnow()) == 3
     assert rebuild_posting(harness.deps, utcnow()) == 0
+
+
+def test_rebuild_refuses_during_an_outage(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A manual rebuild respects the outage flag, like posting_daily does (#217, card 010)."""
+    monkeypatch.setattr("clipforge.pipeline.steps.enqueue_job", lambda *a, **k: 0)  # "old" job
+    channel_job(harness)
+    monkeypatch.undo()
+    keepalive.set_outage(harness.store.kv, "2026-09-20")
+    with pytest.raises(PostingOutage) as raised:
+        rebuild_posting(harness.deps, utcnow())
+    assert "2026-09-20" in str(raised.value)
+    assert "clipforge status --restore 2026-09-20" in str(raised.value)
+    assert DictPostingRepo(harness.store.kv, ACCOUNT).records(ACCOUNT) == []  # nothing queued
+    keepalive.clear_outage(harness.store.kv)  # /go or a restore
+    assert rebuild_posting(harness.deps, utcnow()) == 3
 
 
 # ---- Plan B review fixes
