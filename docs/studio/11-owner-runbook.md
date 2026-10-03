@@ -414,7 +414,23 @@ shred -u /tmp/clipforge-secrets.env
 ```
 No redeploy is needed: the deployed app doesn't use the database yet.
 
-**Protect `main`** (after card 001 is merged, so the checks exist): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check` and `scope` to pass (not `web`: it runs only when `web/`, `src/` or the contract changes, and a required check that never runs blocks the merge), block force pushes. On a free personal account, protection on a private repo may need GitHub Pro; without it, keep the PR flow by convention and CI still runs on every PR.
+**Protect `main`** (after card 017 is merged: `check` then reports on every PR, docs-only ones included): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check` and `scope` to pass (not `web`: it runs only when `web/`, `src/` or the contract changes, and a required check that never runs blocks the merge; see the comment at the top of `web.yml`), block force pushes. Or from the terminal:
+```
+gh api -X PUT repos/MatPizzolo/clipforge/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": {"strict": false, "contexts": ["check", "scope"]},
+  "enforce_admins": false,
+  "required_pull_request_reviews": {"required_approving_review_count": 0},
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+JSON
+gh repo edit --delete-branch-on-merge      # merged branches go away on their own
+```
+On a free personal account, protection on a private repo may need GitHub Pro (the call answers 403 "Upgrade to GitHub Pro"); without it, keep the PR flow by convention and CI still runs on every PR.
+
+**CI runs once per commit** (card 017): `ci.yml` runs on pull requests and on pushes to `main` only, so a branch gets CI once its PR is open. A PR that changes only docs (`docs/`, Markdown files outside `prompts/`, `.gitignore`) runs only the docs tests in `check` (under a minute); anything else runs the whole gate. Every action is pinned to a commit SHA, and dependabot opens one grouped PR a week to update them (branch `dependabot/github_actions/…`, allowed to change only `.github/workflows/`): merge it when CI is green.
 
 **Still left, and when:**
 - The Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variable `DEPLOY_ENABLED=true`. `ci.yml` runs `alembic upgrade head` before deploying and skips web- and docs-only pushes (S1 Task 21b, log #212), but that isn't everything `DEPLOY_ENABLED` needs. Before you set it, all of these must be in place:

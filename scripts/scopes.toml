@@ -88,6 +88,9 @@ allow = [
     "CLAUDE.md",
 ]
 
+# Spikes (x*/): every spike prefix also gets `scratch/<stream>/**` for its probe code. scratch/ is
+# gitignored, so the scope check never sees it; the allow line is for the edit guard
+# (.claude/hooks/scope_guard.py), which would otherwise deny the probe files (card 017).
 [prefix."x2/"]
 stream = "x2"
 log = [320, 339]
@@ -95,6 +98,7 @@ allow = [
     "docs/studio/03-tools-and-models.md",
     "docs/studio/04-roadmap.md",
     "docs/studio/spikes/**",
+    "scratch/x2/**",
 ]
 
 [prefix."s4/"]
@@ -170,6 +174,7 @@ allow = [
     "docs/studio/03-tools-and-models.md",
     "docs/studio/04-roadmap.md",
     "docs/studio/spikes/**",
+    "scratch/x4/**",
 ]
 
 # Cards 014–016 (the S2 build, log #140): one prefix per plan checkpoint, sharing one code scope.
@@ -273,9 +278,9 @@ allow = [
 ]
 
 # Card 021 (S5 media servers and producer registry, spec and plan; ADR-30): documents only,
-# plus measurement probes in scratch/s5d/ (ignored once card 017 lands). Named `s5d/`, not `s5/`:
-# tests/scripts/test_check_scope.py appends a fake `s5/` prefix (card 017 renames it). The build
-# cards get their own prefixes (s5a/, …).
+# plus measurement probes in scratch/s5d/ (gitignored). Named `s5d/`, not `s5/`, because a test
+# used a fake `s5/` prefix until card 017 renamed it; the build cards get their own prefixes
+# (s5a/, …).
 [prefix."s5d/"]
 stream = "s5d"
 log = [580, 609]
@@ -287,3 +292,10 @@ allow = [
     "docs/studio/05-proposed-adrs.md",
     "scratch/s5d/**",
 ]
+
+# Dependabot (card 017, .github/dependabot.yml): GitHub Actions version bumps only. The empty log
+# range [0, -1] contains no number, so it may never add a decision-log row.
+[prefix."dependabot/"]
+stream = "dependabot"
+log = [0, -1]
+allow = [".github/workflows/**"]
