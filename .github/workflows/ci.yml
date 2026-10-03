@@ -29,7 +29,7 @@ jobs:
     outputs:
       code: ${{ steps.classify.outputs.code }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
       - name: Docs only, or code?
@@ -72,7 +72,7 @@ jobs:
         run: |
           echo "the changes job ended with '$RESULT': nothing was checked" >&2
           exit 1
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # A plain apt install (18-36 s). Not cached: cache-apt-pkgs restores files without running
       # postinst, so update-alternatives links such as libblas.so.3 are missing (PR #37).
       - name: Install ffmpeg (with libass)
@@ -83,7 +83,7 @@ jobs:
         run: |
           ffmpeg -version | head -1
           ffmpeg -hide_banner -filters | grep -E '^ ... (ass|subtitles) '
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
       - run: uv sync --locked
@@ -96,7 +96,7 @@ jobs:
         run: scripts/check.sh --docs
       - name: Keep the failing step's full output (card 008)
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: check-last-fail
           path: .superpowers/check-last-fail.log
@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
       - name: Scope check
@@ -132,7 +132,7 @@ jobs:
       tag: ${{ steps.deployed.outputs.tag }}
       when: ${{ steps.deployed.outputs.when }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
       - name: Skip when only the dashboard or docs changed
@@ -156,7 +156,7 @@ jobs:
             echo "deploy=false" >> "$GITHUB_OUTPUT"
             echo "only web/ or docs changed since $BASE: no deploy"
           fi
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         if: steps.changes.outputs.deploy == 'true'
         with:
           enable-cache: true
@@ -235,7 +235,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Push the deploy tag
         env:
           TAG: ${{ needs.deploy.outputs.tag }}
