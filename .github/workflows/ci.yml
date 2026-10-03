@@ -73,12 +73,11 @@ jobs:
           echo "the changes job ended with '$RESULT': nothing was checked" >&2
           exit 1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
-      - name: Install ffmpeg (with libass), cached
+      # A plain apt install (18-36 s). Not cached: cache-apt-pkgs restores files without running
+      # postinst, so update-alternatives links such as libblas.so.3 are missing (PR #37).
+      - name: Install ffmpeg (with libass)
         if: needs.changes.outputs.code != 'false'
-        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9  # v1.6.3
-        with:
-          packages: ffmpeg
-          version: ubuntu-24.04-1  # bump to refresh the cached packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: ffmpeg version (Ubuntu 24.04's 6.1, with libass)
         if: needs.changes.outputs.code != 'false'
         run: |
