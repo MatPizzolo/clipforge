@@ -265,6 +265,35 @@ allow = [
     "docs/studio/08-dashboard-and-operations.md",
 ]
 
+# Cards 022–027 (the S3 dashboard v1 build, log #145): one card per plan checkpoint, S3-1 to S3-5b,
+# run one at a time in one worktree (../clipForge-s3b), sharing this prefix and log range in
+# sequence. `s3/` (#420–#439) and `s3p/` keep the design and the plan.
+[prefix."s3b/"]
+stream = "s3b"
+log = [630, 679]
+allow = [
+    "src/**",
+    "tests/**",
+    "alembic/**",
+    "alembic.ini",
+    ".env.example",
+    "pyproject.toml",
+    "uv.lock",
+    # the dashboard (pages, route handlers, upstream.ts, the generated client, mocks, Vitest, Playwright)
+    "web/**",
+    # plan Task 1: the OpenAPI export switches to the `admin` surface
+    "scripts/export_openapi.py",
+    "docs/ARCHITECTURE.md",
+    "docs/ops/secrets.md",
+    "docs/superpowers/plans/*s3-dashboard*",
+    # ticks only after the owner confirms the deploy
+    "docs/studio/04-roadmap.md",
+    "ROADMAP.md",
+    # §5b (Vercel and proxy tokens) in every card; card 027 also §2's Telegram commands (plan Task 22)
+    "docs/studio/11-owner-runbook.md",
+    "CLAUDE.md",
+]
+
 # Card 020 (HK hook library, spec and plan; ADR-50): documents only; the build card widens this.
 [prefix."hk/"]
 stream = "hk"
