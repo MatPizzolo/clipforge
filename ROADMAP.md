@@ -67,7 +67,7 @@ Full list with exit criteria, dependencies and action cards: [docs/studio/04-roa
 - [ ] S1: Neon Postgres, accounts, content items, blueprints; queue and job records move off the Dict (code built, card 002; ticked at the rollout)
 - [ ] S2: publishing through Upload-Post, the autopilot model (ADR-48; review dial, windows, ladder), the dispatcher, pure policy gate, tracking links; founder.tapes and hombre.en.construccion launch on it (designed in card 011; built in three cards: S2a rails, card 014; S2b Upload-Post, card 015; S2c autopilot and launches, card 016)
 - [ ] S3a: dashboard shell (`web/`, login, Home over today's API): the shell is built; the Vercel deploy is card 004
-- [ ] S3: Next.js dashboard v1 (separate `admin` Modal endpoint; after S1, alongside S2)
+- [ ] S3: Next.js dashboard v1 (separate `admin` Modal endpoint; after S1, alongside S2; planned in card 019; built in six cards, each after the previous one is deployed: S3-1 `admin` endpoint and Settings, card 022; S3-2 needs, Home and `/act`, card 023; S3-3 Review and Calendar, card 024; S3-4 Produce, Jobs and Sources, card 025; S3-5 Results, Compare and the account view, card 026; S3-5b Telegram retirements and the CLI cut-over, card 027)
 - [ ] S3b: Notion one-way mirror (connector, no code)
 - [ ] S3c: account workspaces: versioned categories, blueprints and accounts, experiments, notes (ADR-42; after S1 and S3's `admin` endpoint)
 - [x] S4: Timeline renderer (card 006, 2026-10-01; two-pass loudness ADR-47; deployed)

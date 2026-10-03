@@ -1,6 +1,6 @@
 # Card 019: S3 — dashboard v1, spec delta and build plan
 
-Status: proposed
+Status: done 2026-10-02 (PR #38)
 Stream: S3 · Branch: `s3p/plan` · Worktree: `../clipForge-s3p` (created with `scripts/worktree.sh s3p/plan`)
 Decision-log range: #610–#629 (append only, in this range; `s3/`'s #420–#439 is full, so this card has its own prefix, log #141)
 Model: most capable (plan for the operational UI, no code)
