@@ -117,12 +117,41 @@ Design: **card 009** (done, PR #20; mockups in `docs/design/dashboard/`). The bu
 - [ ] Vercel Pro project. Modal proxy auth plus bearer token from server route handlers, to `admin`: a second `@modal.asgi_app(requires_proxy_auth=True)` that reuses `create_app` with an admin router and its own `ADMIN_API_TOKEN` (D9).
 - **Exit:** the owner runs the daily check-in from the phone in under 20 minutes, every Telegram alert opens its row in `/act`, and the laptop is needed only for `clipforge fetch`.
 
-## S3c: Account workspaces (after S1 and S3's admin endpoint; ADR-42)
-Amended 2026-10-01 by ADR-48 and ADR-50 (S3 dashboard spec §10.3): the review tier and the budget move out of the versioned setup into the `autopilot` table; the actor check allows `system:<component>`; the workspace gains the Style, Hooks and Activity tabs; Accounts gets the Map next to S3's Compare; hook metrics live on the Hooks tab, not in the experiment registry.
-Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../superpowers/specs/2026-09-30-studio-s3-workspaces-design.md). Versioned categories, blueprints and accounts in the database (ADR-42, replacing ADR-35's "blueprints are files"), with notes, experiments and results. The implementation plan is written once S1 is finished.
-- [ ] **S3c-1, versions and workspaces:** its migration, the next in landing order (S3 dashboard spec §8.7) (categories, versions, experiments, notes, `content_items.setup_version`, `post_events.actor`), the resolver and field registry, `POST /setup/preview` (the one dry run for saves and experiment starts), `clipforge setup import` / `setup verify` (S1's blueprints and accounts as version 1), the category, blueprint and account workspaces (setup with origins, history, diff, restore), notes, the Accounts page. `SETUP_SOURCE=off`: edit and review only.
-- [ ] **S3c-2, wiring into the clip producer** (needs S1 Tasks 14, 15, 17 and 21 live): `create_job` reads and stamps the setup, items and sends record their version, caption preset in the captions key (only when not `default`), prompts from released versions, the language-mismatch hold. `SETUP_SOURCE=db` after `verify` reports 0 differences.
-- [ ] **S3c-3, experiments and results:** the experiment flow and page (the only place to keep or revert) with the re-cut estimate, one running experiment per account, results with the metrics available now (posted, skipped, rejected and reasons, cost, holds), the "too few items" warning, the Experiments nav item, Home's "Needs a decision" card, learnings in the category playbook.
+## S3c: Account workspaces (after S1's rollout, S2a's migration and S3's admin endpoint; ADR-42)
+Amended 2026-10-01 by ADR-48 and ADR-50 (S3 dashboard spec §10.3), applied to the spec by card 018 (2026-10-02):
+- The review tier and the budget move out of the versioned setup into the `autopilot` table.
+- The actor check allows `system:<component>`.
+- The workspace gains the Style, Hooks and Activity tabs.
+- Accounts gets the Map next to S3's Compare.
+- Hook metrics live on the Hooks tab, not in the experiment registry.
+- Card 018 also renumbered the migration (landing order; `post_events.actor` is S2a's) and split S3c-1 in two (owner, log #257).
+
+Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../superpowers/specs/2026-09-30-studio-s3-workspaces-design.md). Versioned categories, blueprints and accounts in the database (ADR-42, replacing ADR-35's "blueprints are files"), with notes, experiments and results. The implementation plan: [docs/superpowers/plans/2026-10-02-studio-s3c.md](../superpowers/plans/2026-10-02-studio-s3c.md) (four parts, 21 tasks).
+- [ ] **S3c-1a, data and routes** (after card 010, S2a's migration and S3's `admin` endpoint):
+  - its migration, the next in landing order (S3 dashboard spec §8.7): categories, versions, experiments, notes, `content_items.setup_version`, `accounts.current_version`; no deferred items;
+  - the resolver and field registry, and the versions service (`format_changed`, the `accounts` projection);
+  - `POST /setup/preview` (the one dry run for saves and experiment starts);
+  - `clipforge setup import` / `setup verify` (S1's blueprints and accounts as version 1, the drafted category playbooks);
+  - the admin routes, and `PATCH /accounts/{id}` writing versions.
+  - `SETUP_SOURCE=off`; nothing visible yet.
+- [ ] **S3c-1b, pages** (after S3c-1a and S3's Accounts pages):
+  - the Accounts Map and Compare's versions and experiment columns;
+  - the category, blueprint and account workspaces (Style; Setup & History with origins, diff and restore);
+  - notes.
+  - `SETUP_SOURCE=off`: edit and review only.
+- [ ] **S3c-2, wiring into the clip producer** (after S3c-1b and S2a's deploy):
+  - `create_job` reads and stamps the setup, and items and sends record their version;
+  - the caption preset in the captions key (only when not `default`), and prompts from released versions;
+  - the language-mismatch hold (the language is never a Whisper hint);
+  - `SetupRepo.format_window` as S2's injected format-window source (wired in `runtime.build_deps`; no S2 module changes);
+  - the Framing & captions tab.
+  - `SETUP_SOURCE=db` after `verify` reports 0 differences.
+- [ ] **S3c-3, experiments and results:**
+  - the experiment flow and page (the only place to keep or revert), with the re-cut estimate and autopilot markers;
+  - one running experiment per account, and the hooks card's weight freeze (start calls `hooks.freeze`, stop and decide call `hooks.release`);
+  - results with the metrics available now (posted, skipped, rejected and reasons, cost, holds) and the "too few items" warning;
+  - the Experiments nav item, the `experiment_decision` "needs me" row, and `experiments.digest_line` as a digest provider (wired in `runtime.build_deps`);
+  - learnings in the category playbook.
 - [ ] (In S7) views, retention, followers, clicks and revenue join the metric registry.
 - **Exit:** the owner changes realtalk's max clip length through an experiment, sees before and during for reject rate and posted rate, chooses Keep, and the learning shows in the clips playbook; all from the dashboard, on phone and laptop.
 
