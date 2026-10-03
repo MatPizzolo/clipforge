@@ -22,7 +22,7 @@ Last updated: 2026-10-02 evening (cards 010 checkpoint A (PR #31) and 012 (PR #2
 
 ## Waiting on the owner (most important first)
 
-1. **Before tonight's rollout: move Neon to AWS us-east-1.** The project "clip forge studio" is in `aws-sa-east-1` (São Paulo), but runbook §4a says us-east, near Modal; every query would cross to Brazil and back. It's still empty, so create a new project in us-east-1, put its two strings in `.env` (and `../clipForge-s1/.env`), use the new pooled string at rollout step 2, and delete the São Paulo project once the rollout works.
+1. ✅ Neon moved (2026-10-02): a new empty project in AWS us-east-2 (Ohio, about 10–12 ms from Modal's us-east); both `.env` files hold its pooled and direct strings, checked (connects, 0 tables). The São Paulo project is deleted.
 1. ✅ O5 collected (2026-10-01). You type the facts into `clipforge source edit` at rollout step 4; they live only in the database.
 2. ✅ Cards 002 + 006 + tzdata deployed (2026-10-02 02:10 UTC). Check tomorrow's first `posting_daily:` log line (07:00 UTC).
 3. **Answer the 2 clips waiting since 10:30** (✅, ⏭ or 🗑). The rest of the **S0 checks**: `/status`, `/next`, ✅ on and off, ⏭, 🗑 + reason, `/pause`, `/go`, and one scheduled slot end to end.
