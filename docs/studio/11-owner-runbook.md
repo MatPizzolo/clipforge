@@ -121,6 +121,7 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 - Sessions don't commit. The owner commits at checkpoints, pushes, opens a PR, and merges when CI is green (`docs/templates/checkpoint.md`).
 - Deploys: only with the owner's OK, from `main`, outside the blackout (§1). From card 001 on, only through `scripts/deploy.sh`.
 - The coordinator knows what's running before it reports or hands out a prompt: `ListAgents` (sessions named `clipforge-<stream>-xx`, busy or idle), `git worktree list` with each worktree's `git status --short`, `ps -eo pid,lstart,args | grep '[c]laude'` (shows `claude Run card …` and running Modal probes), and `gh pr list`. If it edits a card after that card's session has branched, it sends the change to the session with `SendMessage` and says so; the card file reaches `main` through a coord PR (2026-10-02).
+- **Deploy before the next code merge** (log #144): every deploy ships all of `main`, so a code card is deployed, with its owner steps done, before the next code card merges. Before a deploy, check that `docs/ops/deploys.md`'s last row matches `git log` (no merged code waiting), and that `db_doctor` shows the expected migration head. Docs-only merges are exempt.
 - Memory holds preferences and pointers only. Facts that change live in `STATUS.md` and the docs; the coordinator reviews memory at each pause.
 
 ### 3.2 How a card runs
