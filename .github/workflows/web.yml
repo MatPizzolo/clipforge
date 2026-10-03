@@ -1,7 +1,15 @@
 name: web
 
+# Not a required check (card 017, decision log #383): the dashboard isn't deployed yet (card 004),
+# and ci.yml's `check` already runs the OpenAPI contract on every code change. So this workflow
+# keeps its `paths:` filters. A required check skipped by a path filter stays "pending" forever
+# on PRs that don't match, so before requiring `web` (when the dashboard goes live), move it to
+# ci.yml's `changes` pattern: a job that always runs and passes when nothing here changed.
+
 on:
+  # one run per commit, as ci.yml: pushes to main, and pull requests
   push:
+    branches: [main]
     paths:
       - "web/**"
       - "scripts/export_openapi.py"
@@ -33,16 +41,31 @@ concurrency:
 jobs:
   web:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      - run: npx playwright install --with-deps chromium
+      # The browser is cached per lockfile (the Playwright version); the system libraries aren't
+      # (they install from apt), so a cache hit still runs install-deps.
+      - name: Cache the Playwright browser
+        id: playwright-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+      - name: Install the Playwright browser and its system libraries
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+        working-directory: web
+      - name: Install the Playwright system libraries (browser from the cache)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
         working-directory: web
       # lint, typecheck, unit tests, build, generated schemas, Playwright smoke (mock API).
       # The OpenAPI export check runs in ci.yml (scripts/check.sh --python) on every push.

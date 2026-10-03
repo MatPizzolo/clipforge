@@ -1,7 +1,10 @@
 name: CI
 
+# One run per commit (card 017): pushes to main (they deploy), and pull requests. A push to any
+# other branch runs nothing until its PR is open.
 on:
   push:
+    branches: [main]
   pull_request:
 
 # Read-only by default; only the tag job (after a deploy) may push, and only tags (card 008).
@@ -15,21 +18,85 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  check:
+  changes:
+    # Docs-only or code (scripts/ci_changes.py). No workflow-level `paths:`: `check` and `scope`
+    # are required checks, and a required check skipped by a path filter stays pending forever.
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read  # the last successful run on main (a push's base)
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Docs only, or code?
+        id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A PR: against its base branch. A push to main: against the last successful run on
+          # main, the deploy job's base, not the previous push: after a failed code push, a
+          # docs-only push must not pass `check` on the docs tests and let deploy ship the
+          # untested code. No earlier successful run (or an unknown commit) counts as code.
+          if [ "$EVENT" = pull_request ]; then
+            BASE="origin/$BASE_REF"
+          else
+            BASE=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main \
+                     --event push --status success --limit 1 --json headSha --jq '.[0].headSha' \
+                   2>/dev/null || true)
+          fi
+          # PRs: three dots (what the branch changed since it left its base). Pushes: two dots
+          # (the trees themselves, as the deploy job diffs), so a non-linear main hides nothing.
+          if [ "$EVENT" = pull_request ]; then DIFF=three-dot; else DIFF=two-dot; fi
+          python3 scripts/ci_changes.py --base "$BASE" --diff "$DIFF" --output "$GITHUB_OUTPUT"
+
+  check:
+    # Always runs, so it always reports a conclusion: the docs tests alone for a docs-only
+    # change, the whole gate otherwise. The name stays `check` (branch protection requires it).
+    # Not skipped when `changes` fails (a skipped required check counts as passed): it fails,
+    # and a missing `code` output runs the whole gate.
+    needs: changes
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: The change classifier must have succeeded
+        if: needs.changes.result != 'success'
+        env:
+          RESULT: ${{ needs.changes.result }}
+        run: |
+          echo "the changes job ended with '$RESULT': nothing was checked" >&2
+          exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      # A plain apt install (18-36 s). Not cached: cache-apt-pkgs restores files without running
+      # postinst, so update-alternatives links such as libblas.so.3 are missing (PR #37).
       - name: Install ffmpeg (with libass)
+        if: needs.changes.outputs.code != 'false'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - uses: astral-sh/setup-uv@v6
+      - name: ffmpeg version (Ubuntu 24.04's 6.1, with libass)
+        if: needs.changes.outputs.code != 'false'
+        run: |
+          ffmpeg -version | head -1
+          ffmpeg -hide_banner -filters | grep -E '^ ... (ass|subtitles) '
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
         with:
           enable-cache: true
       - run: uv sync --locked
       # The single gate (decision log #380): ruff, format, mypy, fast tests, OpenAPI contract, docs
-      - run: scripts/check.sh --python --docs
+      - name: scripts/check.sh --python --docs
+        if: needs.changes.outputs.code != 'false'
+        run: scripts/check.sh --python --docs
+      - name: scripts/check.sh --docs (docs-only change)
+        if: needs.changes.outputs.code == 'false'
+        run: scripts/check.sh --docs
       - name: Keep the failing step's full output (card 008)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: check-last-fail
           path: .superpowers/check-last-fail.log
@@ -40,8 +107,9 @@ jobs:
     # Files outside the branch's scope, and decision-log rows outside its range (scripts/scopes.toml)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0
       - name: Scope check
@@ -64,7 +132,7 @@ jobs:
       tag: ${{ steps.deployed.outputs.tag }}
       when: ${{ steps.deployed.outputs.when }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0
       - name: Skip when only the dashboard or docs changed
@@ -88,7 +156,7 @@ jobs:
             echo "deploy=false" >> "$GITHUB_OUTPUT"
             echo "only web/ or docs changed since $BASE: no deploy"
           fi
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
         if: steps.changes.outputs.deploy == 'true'
         with:
           enable-cache: true
@@ -163,10 +231,11 @@ jobs:
     needs: deploy
     if: needs.deploy.outputs.tag != ''
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
       - name: Push the deploy tag
         env:
           TAG: ${{ needs.deploy.outputs.tag }}

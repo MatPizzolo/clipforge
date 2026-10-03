@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import re
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -138,6 +141,26 @@ def test_cards_have_a_status_and_a_log_range(card: Path) -> None:
     head = "\n".join(card.read_text().splitlines()[:12])
     assert re.search(r"^Status: \S", head, re.MULTILINE), "no Status line"
     assert re.search(r"^Decision-log range: #\d+\u2013#\d+", head, re.MULTILINE), "no log range"
+
+
+def test_every_card_branch_has_a_scope() -> None:
+    # Here, not in tests/scripts/: a PR that only adds a card runs only these docs tests in CI
+    # (scripts/ci_changes.py, card 017).
+    check_scope = _load_script("check_scope")
+    scopes = check_scope.load_scopes(ROOT / "scripts" / "scopes.toml")
+    for card in sorted(CARDS.glob("[0-9]*.md")):
+        branch = card.read_text().split("Branch: `", 1)[1].split("`", 1)[0]
+        assert check_scope.scope_for(branch, scopes) is not None, f"{card.name}: {branch}"
+
+
+def _load_script(name: str) -> ModuleType:
+    path = ROOT / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"_docs_{name}", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses look their module up here
+    spec.loader.exec_module(module)
+    return module
 
 
 # Settings without a default that .env.example may leave out, and why.
