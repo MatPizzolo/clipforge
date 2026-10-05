@@ -1,6 +1,6 @@
 # Card 010: S1 — the rollout (Task 22), run with the owner
 
-Status: checkpoint A merged 2026-10-02 (PR #31); checkpoint B (live) next
+Status: checkpoint B done 2026-10-05 (S1 live on Postgres; report docs/reports/010-s1-2026-10-05.md); checkpoint C next
 Stream: S1 · Branch: `s1/rollout` · Worktree: `../clipForge-s1` (created with `scripts/worktree.sh s1/rollout`)
 Decision-log range: #200–#249 (append only; #200–#218 are taken, re-read the log)
 Model: most capable (a production change, done live with the owner)
@@ -39,6 +39,9 @@ Since the S1 plan was written:
 5. `scripts/check.sh` green, report, stop. The owner merges this before step 1 below.
 
 ### Checkpoint B: the rollout, live, one step at a time
+
+> **Updated 2026-10-05 (ADR-54, log #149):** posting is paused on purpose (the owner sent `/pause`); Telegram is notifications only and realtalk posts nothing until S2b. So no check below waits for a slot send or a tap. Where the steps say "the next slot sends" or "a slot send and tap", check instead: `uv run clipforge status` (read-only), `uv run clipforge posting verify` at 0 differences, `db_doctor` (`ok: True`, `schedule_drift: []`) and `/status` in Telegram (it says paused). The tick's log lines say paused, not "posting is off". The owner keeps posting paused after step 7.
+
 Before starting, confirm with the owner:
 - it's outside a blackout, and there's at least an hour before the next slot;
 - `DATABASE_URL` is **not** in `clipforge-secrets` yet (the owner checks the key list in the Modal dashboard; the value never goes in chat). It goes in only at step 2, after step 1's migration: on 2026-10-02, with the key set before the tables existed, every `sources` read failed and `GET /posting` answered 500 (`docs/ops/deploys.md`);
@@ -49,7 +52,7 @@ Then walk runbook §4c's steps 1 → 6b in one sitting (step 2's deploy opens th
 | Step | The owner runs | The session checks |
 |---|---|---|
 | 1 | `uv run alembic upgrade head` | Output ends at revision 0001 |
-| 2 | Puts `DATABASE_URL` back in `clipforge-secrets` (dashboard edit), sets `DEPLOY_DB_CHECK=on` in `.env`, then `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "S1 rollout 4c.2: dual write"` | The dry run shows `database at the migration head: … 0001`; after the deploy, logs show the tick and no "posting is off" |
+| 2 | Puts `DATABASE_URL` back in `clipforge-secrets` (dashboard edit), sets `DEPLOY_DB_CHECK=on` in `.env`, then `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "S1 rollout 4c.2: dual write"` | The dry run shows `database at the migration head: … 0001`; after the deploy, logs show the tick (paused, ADR-54) and no "posting is off"; `clipforge status` and `/status` answer |
 | 3 | `uv run clipforge account create --blueprint realtalk-clips --lang en --handle realtalk.clipsdaily --posting-from-env` | `account list`: one account, posting on, its slots and time zone as before |
 | 4 | `source import-toml --account realtalk-clips-en --dry-run`, then for real; `source edit billy-garton …` with the O5 facts | `source show billy-garton`: no missing permission facts, platforms as expected. Never echo the evidence link |
 | 5 | `posting import --dry-run`, then `posting import`, then `jobs backfill` | The dry run's counts per status match `clipforge status` |
@@ -58,11 +61,11 @@ Then walk runbook §4c's steps 1 → 6b in one sitting (step 2's deploy opens th
 
 **Stop and ask the owner** at the first surprise (a non-zero difference, an unexpected count, an error in the logs). The rollback is in the runbook: set `STATE_READS=dict` and redeploy. The Dict is still the primary until step 7, so nothing is lost before then.
 
-Then step 7, which can be the same day or the next, outside a blackout: the owner sets `STATE_READS=postgres` in `clipforge-secrets` and `.env`, then runs `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "S1 rollout 4c.7: reads from Postgres" --rollout-step 4c.7`. The session checks `clipforge status` (it now reads from Postgres) and asks the owner to watch the next slot's send and one tap of each kind.
+Then step 7, which can be the same day or the next, outside a blackout: the owner sets `STATE_READS=postgres` in `clipforge-secrets` and `.env`, then runs `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "S1 rollout 4c.7: reads from Postgres" --rollout-step 4c.7`. The session checks `clipforge status` (it now reads from Postgres), `posting verify` at 0 differences and `db_doctor`, and asks the owner for `/status` in Telegram (it says paused). There is no slot send or tap to watch (ADR-54); the owner keeps posting paused after step 7.
 
 ### Checkpoint C: evidence and close-out
 1. The S1 plan's Task 22 step 9: measure and record in `docs/studio/03` a "Neon (S1, measured)" block (`clipforge status` timing after 10 idle minutes, three runs; `posting_tick` durations; storage used).
-2. Step 10's evidence in the report: `account list`, `posting verify` at 0 differences, one real slot send and tap after `STATE_READS=postgres`.
+2. Step 10's evidence in the report: `account list`, `posting verify` at 0 differences, `db_doctor`, and `clipforge status` plus `/status` after `STATE_READS=postgres` (no slot send or tap: posting is paused, ADR-54).
 3. Tick S1 in `docs/studio/04` and `ROADMAP.md`, except "ADR-24's keep-alive retires", which stays open for Task 23.
 4. Update the S1 plan's STATUS block (Task 22 done; Task 23 after 7 clean days of `posting_daily: verify` at 0 differences), and log the rollout's rulings in your range.
 5. List for the coordinator anything in runbook §4c that was wrong or missing.
@@ -73,7 +76,7 @@ Then step 7, which can be the same day or the next, outside a blackout: the owne
 - C: measurements, ticks, plan status. Suggested commit: `010: s1: rollout evidence, Neon measurements, S1 ticked`
 
 ## Done when
-- `posting verify` reports 0 differences after step 7, and one real slot send and tap happened with `STATE_READS=postgres`.
+- `posting verify` reports 0 differences after step 7, and `clipforge status`, `db_doctor` and `/status` answer correctly with `STATE_READS=postgres` (posting stays paused, ADR-54; no slot send or tap is needed).
 - `scripts/check.sh` is green at A and C.
 - The report has every step's output, with no secrets, URLs or permission details in it.
 

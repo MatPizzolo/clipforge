@@ -2,7 +2,7 @@
 
 Every step **you** do, in order, with the exact command. Sessions write code; you hold the keys, create the accounts, approve deploys, and do git. Each step says where its values go.
 
-Last updated: 2026-10-02. Status: ✅ done · ⏳ now · ⬜ later.
+Last updated: 2026-10-05 (ADR-54: Telegram is notifications only). Status: ✅ done · ⏳ now · ⬜ later.
 
 Commands run from the project root (`~/code/clipforge/main`; worktrees sit beside it as `~/code/clipforge/clipForge-<stream>`, layout A, 2026-10-02) unless they start with `cd web`.
 
@@ -55,20 +55,22 @@ Add `STATE_READS=dict` to `clipforge-secrets` too (dashboard edit), so both plac
 
 **Deploy blackout** (decision log #108), until S1's slot guard is verified in production: **don't deploy from each posting slot until 30 minutes after it.** `scripts/deploy.sh` enforces it from `POSTING_SLOTS` and `POSTING_TIMEZONE` in `.env`, and has no override. With the default slots (New York time) that means no deploys during 08:00–08:30, 10:30–11:00, 13:00–13:30, 16:00–16:30, 19:00–19:30 and 21:30–22:00. If you changed `POSTING_SLOTS`, use your own times. Reason: a claim-key change can send the same slot twice (#77).
 
-⏳ **Still open:** the phone test that the S0 session asked for: `/status`, `/next`, ✅ on and off, ⏭ Skip, 🗑 Reject with a reason, `/pause`, `/go`. Report the result to the S0 session. It then checks the next scheduled slot and the 07:00 UTC daily run after the 2026-09-30 redeploy. The 2026-10-02 deploy renamed the cron: the 07:00 UTC run now logs `posting_daily:` (ADR-46, same slot) and also runs the rebuild every day (log #211).
+**Dropped 2026-10-05 (ADR-54):** assisted posting is paused and Telegram is notifications only, so only `/status`, `/pause` and `/go` of this test still apply. Earlier text: the phone test that the S0 session asked for: `/status`, `/next`, ✅ on and off, ⏭ Skip, 🗑 Reject with a reason, `/pause`, `/go`. Report the result to the S0 session. It then checks the next scheduled slot and the 07:00 UTC daily run after the 2026-09-30 redeploy. The 2026-10-02 deploy renamed the cron: the 07:00 UTC run now logs `posting_daily:` (ADR-46, same slot) and also runs the rebuild every day (log #211).
 
 ## 2. Every day (until S2 publishes automatically)
 
-**From S2b, for accounts on Upload-Post** (a connected profile and Publish on): the 09:00 digest and the review cards that follow it replace answering the clip at each slot. Approve or reject each card (✅ Approve · 🗑 Reject + reason); an approved item goes to Upload-Post 30 minutes before its slot. Anything still undecided gets one more card 2 h before its slot. Accounts on the assisted path (Publish off, or no profile yet) keep the clip-at-the-slot flow below.
+**Telegram is notifications only (ADR-54, 2026-10-05).** There is no assisted posting any more: no clip at the slot, no ✅ per platform, no review buttons. Posting is paused (`/pause`, sent 2026-10-05) and realtalk posts nothing until S2b (card 015) publishes through Upload-Post; the queued clips wait intact. Telegram brings you:
+- **alerts:** ops alerts, failures and every "needs me" row, each with an Open link to its dashboard page (`/act/<kind>/<id>`, from card 023);
+- **the 09:00 digest** (from S2c), including "N items need review → Open";
+- **status replies** (`/status`) and **the brake** (`/pause`, `/go`, `/pause all`; §2a).
+
+**From S2b, for accounts on Upload-Post** (a connected profile and Publish on): review on the dashboard's Review page (card 024). When an item is due within 2 h and still undecided, Telegram sends one notification, "N items need review → Open". An approved item goes to Upload-Post 30 minutes before its slot. If a post fails, you get an alert (reconnect, or open the failure row), never a card to post by hand.
 
 | To | Do |
 |---|---|
 | See the queue | `/status` in Telegram, `uv run clipforge status`, or the dashboard's Home |
-| Get the next clip now | `/next` |
-| Record a post | Tap ✅ TikTok / Instagram / YouTube under the clip (tap again to undo) |
-| Skip a clip for 24 h | ⏭ Skip (the next clip arrives right away) |
-| Drop a clip | 🗑 Reject, then pick a reason |
-| Stop or restart the slots | `/pause`, `/go`; from S2a also `/pause <account>`, `/pause all`, `/go <account>`, `/go all` (§2a) |
+| Review, skip or drop a clip | The dashboard's Review page (card 024); until it ships, nothing posts, so nothing needs a decision (ADR-54). `/next` and the ✅/⏭/🗑 buttons are dormant |
+| Stop or restart the slots | `/pause`, `/go` (keep posting paused until S2b, ADR-54); from S2a also `/pause <account>`, `/pause all`, `/go <account>`, `/go all` (§2a) |
 | Add a new episode | Put the file in `videos/<channel>/` and run `uv run clipforge clip`. Add `--fetch` to also download the clips into `videos/out/` |
 | Check one job | `uv run clipforge status <job_id>` |
 | Continue a failed job | `uv run clipforge resume <job_id>` |
@@ -78,7 +80,7 @@ Add `STATE_READS=dict` to `clipforge-secrets` too (dashboard edit), so both plac
 | Promote an account the digest says is ready (from S2c) | `uv run clipforge autopilot promote <account>` (until S3's one tap) |
 | Record a strike or takedown (from S2c) | `uv run clipforge autopilot strike <account> …`: Upload-Post sends no strike event, so you enter it; the account is demoted automatically |
 | Check the gate before turning it on (from S2a) | `uv run clipforge policy dry-run` ("0 items would be held" before `GATE_ENFORCE=on`) |
-| Connect or disconnect an account's Upload-Post profile (from S2b) | `uv run clipforge account edit <account> --publisher-profile <profile> --facebook-page-id <id>`, then `uv run clipforge publisher check <account>` (read-only). Back to assisted: `uv run clipforge account edit <account> --clear-publisher` |
+| Connect or disconnect an account's Upload-Post profile (from S2b) | `uv run clipforge account edit <account> --publisher-profile <profile> --facebook-page-id <id>`, then `uv run clipforge publisher check <account>` (read-only). Disconnect: `uv run clipforge account edit <account> --clear-publisher` (the account then posts nothing; there is no assisted fallback, ADR-54) |
 | Make a tracked bio or affiliate link (from S2c) | `uv run clipforge link add <account> <url> --kind bio` (prints the `/go/<slug>` link), `uv run clipforge link list <account>` |
 
 **Posting after an outage** (the `posting:outage` flag, log #217). If the newest posting snapshot is more than 2 days old when `posting_daily` runs (07:00 UTC), it sets the flag to that snapshot's date. Expired Dict keys could then make a clip go out twice, so while the flag is set:
@@ -97,7 +99,7 @@ uv run clipforge status --restore <date from the alert>
 ## 2a. The brake (from S2a)
 
 - **`/pause <account>`** stops one account; **`/pause all`** (or `/pause` alone) stops every account. **`/go <account>`** and **`/go all`** restart. `/go <account>` while `/pause all` is on says "still braked by /pause all; send /go all to resume".
-- **What a brake stops:** every dispatcher phase for that scope (no plan, no review card, no hand-off, no assisted clip). From S2b it also **cancels posts already scheduled at Upload-Post** for that scope; the reply counts them ("Paused realtalk-clips-en: 1 scheduled post cancelled, 0 already out"). `/go` puts cancelled items back: they lead the next plan, and a slot whose time has passed is missed.
+- **What a brake stops:** every dispatcher phase for that scope (no plan, no review notification, no hand-off). From S2b it also **cancels posts already scheduled at Upload-Post** for that scope; the reply counts them ("Paused realtalk-clips-en: 1 scheduled post cancelled, 0 already out"). `/go` puts cancelled items back: they lead the next plan, and a slot whose time has passed is missed.
 - **"Recorded in the brake only":** the reply when Neon is down. The brake lives first in a Dict key (`brake:<scope>`), which works without the database; the database copy (`posting_state`) is written later, and `posting_daily` repairs any difference (the newer one wins).
 - **How to check:** `/status` in Telegram or `uv run clipforge status` shows which scopes are braked; `uv run clipforge autopilot show <account>` shows the account's state.
 
@@ -155,7 +157,7 @@ git worktree remove ../clipForge-x0     # after its branch is merged
 
 - `docs/studio/10`: append only, in the branch's range; re-read before editing; superseded rows get `superseded by N`.
 - `docs/studio/04` is the Phase 6 source of truth; `ROADMAP.md` mirrors it and is ticked in the same change.
-- ADRs: accepted ones only in `docs/DECISIONS.md`. 05 holds the drafts and the next free number (ADR-52). ADR-41 (S1), ADR-42 (S3c), and ADR-27 and ADR-33 (S2) are accepted and live in `docs/DECISIONS.md`.
+- ADRs: accepted ones only in `docs/DECISIONS.md`. 05 holds the drafts and the next free number (ADR-55). ADR-41 (S1), ADR-42 (S3c), ADR-27 and ADR-33 (S2), and ADR-54 (Telegram is notifications only) are accepted and live in `docs/DECISIONS.md`.
 - `STATUS.md`: the coordinator's; sessions don't edit it except S1's plan-status line if its card says so.
 - Specs and plans are marked historical after their build (`docs/superpowers/README.md`).
 
@@ -182,14 +184,18 @@ git worktree remove ../clipForge-x0     # after its branch is merged
 ### 4b. During the build
 Approve each checkpoint the S1 session reports. A checkpoint is a commit on the card's branch, reviewed in its PR (§3.2).
 
-### 4c. Rollout ⬜ (run as card 010; each deploy only with your OK; the session runs these with you)
+### 4c. Rollout ✅ steps 1–7 done 2026-10-05 (card 010; notes from the run are inline below; step 8 is a later card) (run as card 010; each deploy only with your OK; the session runs these with you)
 1. Migrate the database:
    ```
-   uv run alembic upgrade head
+   uv run --env-file .env alembic upgrade head
    ```
+   It prints nothing on success (log #223); `db_doctor` or `deploy.sh --dry-run` then shows the head.
 2. Deploy. The Dict stays the primary, and Postgres gets a copy of every write:
    ```
    scripts/deploy.sh --reason "S1 rollout 4c.2: dual write"
+   ```
+   Deploy from `~/code/clipforge/main`: its `.env` needs `DEPLOY_DB_CHECK=on` and `DATABASE_URL_UNPOOLED` for the migration-head check.
+   ```
    ```
    Put `DATABASE_URL` (the pooled string) back in `clipforge-secrets` first (dashboard edit, #107): without it the app stays Dict-only.
 
@@ -207,7 +213,7 @@ Approve each checkpoint the S1 session reports. A checkpoint is a commit on the 
    ```
 4. Import the channel into sources, then fill in its permission record:
    ```
-   uv run clipforge source import-toml --account realtalk-clips-en --dry-run
+   uv run clipforge source import-toml --account realtalk-clips-en --dry-run   # from a worktree add --folder ~/code/clipforge/main/videos
    uv run clipforge source import-toml --account realtalk-clips-en
    uv run clipforge source show billy-garton
    uv run clipforge source edit billy-garton --granted-at <YYYY-MM-DD> --granted-by "<name>" --evidence-url <link> --monetization yes --translation <yes|no>
@@ -229,11 +235,11 @@ Approve each checkpoint the S1 session reports. A checkpoint is a commit on the 
    uv run modal run src/clipforge/app.py::db_doctor
    ```
    `db_doctor` must print `ok: True` and `schedule_drift: []`. If it names an account, run any `uv run clipforge account edit` on it, or `posting_daily` again, then check again. Don't go on to step 7 until it's empty.
-7. Switch reads to Postgres: set `STATE_READS=postgres` in `clipforge-secrets` and `.env`, then:
+7. Switch reads to Postgres: set `STATE_READS=postgres` in `clipforge-secrets` and `.env` (type it carefully: `deploy.sh` checks only `.env`, and a typo in the secret, as on 2026-10-05, crashes every container until fixed; check `uv run modal app logs clipforge` right after the deploy), then:
    ```
    scripts/deploy.sh --reason "S1 rollout 4c.7: reads from Postgres" --rollout-step 4c.7
    ```
-   Watch one day of slots and taps. The verify also runs daily inside `posting_daily` (07:00 UTC): its log line is `posting_daily: verify: …`.
+   Posting stays paused (ADR-54), so there are no slots or taps to watch: check `uv run clipforge status` (it now reads from Postgres), `uv run clipforge posting verify` at 0 differences, `db_doctor`, and `/status` in Telegram (it says paused). Keep posting paused after this step. The verify also runs daily inside `posting_daily` (07:00 UTC): its log line is `posting_daily: verify: …`.
 8. After **7 days** with a clean verify every day: a later session removes the Dict copy of the queue and `posting_daily`'s Dict parts (the touch, the Dict snapshot and the verify), and ADR-24 retires. `posting_daily` itself stays (ADR-46), with the jobs backfill, the schedule copies, the rebuild and the table snapshot (log #218).
 
 **Rollback** at any point: set `STATE_READS=dict` and redeploy. The Dict has stayed current for realtalk, and the other accounts pause until you switch back. Run `clipforge posting verify` before switching to Postgres again.
@@ -292,7 +298,7 @@ uv run python scripts/export_openapi.py --check
 
 ## 6. S2: publishing ⬜ (prepare now, because warm-up takes days)
 
-The build is three cards: 014 (S2a, rails), 015 (S2b, Upload-Post for realtalk) and 016 (S2c, autopilot and the two launches). Every deploy: `scripts/deploy.sh --dry-run` first, then the deploy outside the blackout (§1). New secrets: add **only** the new keys in the Modal dashboard (§0), never `modal secret create --force`; then add them to `.env`.
+The build is three cards: 014 (S2a, rails), 015 (S2b, Upload-Post for realtalk) and 016 (S2c, autopilot and the two launches). **Updated 2026-10-05 (ADR-54):** S2b (card 015) starts only after card 024 (the Review page) is deployed, so the order is 014 → 031 → 004 → 022 → 023 → 024 → 015 → 016; reviews happen on the dashboard, and Telegram only notifies. Every deploy: `scripts/deploy.sh --dry-run` first, then the deploy outside the blackout (§1). New secrets: add **only** the new keys in the Modal dashboard (§0), never `modal secret create --force`; then add them to `.env`.
 
 **Prepare now:**
 1. Create the TikTok, Instagram (a Professional account linked to a Facebook Page), YouTube and Facebook accounts for founder.tapes and hombre.en.construccion, with the handles from O3. Use them normally for 3–5 days; no fake engagement. Record the handles in `docs/studio/09-account-registry.md`.
@@ -301,7 +307,7 @@ The build is three cards: 014 (S2a, rails), 015 (S2b, Upload-Post for realtalk) 
 **S2a (card 014), after card 010's rollout** (`STATE_READS=postgres` verified, `posting verify` at 0, `db_doctor` showing a schedule copy for every account, Neon's head at `0001`):
 1. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "S2a: dispatcher replaces posting_tick"`, outside the posting slots. CI runs migration 0002 before the deploy.
 2. `uv run modal run src/clipforge/app.py::db_doctor`: the head is `0002`.
-3. For one day: the `dispatcher:` log lines show the same sends as the previous day's `posting_tick:` lines, and `uv run clipforge posting verify` reports 0 differences.
+3. For one day: the `dispatcher:` log lines show the same results as the previous day's `posting_tick:` lines (with posting paused per ADR-54, both say paused and send nothing), and `uv run clipforge posting verify` reports 0 differences.
 4. In Telegram: `/pause realtalk-clips-en`, `/go realtalk-clips-en`, `/pause all`, `/go all`. Then `uv run clipforge autopilot show realtalk-clips-en`: Hands-on, "Publish: on, waiting for a connected profile".
 5. `uv run clipforge policy dry-run` (the gate is still log-only). Note the count for S2b.
 
@@ -317,7 +323,7 @@ The build is three cards: 014 (S2a, rails), 015 (S2b, Upload-Post for realtalk) 
 4. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "S2b: publishing"`.
 5. `uv run clipforge policy dry-run`. When it reports "0 items would be held", set `GATE_ENFORCE=on` in `clipforge-secrets` and `.env`, then redeploy (dry run first).
 6. `uv run clipforge account edit realtalk-clips-en --publisher-profile realtalk-clips-en --facebook-page-id <id>`, then `uv run clipforge publisher check realtalk-clips-en`: no problems.
-7. The next morning at 09:00: approve one card. After its slot: `uv run clipforge status`, `uv run clipforge posting verify` (0 differences), and the post on each platform.
+7. Approve one item on the dashboard's Review page (Telegram only notifies, ADR-54). After its slot: `uv run clipforge status`, `uv run clipforge posting verify` (0 differences), and the post on each platform.
 8. With one item scheduled: `/pause realtalk-clips-en` (the reply says 1 cancelled), then `/go realtalk-clips-en`. Run a day on Hands-on.
 
 **S2c (card 016) launch:**
@@ -327,7 +333,7 @@ The build is three cards: 014 (S2a, rails), 015 (S2b, Upload-Post for realtalk) 
 4. One Upload-Post profile each (`founder-tapes-en`, `hombre-en-construccion-es`; 3 of Basic's 5), connected as in S2b; then `uv run clipforge account edit <id> --publisher-profile <id> --facebook-page-id <id>` and `uv run clipforge publisher check <id>`.
 5. Optional: `uv run clipforge link add realtalk-clips-en <bio url> --kind bio`, and put the printed `/go/<slug>` link in the bio.
 
-**Rollback:** one account: `uv run clipforge account edit <id> --clear-publisher` (cancels its scheduled Upload-Post posts; assisted from the next slot). The gate: `GATE_ENFORCE=off` and a redeploy. A promotion: `uv run clipforge autopilot preset <id> hands_on --reason "<why>"`. A whole step: a revert on `main`, then `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "revert S2<x>"`; 0002 is expand-only, so older code runs on it.
+**Rollback:** one account: `uv run clipforge account edit <id> --clear-publisher` (cancels its scheduled Upload-Post posts; the account then posts nothing, since the assisted fallback is gone, ADR-54). The gate: `GATE_ENFORCE=off` and a redeploy. A promotion: `uv run clipforge autopilot preset <id> hands_on --reason "<why>"`. A whole step: a revert on `main`, then `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "revert S2<x>"`; 0002 is expand-only, so older code runs on it.
 
 ## 7. Spikes
 

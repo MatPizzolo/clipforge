@@ -241,6 +241,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 ### S2: Publishing, review tiers, policy gate, ledger
 - **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** 04's S2 list is the source: autopilot (`autopilot` table and history, the Review dial, the Publish switch, presets, ladder, demotions), the review windows (format 10, producer version 5 per ADR-49, first dubs 10), the brake's scope, one-tap only for items due within 2 h, publishing-failure rows, the dispatcher (accept ADR-27 here), the migration landing-order rule. founder.tapes and hombre.en.construccion are created just before this card (O3); the exit is realtalk auto-posting on its rung and the other two starting Hands-on. Read the S3 dashboard spec §8.6.
 - **Updated 2026-10-02 (card 011's spec and plan, PR #27):** designed in `docs/superpowers/specs/2026-10-01-studio-s2-design.md` and planned in `docs/superpowers/plans/2026-10-02-studio-s2.md`; built in three cards, 014 (S2a), 015 (S2b) and 016 (S2c). ADR-27 and ADR-33 (tracking links only) are accepted; conversion import is draft ADR-51 (S7).
+- **Updated 2026-10-05 (ADR-54):** Telegram is notifications only. No review cards, no 09:00 review batch or `REVIEW_BATCH`, no AssistedPublisher fallback; assisted posting is paused (dormant code) and S2b (card 015) starts only after card 024 (S3-3, the Review page) is deployed: 010 → 014 → 031 → 004 → 022 → 023 → 024 → 015 → 016. The plan and spec carry dated amendment notes.
 - **Depends:** S1's rollout (card 010) finished with Dual writes still on; ADR-28 and ADR-29 accepted; ADR-27 accepted (spec §11.1); ADR-33 accepted as tracking links (spec §11.2).
 - **Owner:**
   - Upload-Post **Basic** ($24/month, 5 profiles; O4, #440), not Professional; upgrade at the 6th account;
@@ -252,7 +253,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 - **Read:** the S2 spec and plan, 02 §5, §5b and §6, 08 §1, §2b and §2c, 03 (Upload-Post, media hosting).
 - **Actions:** the plan's tasks, by sub-step:
   - **S2a** (card 014, Tasks 1–8): contracts and settings, migration 0002, the autopilot service, the brake, the policy gate v1 (log-only), routing and windows, the dispatcher, the autopilot CLI and routes.
-  - **S2b** (card 015, Tasks 9–20): R5's real call first; publish state, the publisher, media links, per-platform copy, the slot planner, review cards, hand-off, the webhook, reconcile and the fallback, the brake at Upload-Post, the 09:00 review batch.
+  - **S2b** (card 015, Tasks 9–19, after card 024 is deployed): R5's real call first; publish state, the publisher, media links, per-platform copy, the slot planner, the "needs review" notification, hand-off, the webhook, reconcile and the final check, the brake at Upload-Post (Task 20, the 09:00 review batch, removed by ADR-54).
   - **S2c** (card 016, Tasks 21–26): the ladder and demotions, the `sample` and `auto` dials, the digest, failure rows, tracking links, launch support and the docs.
   - Tests throughout: a fake Publisher, golden cases for the gate. (Judge, ledger, lanes and the morning message move to S6.)
 - **Done when:**
@@ -263,6 +264,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 
 ### S3: Dashboard v1 (Next.js on Vercel)
 - **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** the pages, API and data are in the S3 dashboard spec §7 and §10.2 and 04's S3 list (inbox-first Home with "needs me" and the attention meter, `/act`, Results, Settings, Accounts → Compare, the Overview/Autopilot/Activity tabs, the link-contract test); mockups in `docs/design/dashboard/`. Caps are shown, not enforced. Its exit is the 20-minute phone check-in.
+- **Updated 2026-10-05 (ADR-54):** review decisions happen only here (Telegram only notifies), so cards 004, 022, 023 and 024 now run before S2b (card 015); `REVIEW_BATCH` no longer exists, and every "needs me" row reaches the phone as a notification with Open → `/act/<kind>/<id>`.
 - **Depends:** S1 and S3a, and ADR-38 accepted. Runs alongside S2; approve-to-publish in the inbox lands when S2 does.
 - **Updated 2026-10-02 (card 019's spec §11 and plan, PR #38; log #145, #146):** planned in `docs/superpowers/plans/2026-10-02-studio-s3-dashboard.md` (spec §11 wins over §1–§10 where they differ); built in six cards, one per checkpoint, each after the previous one is deployed (#144, #623): 022 (S3-1), 023 (S3-2), 024 (S3-3), 025 (S3-4), 026 (S3-5) and 027 (S3-5b), on branch prefix `s3b/`. S3-1 starts after card 010 is done and card 014 (S2a) is deployed. Calendar's drag-to-reschedule is a later card (Open table); Personas is S8.
 - **Owner:**

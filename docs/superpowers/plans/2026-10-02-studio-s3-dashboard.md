@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Amended by ADR-54 (2026-10-05): Telegram is notifications only** (log #149, #150). `REVIEW_BATCH` and S2's 09:00 review batch are removed, so S3-3 has no `REVIEW_BATCH=off` step and its rollback doesn't bring a batch back. There are no Telegram review cards: S2's `review/cards.py` is replaced by `review/notify.py` (a "N items need review → Open" notification through `ops.alert`), so Task 10's optional `review/cards.py` edit doesn't apply. S3-1 to S3-3 (cards 022–024) now land **before** S2b (card 015), which waits for the Review page; until S2b is deployed the Review lane shows its empty state and `POST /admin/review/batch` is card 015's follow-up. Posting is paused, so S3-3's owner check of "the next slot sends it" becomes "it shows first in the queue".
+
 **Goal:** Build the dashboard v1 in six deployable checkpoints, one card each:
 - **S3-1:** the `admin` endpoint, S3's migration and Settings.
 - **S3-2:** "needs me", Home and `/act`.
@@ -123,7 +125,7 @@ The five conditions the spec implies but no task's main tests exercise, most lik
 | `src/clipforge/posting/actions.py` | changed | `pin` |
 | `src/clipforge/posting/repo.py`, `posting/queue.py`, `posting/migrate.py` | changed | `set_pin` on the protocol; `pick_next` pins; verify excludes pins |
 | `src/clipforge/ops.py` | changed | `row_id`, `alert:msg:<row id>`, `mark_done` |
-| `src/clipforge/review/cards.py`, `dispatch/digest.py` | changed | Open ↗ to `/act`; `EXISTING_PAGES` grows |
+| `dispatch/digest.py` | changed | `EXISTING_PAGES` grows (`review/cards.py` removed by ADR-54) |
 | `src/clipforge/bot/commands.py` | changed | `/clip`, `/status <id>`, `/resume` retire (S3-5b) |
 | `src/clipforge/cli.py` | changed | the CLI cut-over to `admin` (S3-5b) |
 | `scripts/export_openapi.py` | changed | export the `admin` surface |
@@ -858,7 +860,7 @@ Run `scripts/check.sh --python --web`.
 
 **Files:**
 - Modify: `src/clipforge/ops.py`, `src/clipforge/needs/router.py` (call `mark_done`), `src/clipforge/bot/messages.py` and `bot/webhook.py` (the failure alert gains a **[Resume]** callback button `n:job_failed:resume:<job>`; that callback and typed `/resume <id>` call `needs.router.act(kind="job_failed", subject=<job>, action="resume", actor=telegram:<id>, surface="telegram")` when the database is wired, else `service.resume_job` as today), the callers of `ops.alert` for row kinds (`pipeline` failure path → `row_id="job_failed:<job>"`; `bot/posting.py` permission hold → `permission_expired:<source>`; `posting/daily.py` outage → `outage:posting`); if merged: `review/cards.py` (Open ↗ to `/act/review_due/<item>`), `publishing/problems.alert_problem` (passes `row_id`), and `dispatch/digest.py` (`EXISTING_PAGES` gains `"/act/"` and `"/?needs="`)
-- Test: `tests/test_ops.py` (add), `tests/review/test_cards.py` (add, if merged), `tests/dispatch/test_digest.py` (add, if merged)
+- Test: `tests/test_ops.py` (add), ~~`tests/review/test_cards.py`~~ (no review cards, ADR-54), `tests/dispatch/test_digest.py` (add, if merged)
 
 **Interfaces:**
 - Produces:
@@ -1267,12 +1269,12 @@ Run: `npm --prefix web run e2e -- calendar` (FAIL first). Implement. Rerun: PASS
 0. **Pre-deploy check (#623):** no other code card is on `main` undeployed (`docs/ops/deploys.md` against `git log`), and `uv run modal run src/clipforge/app.py::db_doctor` shows the expected head (S3's `NNNN`).
 1. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "S3-3: review and calendar"`.
 2. `uv run clipforge posting verify`: still 0 differences (pins are excluded).
-3. Online: open Review → Queue, move one clip to the front, and check that the next slot sends it.
-4. **After 7 days of Review online with no problems (#617):** set `REVIEW_BATCH=off` with the `docs/ops/secrets.md` procedure, then `scripts/deploy.sh --reason "REVIEW_BATCH off"`. Only the 2 h cards remain.
+3. Online: open Review → Queue, move one clip to the front, and check that it shows first (posting stays paused until S2b, ADR-54, so no slot sends it).
+4. ~~`REVIEW_BATCH=off` after 7 days~~: removed by ADR-54 (2026-10-05); the setting no longer exists. Tell the coordinator that card 015 (S2b) can start.
 
 **What the owner sees:** Review with both tabs; the queue reorderable from the phone; Calendar.
 
-**Rollback (S3-3):** a revert deploy. `queue_pin` values stay, and the old `pick_next` ignores them. `REVIEW_BATCH=on` brings the morning batch back.
+**Rollback (S3-3):** a revert deploy. `queue_pin` values stay, and the old `pick_next` ignores them. (ADR-54: there is no morning batch to bring back.)
 
 ---
 
@@ -1773,7 +1775,7 @@ Run: `uv run pytest -q tests/test_cli.py tests/api/admin/test_surfaces.py` (FAIL
 |---|---|---|---|
 | S3-1 | 1–5 | yes (after card 010 done and card 014 deployed with its owner steps; migration) | Settings; Home and jobs unchanged, over `admin` |
 | S3-2 | 6–11 | yes (after S3-1) | Home as the check-in; `/act`; Open buttons; alerts marked done |
-| S3-3 | 12–15 | yes (after S3-2) | Review (Queue, Review lane), move to the front, Calendar; `REVIEW_BATCH` off after 7 days |
+| S3-3 | 12–15 | yes (after S3-2) | Review (Queue, Review lane), move to the front, Calendar; gates S2b (ADR-54) |
 | S3-4 | 16–18 | yes (after S3-3) | Produce with batches and estimates, Jobs tab, Resume, Sources |
 | S3-5 | 19–21 | yes (after S3-4 is deployed) | Results → Costs, Compare, account view |
 | S3-5b | 22–23 | yes (after S3-5; each task after its 7-day wait) | `/clip`, `/status <id>`, `/resume` retired; CLI on `admin`; `web` public routes only |

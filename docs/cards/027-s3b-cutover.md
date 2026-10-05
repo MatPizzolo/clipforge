@@ -1,15 +1,15 @@
 # Card 027: S3 (S3-5b) — the Telegram retirements and the CLI cut-over to `admin`
 
-Status: proposed
+Status: proposed · Updated 2026-10-05 (ADR-54): the `REVIEW_BATCH` step is removed (the setting no longer exists)
 Stream: S3 (S3-5b) · Branch: `s3b/cutover` · Worktree: `../clipForge-s3b` (created with `scripts/worktree.sh s3b/cutover`)
 Decision-log range: #630–#679 (append only; shared in sequence by cards 022–027: re-read the log and take the next free number after card 026's rows)
 Model: most capable (the cut-over removes every bearer route from the public endpoint)
-Depends on: card 026 (S3-5) **deployed** with its owner steps done, AND its 7-day windows (#617, #623): Task 22 only after S3-4's Produce and the job page's Resume have been used online (card 004 done) for 7 days; Task 23 only after `admin` has been live for 7 days (from card 022's deploy). If only one window is over, the card does that task and the report names the other. `REVIEW_BATCH=off` (an owner step, no code) only after Review has worked online for 7 days after card 024's deploy, and only if card 015 (S2b) is deployed. Per log #144, no other code card is on `main` undeployed when this one merges
+Depends on: card 026 (S3-5) **deployed** with its owner steps done, AND its 7-day windows (#617, #623): Task 22 only after S3-4's Produce and the job page's Resume have been used online (card 004 done) for 7 days; Task 23 only after `admin` has been live for 7 days (from card 022's deploy). If only one window is over, the card does that task and the report names the other. (`REVIEW_BATCH` was removed by ADR-54, 2026-10-05.) Per log #144, no other code card is on `main` undeployed when this one merges
 Cost cap: $2 of Modal/API spend (fast tests; no Modal runs needed). The owner's deploy is not session spend
 
 ## Context
 Cards 022–026 built and deployed the dashboard v1. **This card is S3-5b, plan Tasks 22–23**, the bridges' end (spec §11.9, §11.2):
-- **Task 22:** `/clip` answers "Clip jobs start in Produce now: <DASHBOARD_URL>/produce" and creates nothing; `/status <job_id>` and `/resume <id>` answer with the job page's link. `/status` with no argument, the failure alert's [Resume] button, and `clipforge status <id>` / `clipforge resume <id>` on the laptop stay. Without `DASHBOARD_URL` the commands keep working as today.
+- **Task 22:** `/clip` answers "Clip jobs start in Produce now: <DASHBOARD_URL>/produce" and creates nothing; `/status <job_id>` and `/resume <id>` answer with the job page's link. `/status` with no argument and `clipforge status <id>` / `clipforge resume <id>` on the laptop stay. Without `DASHBOARD_URL` the commands keep working as today.
 - **Task 23, the CLI cut-over (#618):** the CLI talks to `admin` (`CLIPFORGE_ADMIN_URL`, `MODAL_PROXY_KEY`, `MODAL_PROXY_SECRET`, `ADMIN_API_TOKEN` in the laptop's `.env`) for every route of `cli_router`; it refuses to start an admin call without the settings, naming the missing ones. Uploads keep `modal volume put`, `--fetch` keeps `ModalCliDownloader`, and `set-webhook` talks to Telegram with the public `web` URL.
 
 **Owner ruling, 2026-10-02 (log #146), which settles the plan's proposal (#623):** at the cut-over **every** bearer route leaves `web`: S2's `/admin/*` **and S1's `/accounts` and `/sources` routes (writes included)**, with `/jobs`, `/jobs/backfill` and `/posting*`. `cli_router` is mounted on `admin` only; **no** `s1_router` split. `web` ends **public-only**: `/telegram/webhook`, `/jobs/{id}/download`, `/webhooks/upload-post`, `/media/{item}.mp4` and `/go/{slug}` (the last three as far as S2b and S2c have landed them). `API_TOKEN` retires from `clipforge-secrets` a week after the deploy.
@@ -28,7 +28,7 @@ Since the plan was written: the plan's Task 23 test `test_web_serves_only_public
 ## Scope
 - May edit, as `scripts/scopes.toml` allows for `s3b/`: `src/**`, `tests/**`, `.env.example`, `pyproject.toml`, `uv.lock`, `web/**` (only if the OpenAPI export or the generated client changes), `scripts/export_openapi.py`, `docs/ARCHITECTURE.md`, `docs/ops/secrets.md` (the laptop's CLI variables; `API_TOKEN`'s retirement), `docs/superpowers/plans/*s3-dashboard*` (task ticks), `docs/studio/04-roadmap.md` and `ROADMAP.md` (the Phase 1 Telegram item, and the S3 ticks only after the owner confirms the exit), `docs/studio/11-owner-runbook.md` (**§2's Telegram commands text, plan Task 22, and §5b**), `CLAUDE.md` (Commands: the CLI talks to `admin`), its own report, and log rows in #630–#679.
 - Must not edit: the spec, `STATUS.md`, other cards, `prompts/`, stage modules, `alembic/`.
-- **No new dependencies.** **Only `app.py` imports `modal`.** **The session never deploys, changes a secret (`REVIEW_BATCH`, `API_TOKEN`) or touches Vercel**: the owner does.
+- **No new dependencies.** **Only `app.py` imports `modal`.** **The session never deploys, changes a secret (`API_TOKEN`) or touches Vercel**: the owner does.
 
 ## Actions
 Each task follows the plan: failing tests first, then the implementation, then its checks, then "check and record".
@@ -51,7 +51,7 @@ Stop for the owner at the checkpoint below.
 
 ## Owner steps
 - Before: card 026 deployed with its owner steps, and the windows above. After 026's merge, `scripts/worktree.sh --remove s3b/results`, then `scripts/worktree.sh s3b/cutover`, open a session in `../clipForge-s3b`, paste `Run card docs/cards/027-s3b-cutover.md`.
-- **`REVIEW_BATCH` off (no code; can run any time after its window, before or after this card's deploy):** with S2b deployed and 7 days of Review online with no problems since card 024's deploy, set `REVIEW_BATCH=off` with the `docs/ops/secrets.md` procedure, then `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "REVIEW_BATCH off"`. Only the 2 h review cards remain.
+- ~~`REVIEW_BATCH` off~~: removed by ADR-54 (2026-10-05). There is no 09:00 review batch and no `REVIEW_BATCH` setting; nothing to turn off.
 - At A: commit with the suggested message, `git push -u origin s3b/cutover`, `gh pr create --fill`, squash-merge when CI is green.
 - Deploy (from `main`, after the merge, outside the blackout):
   0. **Pre-deploy check (#623):** no other code card is on `main` undeployed (`docs/ops/deploys.md` against `git log`), and `uv run modal run src/clipforge/app.py::db_doctor` shows S3's head (or a later one, if another card's migration deployed since).
@@ -62,7 +62,7 @@ Stop for the owner at the checkpoint below.
   5. **A week later:** remove `API_TOKEN` from `clipforge-secrets` (the `docs/ops/secrets.md` procedure) and from the laptop's `.env`, then `scripts/deploy.sh --reason "API_TOKEN retired"`.
   6. **The exit (04's S3):** for a week, the daily check-in from the phone in under 20 minutes, and every Telegram alert opens its row in `/act`. Tell the coordinator; then S3 is ticked.
   7. Commit the `docs/ops/deploys.md` lines.
-- **Rollback:** a revert deploy (`git revert` of the merge, `scripts/deploy.sh --dry-run`, `scripts/deploy.sh --reason "revert S3-5b"`). Then `/clip` creates jobs again, `web` mounts the bearer routes again, and the CLI's old `CLIPFORGE_API_URL` and `API_TOKEN` work again (which is why they stay in `.env` for a week). `REVIEW_BATCH=on` brings the morning batch back.
+- **Rollback:** a revert deploy (`git revert` of the merge, `scripts/deploy.sh --dry-run`, `scripts/deploy.sh --reason "revert S3-5b"`). Then `/clip` creates jobs again, `web` mounts the bearer routes again, and the CLI's old `CLIPFORGE_API_URL` and `API_TOKEN` work again (which is why they stay in `.env` for a week).
 
 ## Hand-off
 Write `docs/reports/027-s3b-<YYYY-MM-DD>.md` from `docs/templates/handoff-report.md` at the checkpoint, with which tasks ran, the reviewers' findings and the owner steps. Don't commit: the owner does. After the merge, `scripts/worktree.sh --remove s3b/cutover`. S3c's build (card 018's plan) builds on the same `admin` endpoint.

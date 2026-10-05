@@ -26,7 +26,7 @@ Hooks are the lever the owner most wants to improve (ADR-50). This card designs 
 | R1 | One prompt or two for clip variants | **One `keywords_v3` call** writes the caption key words, the variants, its ranking and the key word of the shipped line |
 | R2 | How the shipped hook is chosen | **The weighted draw picks one pattern; the LLM writes 2–3 lines in that pattern and its best line ships.** Exposure follows the weights exactly, so per-pattern results aren't skewed by the LLM's taste. This reads ADR-50's "2–3 variants per item from approved patterns" as variants *of* the drawn pattern; ADR-50 doesn't change |
 | R3 | Seed library | **5 patterns plus a control per clips account, at equal weight, approved by approving this spec** (§4.1) |
-| R4 | Where 👍/👎 lives | **Dashboard only** (S3's Review page and the Hooks tab). Telegram's review cards stay approve/reject (#427) |
+| R4 | Where 👍/👎 lives | **Dashboard only** (S3's Review page and the Hooks tab). Telegram's review cards stay approve/reject (#427). *ADR-54 (2026-10-05): Telegram has no review cards at all* |
 | R5 | The freeze | **A snapshot owned by the hooks service** (`hook_freezes`), opened and closed by S3c's experiment service through S3c's `HookFreezer` protocol (coordinator, 2026-10-02); library edits stay allowed and apply at release |
 | R6 | Release against #439's bundling rule | **Behind `HOOK_VARIANTS` (default off), flipped on alone right after the build deploys**, accepting one 5-item window per clips account (about 15 reviews). Bundle only if another clips stage or prompt bump is due the same week |
 | R7 | Who moves weights | **The owner, with suggestions.** Weights change only on a tap; the system ranks and suggests |

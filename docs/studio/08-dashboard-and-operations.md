@@ -28,7 +28,7 @@ decisions(id, at, subject_kind, subject_id, account_id, decision, judge, model_v
 | Lane | Meaning |
 |---|---|
 | `publish` | auto-post (allowed only in `sample`/`auto` tiers) |
-| `review` | a human decides in Telegram or the dashboard |
+| `review` | a human decides on the dashboard (ADR-54; Telegram only notifies) |
 | `fix` | a writing model redrafts the copy, then it goes back to the gate |
 | `reject` | dropped, with a reason |
 
@@ -69,7 +69,7 @@ Anomalies (escalation above target, a false pass, a budget breach) go on the fir
 |---|---|---|---|
 | **Home** | Today across all accounts: posts scheduled or published, review inbox count, escalation rate, spend vs budget, anomalies, a banner for any source permission expiring within 14 days, and experiments that **need a decision** (S3c) | Jump to the inbox or the experiment | Digest at 09:00 links here (ADR-45) |
 | **Jobs** (S3a, built) | A job-id lookup, recent jobs (kept in the browser until S3 has a jobs list from S1's `jobs` table), and the job page: clips, progress, errors, cost, download link | Look up a job; resume a failed one (S3) | The failure alert carries [Resume] (deliberate duplicate: safe and cached, one tap) and [Open]; `/status <job_id>` and typed `/resume` retire when this page has Resume |
-| **Review inbox** | Items in `review`/`fix`, with video preview (signed Volume links; R2 only if needed, ADR-28), per-platform copy, gate answers and confidences, and the reason for escalation | Approve, edit copy, reject (with reason), re-render | Telegram gets a review card (✅ / 🗑 / Open) only for items due within 2 h; editing copy happens only here. Before S2 this page is a queue manager (skip, reject, reorder, posted correction), not a second posting flow |
+| **Review inbox** | Items in `review`/`fix`, with video preview (signed Volume links; R2 only if needed, ADR-28), per-platform copy, gate answers and confidences, and the reason for escalation | Approve, edit copy, reject (with reason), re-render | Telegram sends one notification, "N items need review → Open", for items due within 2 h; every decision and copy edit happens only here (ADR-54). Before S2b this page is a queue manager (skip, reject, reorder, posted correction), not a second posting flow |
 | **Calendar** | Week view per account and platform: scheduled, published, failed | Drag to reschedule (a later card, not S3: S3 dashboard spec §11.11; writers `dispatch/plan.py` for one slot, the accounts service for the schedule), pause an account | `/status` in Telegram is a short read-only summary with a link here. The per-account pause here is the same writer as `/pause` (deliberate duplicate: the brake must work from the phone) |
 | **Accounts** (S3 Compare, S3c Map) | **Compare** (S3, `/accounts?view=compare`) and the **studio map** (S3c): every account grouped by category (`clips`, `story`, `band`, `avatar`, `model`) with status, blueprint and version, rung (from `autopilot`, ADR-48), recent posting and running experiments. **Workspaces** per category (`/categories/<code>`: playbook, rules, defaults, blueprints), blueprint (`/blueprints/<name>`: pillars, series, briefs, money, prompts) and account (`/accounts/<id>`: Overview, the type's tabs, Autopilot, Style, Hooks and Activity, then Setup & History (effective setup with where each value comes from, versions and diffs), Results, Experiments, Notes and Sources under More; §2c). Every save is a new version (ADR-42), previewed first by one dry run (diff, re-runs, affected items, cost) | Create from a blueprint; edit the setup (with a note); reset an override; diff and restore versions; apply a category or blueprint version to its accounts; add a note; start an experiment | none (notes and edits only here) |
 | **Experiments** (S3c) | Across all accounts: **needs a decision**, running (progress, before vs during so far), drafts, and ideas (open idea notes). Each experiment: hypothesis, change (from and to version), one metric, window, cost preview, result with a verdict (likely better / no clear difference / likely worse) and a "too few items" warning | Start one from an idea or a setup change; stop; keep or revert with a reason; add the learning to the category playbook | the digest lists "needs a decision" (link `/experiments?needs=decision`); keep or revert is decided only on the experiment's page, `/experiments/<id>` |
@@ -92,24 +92,24 @@ Implementation notes:
 
 ### 2b. Two surfaces, one product (ADR-44, ADR-45)
 
-**One home per task.** The column above names Telegram's role for each page. Telegram does push and single-tap, time-bound decisions away from the desk; the dashboard does everything that needs context, comparison, editing, bulk actions, history, experiments or money. Tasks in both surfaces, each on purpose:
+**One home per task.** The column above names Telegram's role for each page. **Telegram is notifications only (ADR-54, 2026-10-05):** alerts (each "needs me" row as a notification with Open → `/act/<kind>/<id>`), the 09:00 digest, status replies (`/status`) and the brake. It takes no decisions: no clip cards with per-platform buttons, no review approve or reject, no manual-posting fallback. The dashboard does everything that needs a decision, context, comparison, editing, bulk actions, history, experiments or money. Tasks in both surfaces, each on purpose:
 
 | Task | Why both | Shared backend |
 |---|---|---|
-| Assisted posting (✅ per platform, ⏭, 🗑 + reason) | Posting happens in the phone apps at the slot; the dashboard corrects a mistake later | `posting/actions.py` (S1 addendum), actor `telegram:<user id>` or `web:<login>` |
+| ~~Assisted posting (✅ per platform, ⏭, 🗑 + reason)~~ | Retired by ADR-54: paused since 2026-10-05, dormant code until removed; Upload-Post posts from S2b. The dashboard's Review Queue keeps the posted correction | `posting/actions.py` (S1 addendum), actor `web:<login>` |
 | Pause / go | The brake must work from the phone; the laptop toggles one account | `posting/actions.py` `pause`, plus a Dict brake key from S2 |
-| Review approve / reject (from S2) | Items due within 2 h need a decision away from the desk; batches are faster on the laptop | the S2 review service |
-| Resume a failed job | One safe tap from the alert; the job page shows the context | `service.resume_job` |
+| ~~Review approve / reject~~ | Dashboard only (ADR-54); Telegram sends "N items need review → Open" | the S2 review service |
+| Resume a failed job | The alert carries only Open → `/act/job_failed/<id>`, where Resume is one tap with the job's context; no Resume button in Telegram (ADR-54, owner 2026-10-05) | `service.resume_job` |
 
-**Staying in sync.** A dashboard action redraws or deletes every Telegram message of that item (its buttons end in the new state); a Telegram tap shows on the dashboard's next poll. Both surfaces follow ADR-14's one-writer rule and the same claim keys.
+**Staying in sync.** A dashboard action redraws every Telegram notification of that row as done ("Done by … at …", #616); a brake sent from Telegram shows on the dashboard's next poll. Both surfaces follow ADR-14's one-writer rule and the same claim keys.
 
 **Notification policy (ADR-45):**
 
 | Event | Where |
 |---|---|
-| Assisted clip at a slot; review item due within 2 h; a publish failed for a post due today; a job failed with less than 1 day of queue left; `/pause` confirmation; Upload-Post disconnected; budget breach; an expired permission holding clips; the database unavailable at the tick | **instant** |
-| Other job failures, held clips, accounts with under 3 days of queue, permissions expiring within 14 days, experiments needing a decision, sample-tier spot checks, review backlog, cost vs budget, yesterday's posts | **digest**: one message at 09:00 in the owner's time zone, then the review cards; its content is §2c's "S2" block below (S2 spec §7.2) |
-| Job done, clips rendered, successful posts, version saves, source edits, stats | **dashboard only**. A Telegram card already sent is edited in place ("Posted ✓ TT·IG·YT"), which uses no budget |
+| Review items due within 2 h (one "N items need review → Open" notification, ADR-54); a publish failed for a post due today; a job failed with less than 1 day of queue left; `/pause` confirmation; Upload-Post disconnected; budget breach; an expired permission holding clips; the database unavailable at the tick | **instant** |
+| Other job failures, held clips, accounts with under 3 days of queue, permissions expiring within 14 days, experiments needing a decision, sample-tier spot checks, review backlog, cost vs budget, yesterday's posts | **digest**: one message at 09:00 in the owner's time zone, ending with "N items need review → Open" (no cards follow, ADR-54); its content is §2c's "S2" block below (S2 spec §7.2) |
+| Job done, clips rendered, successful posts, version saves, source edits, stats | **dashboard only**. A Telegram notification already sent is edited in place ("Done by … at …"), which uses no budget |
 
 - **Quiet hours:** 23:00–08:00; only brake-worthy events (publishing broken across accounts, spend over 2× the daily budget) break through.
 - **Rate limits:** one alert per (kind, subject) per hour, deduped by a Dict claim `notify:<kind>:<subject>:<hour>`; at most 20 instant messages an hour, the rest folded into "N more → dashboard".
@@ -119,7 +119,7 @@ Implementation notes:
 
 **Identity.** One owner: the Telegram user id in `TELEGRAM_ALLOWED_USER_IDS` and the GitHub account whose verified email is `OWNER_EMAIL`. Every write records which one acted.
 
-**Telegram after S2.** It keeps review cards, alerts, the brake, the digest and the AssistedPublisher fallback. `/clip` retires when Produce ships; `/status <job_id>` and typed `/resume` retire when the job page has Resume. The ✅ taps stay for accounts on the assisted path (Publish off, or no connected Upload-Post profile) and for the fallback's failed platforms. A ✅ means "posted", never "reviewed": no assisted-card tap counts toward the ladder, the spot checks or the producer window (R2, R6; #454).
+**Telegram after ADR-54 (2026-10-05).** Telegram is notifications only: alerts (each with Open → `/act/<kind>/<id>`), the 09:00 digest, status replies and the brake (`/pause`, `/go`, `/pause all`). No review cards, no 09:00 review batch, no clip cards with ✅ per platform, and no AssistedPublisher fallback: if Upload-Post fails, Telegram sends an alert (reconnect, or open the failure row), never a manual post card. Assisted posting is paused now; realtalk posts nothing until S2b publishes through Upload-Post, and S2b waits for the Review page (card 024). The assisted code stays dormant, then is turned off per account when Upload-Post goes live. `/clip` retires when Produce ships; `/status <job_id>` and typed `/resume` retire when the job page has Resume. Only review decisions made on the dashboard count toward the ladder, the spot checks and the windows (R2, R6; #454).
 
 ### 2c. Accepted changes from card 009 (2026-10-01; ADR-48 to ADR-50)
 
@@ -147,32 +147,32 @@ Implementation notes:
 
 **Two surfaces (§2b).**
 - **Every Telegram alert is a "needs me" row** pushed to the phone, with Open → `/act/<kind>/<id>`. Acting in either place clears both. A link to something already handled shows who did it, when and where (#429).
-- **One-tap inside Telegram only** for review items due within 2 hours (approve or reject, plus the posting buttons) and for the brake (`/pause`, `/go`, and `/pause all` at fleet scope, the same Dict key as 04's S2 brake). Everything else opens the dashboard (#427).
+- **No one-tap decisions in Telegram** (ADR-54, 2026-10-05; replaces #427's due-soon review buttons): review items due within 2 hours get one notification, "N items need review → Open". The brake stays (`/pause`, `/go`, and `/pause all` at fleet scope, the same Dict key as 04's S2 brake). Everything else opens the dashboard.
 - **Telegram is the only push channel.** There are no browser push notifications.
 - **New link formats** (a contract, with a test that each one resolves): `/act/<kind>/<id>`, `/?needs=<kind>`, `/accounts?view=compare`, `/results?tab=costs&account=<id>`.
 - **Levels per row type:**
 
   | Level | Row types |
   |---|---|
-  | Instant | due-soon reviews, the brake, platform health (a failed post due today, a disconnected publisher, a strike), spend over a line or a cap, expired permissions holding clips |
+  | Instant | due-soon reviews (one "N items need review → Open" notification), the brake, platform health (a failed post due today, a disconnected publisher, a strike), spend over a line or a cap, expired permissions holding clips |
   | Digest | runway under 14 days, promotions ready, demotions done, experiments, held clips, other failures, the review backlog, weak hook patterns, "what ran without you" |
   | Dashboard only | everything else |
 
-**S2 (card 011's spec, accepted 2026-10-02; [S2 spec](../superpowers/specs/2026-10-01-studio-s2-design.md) §6.7, §7; log #442, #443, #448, #453–#455).**
-- **Callbacks:** review cards use `r:` callbacks (`r:ok`, `r:rej`, `r:why`); posting cards keep `p:`, so every older message keeps working.
-- **The 09:00 morning batch** is a bridge (Q3), behind `REVIEW_BATCH` (default on): one review card per undecided review-lane item in the plan's horizon, sent after the digest. It is exempt from ADR-45's 20-an-hour cap, counts as one delivery and is paced at most one message per second (R1). When S3's Review page ships it is turned off, and only the 2 h cards remain (#427).
-- **The digest's content:** one message at 09:00 in the owner's time zone, claimed `digest:<date>`; lines with nothing to say are left out. In order: anomalies (an outage, a brake that's on, a disconnected publisher, yesterday's final publish failures, the database unavailable at a tick, unmatched webhook deliveries); yesterday per account (posted, of which automatic, failed, rejected, what ran without you); today per account (slots, approved, need you); the attention arithmetic (about 1 minute per review decision and 7 per assisted clip, against the ~20-minute budget, naming accounts whose ladder criteria are met when over); then the digest-level rows (promotions ready, demotions done, runway under 14 days, held clips, expiring permissions, other job failures, the review backlog, missed slots). Planning (08:50) and the digest run in the owner's time zone for every account; slots keep each account's own (R3).
+**S2 (card 011's spec, accepted 2026-10-02, amended by ADR-54 on 2026-10-05; [S2 spec](../superpowers/specs/2026-10-01-studio-s2-design.md) §6.7, §7; log #443, #448, #454, #455, #149, #150).**
+- **Callbacks:** no review cards and no `r:` callbacks (ADR-54). Old posting cards keep their `p:` callbacks, dormant while posting is paused.
+- **No 09:00 morning batch and no `REVIEW_BATCH`** (removed by ADR-54, log #150). Undecided review items get one "N items need review → Open" notification at S − 2 h.
+- **The digest's content:** one message at 09:00 in the owner's time zone, claimed `digest:<date>`; lines with nothing to say are left out. In order: anomalies (an outage, a brake that's on, a disconnected publisher, yesterday's final publish failures, the database unavailable at a tick, unmatched webhook deliveries); yesterday per account (posted, of which automatic, failed, rejected, what ran without you); today per account (slots, approved, need you); the attention arithmetic (about 1 minute per review decision against the ~20-minute budget; no assisted clips after ADR-54; naming accounts whose ladder criteria are met when over); then the digest-level rows (promotions ready, demotions done, runway under 14 days, held clips, expiring permissions, other job failures, the review backlog, missed slots), ending with "N items need review → Open". Planning (08:50) and the digest run in the owner's time zone for every account; slots keep each account's own (R3).
 - **The brake:** `/pause` and `/go` take `<account>` or `all` (no argument is the fleet). The Dict key `brake:<scope>` is written first and mirrored to `posting_state` (`changed_by`, `reason`); `/go` writes `on=false` and never deletes the key. A pause cancels posts already scheduled at Upload-Post and the reply counts them; with Neon down it says the pause is recorded in the brake only. `posting_daily` repairs a difference between the key and the row: the newer one wins.
 
 **S3 (card 019's delta, proposed 2026-10-02, pending the owner's review; [S3 dashboard spec §11](../superpowers/specs/2026-10-01-studio-s3-dashboard-design.md#11-revised-2026-10-02-card-019-the-delta-after-s2s-plan); log #610–#623).**
 - **Two endpoints, split by caller:** the dashboard's Vercel route handlers call `admin` (Modal proxy auth plus `ADMIN_API_TOKEN`, actor `web:<login>`); `web` keeps the public routes and, until S3-5b's CLI cut-over, S2's `/admin/*` routes for the CLI. Every dashboard API route is under `/admin/`.
-- **Sync:** a dashboard action redraws posting and review cards through their services, as today; alerts with an Open button are recorded under `alert:msg:<row id>` and edited to "Done by … at …" after the row is acted on (best-effort).
+- **Sync:** alerts and notifications with an Open button are recorded under `alert:msg:<row id>` and edited to "Done by … at …" after the row is acted on (best-effort).
 - **Review** has a Queue tab (assisted accounts: move to the front, skip, reject, posted correction) and a Review lane tab (S2's routes, plus batch approve).
-- **Bridges end after 7 days online:** `REVIEW_BATCH` after the Review page (S3-3); `/clip`, `/status <job_id>` and typed `/resume` in S3-5b, after Produce and the job page's Resume (S3-4); `/status` with no argument, the failure alert's [Resume], `clipforge status <id>` and `clipforge resume <id>` stay.
+- **Bridges end after 7 days online:** `/clip`, `/status <job_id>` and typed `/resume` in S3-5b, after Produce and the job page's Resume (S3-4); `/status` with no argument, `clipforge status <id>` and `clipforge resume <id>` stay. (`REVIEW_BATCH`, once listed here, was removed by ADR-54.)
 
 **Hooks (card 020's spec, 2026-10-02; [hooks spec](../superpowers/specs/2026-10-02-studio-hooks-design.md) §5, §6, §7; log #550–#562).**
 - **Home:** the account workspace's **Hooks** tab (`/accounts/<id>?tab=hooks`, S3c). Until S3c's workspace exists, a standalone page **`/hooks?account=<id>`**, which then redirects to the tab. Both paths join the link contract. The page holds the library (pattern, version, status, weight with ❄ while a setup experiment freezes the rotation), each pattern's rates against the "Highlight title" control with a 90% interval, and Edit, Approve, Retire, Share to blueprint and Weight (with the suggested value pre-filled).
-- **Dashboard only:** 👍/👎 per hook (on the Review page and the Hooks page), weight changes, and re-rendering one item with another pattern or title (Review's re-render button, disabled until the hooks build's HK-2). Telegram has no hook task: its review cards stay approve/reject (#427, #553).
+- **Dashboard only:** 👍/👎 per hook (on the Review page and the Hooks page), weight changes, and re-rendering one item with another pattern or title (Review's re-render button, disabled until the hooks build's HK-2). Telegram has no hook task and, after ADR-54, no review cards at all (#553).
 - **Digest:** `hook_weak`, one line per pattern likely worse than the control with ≥ 10 decided items, with a suggested weight, linking to the Hooks page. Never instant (ADR-45).
 
 ## 3. Notion mirror (one-way)

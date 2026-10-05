@@ -155,9 +155,9 @@ Every call is written to the **decision ledger**, and lanes, fail-closed rules a
   - `sample`: auto-post, and send ~10% to Telegram for a look;
   - `auto`: post.
 
-  Telegram buttons: ✅ approve, ✏️ fix copy, ⏭ skip, 🗑 reject with a reason.
+  Telegram buttons: ✅ approve, ✏️ fix copy, ⏭ skip, 🗑 reject with a reason. **Superseded by ADR-54 (2026-10-05):** review happens only on the dashboard's Review page; Telegram sends one "N items need review → Open" notification and has no decision buttons.
 - **Publisher:**
-  - The `Publisher` protocol has an `UploadPostPublisher` (primary) and an `AssistedPublisher` (Telegram manual post, as today).
+  - The `Publisher` protocol has an `UploadPostPublisher` (primary) and an `AssistedPublisher` (Telegram manual post, as today). *ADR-54 (2026-10-05) drops `AssistedPublisher`: a final failure is an alert and a failure row.*
   - It maps `ai_disclosure` to TikTok `is_aigc`, YouTube `containsSyntheticMedia`, Instagram `is_ai_generated` and Facebook `facebook_is_ai_generated`.
   - Signed webhooks from Upload-Post update the `posts` rows.
   - Official APIs (YouTube Data, Instagram Graph) can be added later as more publishers behind the same protocol.
