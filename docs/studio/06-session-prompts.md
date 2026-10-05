@@ -283,17 +283,51 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
 - **Cost:** $2 per build card (mostly CPU tests; no GPU).
 
 ### S3c: Account workspaces (versioned categories, blueprints and accounts; experiments; notes)
-- **Updated 2026-10-01 (card 009, ADR-48 to ADR-50):** apply the S3 dashboard spec §10.3: the review tier and budget leave the versioned setup (ADR-48), `system:<component>` actors, the Style/Hooks/Activity tabs, the Map next to Compare, hook metrics on the Hooks tab (ADR-50).
-→ card 003 (the design revision, done 2026-09-30, PR #6). No build card yet.
-- **Depends:** S1 finished (all tasks; 0001 frozen) and S3's `admin` endpoint (S3 action 4). ADR-42 accepted. S3c-2 needs S1 Tasks 14, 15, 17 and 21 live. Soft: land S3c-2 before S6, so the story producer reads `EffectiveSetup` from its first version.
-- **Owner:** none beyond S1 and S3 (Neon and Vercel already set up). Edit the drafted category playbooks in the dashboard after S3c-1.
-- **Read:** the S3c spec (docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md, revised by card 003), ADR-42 in docs/DECISIONS.md, 08 §2 and §2b, the S1 spec §6, card 002's `posting/actions.py`, S1's final `models.py` (`Account`, `Blueprint`, `ContentItem`), `db/tables.py`, `accounts/`, `hashing.py`, `stages/highlights.py` and `captions.py`.
+- **Updated 2026-10-02 (card 018):** the spec carries the ADR-48 and ADR-50 amendments (the S3 dashboard spec §10.3), the migration in landing order without `post_events.actor`, the field registry v1, and the owner's six rulings (log #254–#259). The build is four cards, one per part below; the plan is card 018's.
+→ card 003 (the design revision, done 2026-09-30, PR #6) and card 018 (spec revision and plan). No build card yet.
+- **Depends:**
+  - S3c-1a: S1's rollout (card 010), S2a deployed (card 014) and S3-1 deployed (card 022, the `admin` endpoint). S3c's migration is numbered after whatever hooks or S3 migration is already on `main`.
+  - S3c-1b: S3c-1a and S3-5 deployed (card 026: Compare and the account read view).
+  - S3c-2: S3c-1b deployed (S2a, which defines `FormatWindowSource`, is deployed by then).
+  - S3c-3: S3c-2 and S2c deployed (card 016: `DigestProvider`). The hooks freeze is a no-op until the hooks build deploys.
+  - Soft: land S3c-2 before S6, so the story producer reads `EffectiveSetup` from its first version.
+- **Owner:** run `clipforge setup import` and `setup verify` in production after S3c-1a. Edit the drafted category playbooks in the dashboard after S3c-1b. Switch `SETUP_SOURCE=db` after S3c-2, when verify reports 0 differences.
+- **Read:**
+  - the S3c spec (docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md, revised by card 018) and the S3c plan (docs/superpowers/plans/2026-10-02-studio-s3c.md: S3c-1a Tasks 1–7, S3c-1b Tasks 8–10, S3c-2 Tasks 11–16, S3c-3 Tasks 17–21);
+  - ADR-42, 48 and 50 in docs/DECISIONS.md;
+  - 08 §2, §2b and §2c;
+  - the S3 dashboard spec §7.3, §7.4, §8.4, §8.5, §8.7;
+  - the S2 plan's Tasks 2, 3 and 6;
+  - S1's final `models.py` (`Account`, `Blueprint`, `ContentItem`), `db/tables.py`, `accounts/`, `posting/actions.py`, `hashing.py`, `stages/highlights.py` and `captions.py`.
 - **Actions:**
-  1. Plan first (superpowers:writing-plans) on S1's final schema; confirm the open points in spec §7.
-  2. **S3c-1:** migration 0002 (with `post_events.actor`, backfilled from `data.actor`; spec §5.3); the resolver (`accounts/setup.py`) and the field registry with change classes; the versions service (append-only `*_versions`, `accounts` as a projection, `expected_version` → 409); `clipforge setup import [--dry-run]` and `setup verify` (0 differences); `POST /setup/preview`, the one dry run every save, restore and apply calls (spec §3.4); admin routes for categories, blueprints, account setup, versions, diff, restore and notes; the Accounts page and the category, blueprint and account workspaces at the spec §2.9 paths (phone and laptop). `SETUP_SOURCE=off`.
-  3. **S3c-2:** `create_job` reads and stamps `JobInput.setup`; `content_items.setup_version` at enqueue; `post_events.data.setup_version` at send; caption preset in the captions key only when not `default` (pinned-value test); prompts from released versions; the language-mismatch hold; a test that the setup version is in no cache key. Regenerate `web/openapi.json` in the same checkpoint (#49). Switch `SETUP_SOURCE=db` after `verify`.
-  4. **S3c-3:** experiments (draft, running, needs a decision derived on read, done, stopped) and the experiment page `/experiments/<id>`, the only place to keep or revert; the re-cut estimate in the preview (`config.Prices`, source hours from `jobs`), one running per account (partial unique index), the edit block during a run, the metric registry (metrics available now), before/during with the Wilson verdict and the 10-item floor, the Experiments nav item and Home's "Needs a decision" card, learnings in the playbook.
-  5. Tests: pure, DB (local Postgres), API and pipeline tests as in spec §5.5; Playwright phone and desktop against a mocked admin API. Checks run locally and in production (previews are build-only).
+  1. Follow the plan's part for the card.
+  2. **S3c-1a:**
+     - the migration (the next in landing order, moving `EXPECTED_HEAD`; no deferred items; spec §5.3);
+     - the resolver (`accounts/setup.py`) and the field registry with change classes (spec §1.4);
+     - the versions service (append-only `*_versions`, `accounts` as a projection, `format_changed`, `expected_version` → 409);
+     - `clipforge setup import [--dry-run]` (with the drafted playbooks) and `setup verify` (0 differences);
+     - `POST /setup/preview`, the one dry run every save, restore and apply calls (spec §3.4);
+     - `/admin/` routes for categories, blueprints, account setup, versions, diff, restore, notes and pickers, appended to S3's `admin_routers`; the CLI's routes in S3's `cli_router`;
+     - `PATCH /accounts/{id}` writing a version and refusing `review_tier`; S2's publisher fields keep their own path;
+     - the schedule copy rewritten through S2a's `write_schedule_copy` after every commit that changes posting.
+     - `SETUP_SOURCE=off`.
+  3. **S3c-1b:** the Accounts Map, Compare's versions and experiment columns, and the category, blueprint and account workspaces at the spec §2.9 paths (Style, Setup & History, notes), on phone and laptop.
+  4. **S3c-2:**
+     - `create_job` reads and stamps `JobInput.setup`; `content_items.setup_version` at enqueue; sends attributed by their claim time (`SetupRepo.send_versions`);
+     - the caption preset in the captions key only when not `default` (pinned-value test); prompts from released versions;
+     - the language-mismatch hold (no Whisper hint);
+     - `SetupRepo.format_window` (S2's `FormatWindowSource`), wired as `format_source` in `runtime.build_deps`; no S2 module is edited;
+     - Framing & captions;
+     - a test that the setup version is in no cache key.
+     - Regenerate `web/openapi.json` in the same checkpoint (#49). Switch `SETUP_SOURCE=db` after `verify`.
+  5. **S3c-3:**
+     - experiments (draft, running, needs a decision derived on read, done, stopped) and the experiment page `/experiments/<id>`, the only place to keep or revert, with autopilot markers;
+     - the re-cut estimate in the preview (`config.Prices`, source hours from `jobs`);
+     - one running per account (partial unique index), the edit block during a run, and the hooks freeze through the `HookFreezer` protocol in `src/clipforge/hooks/freezer.py` (created by S3c-3 or HK-1, whichever lands first; the scope includes it; `freeze` at start, `release` at stop and decide, in the same transaction; `NoHookFreezer` until the hooks build);
+     - the metric registry (metrics available now), and before/during with the Wilson verdict and the 10-item floor;
+     - the Experiments nav item, the `experiment_decision` row (registered in `needs_providers`), and `experiments.digest_line` registered as a digest provider in `runtime.build_deps` (no S2 module is edited);
+     - learnings in the playbook.
+  6. **Tests:** pure, DB (local Postgres), API and pipeline tests as in spec §5.5; Playwright phone and desktop against a mocked admin API. Checks run locally and in production (previews are build-only).
 - **Done when:** the owner changes realtalk's max clip length through an experiment, sees before and during for reject rate and posted rate, chooses Keep, and the learning shows in the clips playbook, all from the dashboard on phone and laptop.
 - **Cost:** ~$1 (tests and one smoke run). A backlog re-cut, if ticked, is priced in the form before it runs.
 
