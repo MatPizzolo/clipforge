@@ -21,6 +21,7 @@ from clipforge.bot.context import BotContext
 from clipforge.bot.deeplinks import item_row
 from clipforge.bot.posting import keyboard
 from clipforge.bot.posting import send_next as _send_next
+from clipforge.bot.telegram import not_modified
 from clipforge.db.engine import is_db_error, redact
 from clipforge.models import Platform, PostVerdict, RejectReason
 from clipforge.posting.backend import Posting, posting_of
@@ -191,6 +192,8 @@ def redraw_all(ctx: BotContext, ref: str, also: Iterable[int] = ()) -> None:
     for message_id in sorted({*also, *(s.message_id for s in record.sends)}):
         try:
             ctx.sender.edit_buttons(account.posting.chat_id, message_id, buttons)
-        except Exception:
+        except Exception as exc:
+            if not_modified(exc):  # it already shows this state: done
+                continue
             log.warning("posting: editing message %s of %s failed", message_id, ref,
                         exc_info=True)  # fmt: skip

@@ -835,3 +835,37 @@ def test_posting_import_dry_run_sends_the_flag(tmp_path: Path) -> None:
     api = _api({("POST", "/posting/import"): {"dry_run": True, "failed": ["x"]}}, seen)
     code = main(["posting", "import", "--dry-run"], http=api, settings=make_settings(tmp_path))
     assert code == 1 and seen[0].url.params["dry_run"] == "true"
+
+
+def _slow(times: int, body: object, seen: list[httpx.Request]) -> httpx.Client:
+    """Times out `times` times, then answers `body` (card 039: the overview took 20 to 42 s)."""
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if len(seen) <= times:
+            raise httpx.ReadTimeout("timed out", request=request)
+        return httpx.Response(200, json=body)
+
+    return httpx.Client(base_url="https://api.example", transport=httpx.MockTransport(handle))
+
+
+def test_a_slow_read_is_retried_once(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from clipforge.cli import TIMEOUT_S
+
+    assert TIMEOUT_S == 60.0
+    seen: list[httpx.Request] = []
+    assert main(["account", "list"], http=_slow(1, [], seen), settings=make_settings(tmp_path)) == 0
+    assert len(seen) == 2
+    assert capsys.readouterr().err.count("slow response, retrying") == 1
+    seen.clear()
+    assert main(["account", "list"], http=_slow(2, [], seen), settings=make_settings(tmp_path)) == 1
+    err = capsys.readouterr().err
+    assert len(seen) == 2 and err.count("slow response, retrying") == 1
+    assert "network error talking to the API: ReadTimeout" in err
+
+
+def test_a_slow_write_is_not_retried(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    seen: list[httpx.Request] = []
+    http = _slow(1, {"added": 0}, seen)
+    assert main(["status", "--rebuild"], http=http, settings=make_settings(tmp_path)) == 1
+    assert len(seen) == 1 and "retrying" not in capsys.readouterr().err

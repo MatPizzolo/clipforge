@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.exc import OperationalError
 
+from clipforge.bot.context import BotContext
 from clipforge.db.engine import Database
 from clipforge.db.jobs import JobsRepo
 from clipforge.jobs import DictJobStore
@@ -295,3 +296,70 @@ def test_restore_clears_the_outage_and_status_shows_it(harness: Harness) -> None
     restore_posting(harness.deps)
     assert outage_since(harness.store.kv) is None
     assert posting_overview(harness.deps, settings, at).state == "on"
+
+
+# ---- card 039: the overview's reads don't grow with the number of jobs and clips
+
+
+def _overview_selects(ctx: BotContext, db: Database, extra: int) -> int:
+    from sqlalchemy import event
+
+    from clipforge.models import ChannelRef, Job
+    from clipforge.pipeline.steps import summary_of
+    from tests.posting.builders import item
+
+    assert ctx.deps.posting is not None
+    ctx.deps.jobs_db = JobsRepo(db)
+    t0 = datetime(2026, 9, 28, tzinfo=UTC)
+    for n in range(extra):
+        job_id = f"20260928-cccccccc-{n:04d}"
+        channel = ChannelRef(slug="billy-garton", name="Billy Garton Jr.")
+        job_input = JobInput(source_url="https://example.com/v.mp4", source_label=f"ep{n}",
+                             permission=Permission.CREATOR_AGREEMENT, channel=channel)  # fmt: skip
+        job = Job(job_id=job_id, status=JobStatus.DONE, input=job_input, created_at=t0,
+                  updated_at=t0)  # fmt: skip
+        ctx.deps.jobs_db.upsert(summary_of(job))
+        ctx.deps.posting.repo.add(item(job_id=job_id, source_hash=f"{n:064d}"),
+                                  list(LEGACY_PLATFORMS))  # fmt: skip
+    statements: list[str] = []
+
+    def capture(conn: object, cursor: object, sql: str, *rest: object) -> None:
+        statements.append(sql)
+
+    event.listen(db.engine, "before_cursor_execute", capture)
+    try:
+        view = posting_overview(ctx.deps, ctx.settings, datetime(2026, 9, 29, 12, tzinfo=UTC))
+    finally:
+        event.remove(db.engine, "before_cursor_execute", capture)
+    assert view.accounts[1].waiting == 1 + extra
+    return sum(s.lstrip().upper().startswith("SELECT") for s in statements)
+
+
+def test_the_overview_reads_a_constant_number_of_queries(tmp_path: Path, db: Database) -> None:
+    from sqlalchemy import text
+
+    from clipforge.db.tables import metadata
+
+    few = _overview_selects(two_account_ctx(tmp_path / "a", db), db, 1)
+    names = ", ".join(table.name for table in reversed(metadata.sorted_tables))
+    with db.begin() as conn:  # the same database for the second count
+        conn.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+    many = _overview_selects(two_account_ctx(tmp_path / "b", db), db, 8)
+    assert many == few, (few, many)
+
+
+def test_job_summaries_read_the_dict_once(harness: Harness) -> None:
+    # card 039: one streaming read of the Dict, not one `get` per job
+    channel_job(harness)
+    channel_job(harness)
+    kv = harness.store.kv
+    gets: list[str] = []
+    real_get = kv.get
+
+    def counting_get(key: str) -> str | None:
+        gets.append(key)
+        return real_get(key)
+
+    kv.get = counting_get  # type: ignore[method-assign]
+    assert len(job_summaries(harness.deps)) == 2
+    assert [k for k in gets if k.startswith("job:")] == []

@@ -6,6 +6,7 @@ Secrets are `SecretStr` so they never show up in reprs or logs (CLAUDE.md rule 8
 from __future__ import annotations
 
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal, Self
@@ -24,6 +25,7 @@ from clipforge.schedule import (
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 log = logging.getLogger(__name__)
+_WORD = re.compile(r"[A-Za-z_ -]{1,20}")
 
 
 class TokenPrice(BaseModel):
@@ -111,6 +113,9 @@ class Settings(BaseSettings):
     # Durable state (ADR-26, S1): Neon's pooled URL; reads come from `state_reads` (ADR-41)
     database_url: SecretStr | None = None
     state_reads: Literal["dict", "postgres"] = "dict"
+    # Why STATE_READS was ignored (set by the check below; not an env value). A typo there
+    # read as `dict` with posting off, never a crash (card 039)
+    state_reads_problem: str | None = None
     # The account the Dict queue and the POSTING_* settings belong to (dict mode, seeding)
     posting_account_id: str = "realtalk-clips-en"
     blueprints_dir: Path = _REPO_ROOT / "blueprints"
@@ -141,6 +146,27 @@ class Settings(BaseSettings):
     git_sha: str | None = None
 
     prices: Prices = Field(default_factory=Prices)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _check_state_reads(cls, data: object) -> object:
+        """An unknown STATE_READS reads the Dict, which every posting action still writes
+        until S1 Task 23 (ADR-41), and turns posting off; a crash here would stop every
+        container (rollout 2026-10-05, card 039)."""
+        if not isinstance(data, dict):
+            return data
+        data = {k: v for k, v in data.items() if k != "state_reads_problem"}  # never from env
+        raw = data.get("state_reads")
+        if not isinstance(raw, str):
+            return data
+        value = raw.strip().lower()
+        if value in ("dict", "postgres"):
+            return {**data, "state_reads": value}
+        # a mangled secret line can hold a URL or token: echo only what looks like a word
+        shown = repr(raw) if _WORD.fullmatch(raw) else f"a value of {len(raw)} characters"
+        problem = f"STATE_READS must be dict or postgres, got {shown}"
+        log.warning("%s; reading the Dict, posting is off", problem)
+        return {**data, "state_reads": "dict", "state_reads_problem": problem}
 
     @field_validator("telegram_allowed_user_ids", mode="before")
     @classmethod
@@ -236,6 +262,8 @@ class Settings(BaseSettings):
 
 
 def _posting_problem(settings: Settings) -> str | None:
+    if settings.state_reads_problem is not None:
+        return settings.state_reads_problem
     problem = schedule_problem(
         settings.posting_timezone, settings.posting_slots, settings.posting_hashtags
     )

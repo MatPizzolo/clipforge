@@ -89,6 +89,15 @@ class DictJobStore:
             if key.startswith("job:") and key.count(":") == 1
         ]
 
+    def job_records(self) -> list[tuple[str, str]]:
+        """Every core record as (job id, raw JSON), in one streaming read instead of one `get`
+        per job (the posting overview, card 039)."""
+        return [
+            (key.removeprefix("job:"), value)
+            for key, value in self.kv.items()
+            if key.startswith("job:") and key.count(":") == 1
+        ]
+
     # ---- clip records
 
     def create_clip(self, job_id: str, state: ClipState) -> bool:
