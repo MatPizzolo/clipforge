@@ -61,6 +61,23 @@ Before changing a model on any quality-level stage, run an eval (ADR-4, docs/EVA
 | Band photos | **Wikimedia Commons** (CC-BY or CC-BY-SA, with attribution) | Band-supplied press material with written permission | $0 | No photoreal generated images of real people |
 | Downloads (local) | **yt-dlp** + Deno + bgutil PO-token plugin | yoinks (interactive only, no script mode) | $0 | Only from home internet. Only permitted content |
 
+### Neon (S1, measured)
+
+Measured on 2026-10-05, the day of the S1 rollout (card 010; report `docs/reports/010-s1-2026-10-05.md`). Setup:
+- a new free-tier project in us-east-2, Postgres 18.6, the pooled endpoint from Modal;
+- one account (`realtalk-clips-en`), 30 queue items, 12 job rows;
+- `STATE_READS=postgres`, with posting paused.
+
+Results:
+- **`clipforge status`**, run 3 times after more than 10 idle minutes: 26.3 s, 13.9 s, 14.2 s at the CLI. On the server, `GET /posting` took 24.5 s (16.1 s of execution; the first call includes the web container's cold start and Neon waking), then 12.9 s and 12.9 s.
+  - Most of that time is the overview itself, not Neon: it reads the source row once per job summary and once per queue item.
+  - In dict mode, with the database connected, the same call took 22–42 s. Before the database it took about 20 s.
+  - The CLI's 30 s client timeout is close; a follow-up should cache sources per request.
+- **`posting_tick`:** each tick logs its line 7–14 s after its scheduled minute, container start included. Outside a due slot, the tick reads only the Dict copy of each schedule, so Neon can scale to zero between slots (ADR-41).
+- **Neon wake-up:** `db_doctor`'s `connect_ms` was 1763 ms and 1440 ms with Neon asleep, and 925 ms soon after other calls (from Modal, through the pooler).
+- **Storage:** `pg_database_size` is 8.2 MB (largest tables: `costs` 144 kB, `content_items` 96 kB), against the free tier's 0.5 GB. The Neon console's figure includes history, so it reads higher.
+- **Compute:** not measured yet. Check the console's CU-hours after a week on Postgres; the plan expects scale-to-zero between slots and the daily run, well inside the free tier's 100 CU-h a month.
+
 ## Monthly cost model (recomputed 2026-09-29 with verified prices; voice measured in X1 on 2026-09-30, stills, b-roll and music in X4 on 2026-10-02; talking heads are estimates until X2 measures them)
 
 **Per video, variable cost** (GPU, CPU and LLM; cold starts spread over a daily batch per account):

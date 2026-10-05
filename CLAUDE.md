@@ -10,7 +10,7 @@ Guidance for Claude Code in this repository. Read this first, then the relevant 
 
 ClipForge is a studio for running and growing many short-video channels (TikTok, Reels, Shorts, Facebook Reels; English and Spanish). Each channel is an account of one type (`clips`, `story`, `band`, `avatar`, `model`; docs/studio/09), built from a blueprint, and every account runs the same loop: produce → review → publish → measure → scale. Each type plugs in its own producer; everything after production is shared. Every producer ends in a `ContentItem` (ADR-25), and one Timeline renderer serves them all (ADR-31).
 
-Built today: the `clips` producer, the Telegram posting assistant, Postgres for accounts, sources and the queue (S1, rollout pending), and a dashboard shell (`web/`). The rest is planned in docs/studio/04. Interfaces (Telegram bot, CLI, dashboard) are thin clients over one job API (ADR-2). Everything runs serverless on Modal (ADR-9): the API, the Telegram webhook, each pipeline step and the crons. Durable state lives in Neon Postgres (ADR-26), and the Modal Dict holds only short-lived step state. Nothing runs locally except development.
+Built today: the `clips` producer, the Telegram posting assistant, Postgres for accounts, sources and the queue (S1, live since 2026-10-05; the Dict mirror retires in Task 23), and a dashboard shell (`web/`). The rest is planned in docs/studio/04. Interfaces (Telegram bot, CLI, dashboard) are thin clients over one job API (ADR-2). Everything runs serverless on Modal (ADR-9): the API, the Telegram webhook, each pipeline step and the crons. Durable state lives in Neon Postgres (ADR-26), and the Modal Dict holds only short-lived step state. Nothing runs locally except development.
 
 ## Stack
 
@@ -44,8 +44,8 @@ uv run clipforge clip [videos/<channel>/<file>] [--fetch]   # videos/ inbox → 
 uv run clipforge status [<id>] [--rebuild|--restore [DATE]] / resume <id>     # read or continue a job; no id: the posting overview
 uv run clipforge set-webhook                     # point Telegram at the deployed API
 # uv run clipforge eval --set evals/v1   # planned, not built (ROADMAP Phase 5, docs/EVALS.md)
-uv run alembic upgrade head                      # migrate Neon (DATABASE_URL_UNPOOLED only; CI runs it before deploy)
-uv run modal run src/clipforge/app.py::db_doctor # read-only: revision, pooled host, schedule copies (rollout only)
+uv run --env-file .env alembic upgrade head      # migrate Neon (DATABASE_URL_UNPOOLED only, read from the environment; CI runs it once DEPLOY_ENABLED is set)
+uv run modal run src/clipforge/app.py::db_doctor # read-only: revision, pooled host, schedule copies
 uv run clipforge account create|edit|list        # studio accounts (blueprints/)
 uv run clipforge source add|edit|list|show|submissions   # sources live in the database (option B)
 uv run clipforge source import-toml [--dry-run]  # one-off: videos/channels.toml -> sources

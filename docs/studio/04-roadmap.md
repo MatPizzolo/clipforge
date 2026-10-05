@@ -55,22 +55,23 @@ Two paths leave S0. **Wave 1** (more clip accounts) is S0 → S1, then S2 and S3
 - **Exit:** clips reach the phone on schedule and the taps update the status.
 
 ## S1: Foundations: accounts, database, content items
-The code for the open items below is built (card 002, PR #5) and deployed Dict-only on 2026-10-02. They are ticked at the rollout: **card 010** (Task 22, runbook §4c).
+Built by card 002 (PR #5), deployed Dict-only on 2026-10-02, and rolled out by **card 010** on 2026-10-05 (Task 22, runbook §4c): production reads the posting queue from Postgres (`STATE_READS=postgres`), with `posting verify` at 0 differences (log #223). Only the ADR-24 retirement (Task 23) is open.
 - [x] ADR-25, ADR-26 and ADR-35 accepted (2026-09-29 kickoff review).
-- [ ] Neon Postgres with SQLAlchemy 2, psycopg 3 and Alembic. `DATABASE_URL` in the Modal secret. Tests run on a local Postgres (`TEST_DATABASE_URL`, or Docker through testcontainers).
-- [ ] New contracts: `Account`, `PlatformProfile`, `BrandKit`, `Persona`, `AssetSource`, `ContentItem`. `channels.toml` sources move into `sources`, with an import command.
-- [ ] Posting queue moves from Dict keys to `posts` rows, keeping the ADR-23 status rules. A one-off import (dry run, count check) brings over the existing `post:*` keys, and a `jobs` table is backfilled from each job's `metadata.json`. A setting switches reads between the Dict and Postgres, so rollback is a config change. The daily cron stays as `posting_daily` (ADR-46); only its Dict touch retires after a week on Postgres.
-- [ ] Alembic runs in the CI deploy job before `modal deploy` (ADR-16). DB tests start Postgres with testcontainers (Docker), locally and in CI.
-- [ ] Clip producer output wrapped into `ContentItem`s. realtalk.clipsdaily becomes account #1.
-- [ ] Blueprints (`blueprints/<name>.toml`, versioned) and `clipforge account create --blueprint --lang --handle`. Write the three clip blueprints from 07.
-- [ ] Campaign sources (e.g. Whop Content Rewards): required tags and links, and a submission list.
-- [ ] Items deferred from S0's final review: a tap reads one clip's rows instead of scanning the whole Dict; a tap on an older message of a re-sent clip redraws every message of that clip, not just the tapped one.
-- [ ] `producer_version` derived from the stage versions, prompt names and models; the git SHA only as `build` (ADR-43; replaces #85's rule).
-- [ ] Slot guard: the tick skips a slot that already has a send, so a claim-key change can't double-send (#77). Until it's verified, the deploy blackout in runbook §1 applies.
-- [ ] `posting/actions.py`: one backend for posted, skip, reject, reason, pause and next, with an actor on every write, used by the webhook and later by the admin routes (ADR-44).
-- [ ] Ops alerts for silent failures and the daily reconcile `posting_daily` (ADR-45, ADR-46).
-- [ ] Task 21 split: 21a (blueprints mounted, a read-only `db_doctor` Modal check, `.env.example`) before 21b (the database wired into `build_deps`, deployed only at rollout step 4c.2).
-- [ ] Rollout rule: only realtalk.clipsdaily is created and hand-posted until S2; founder.tapes and hombre.en.construccion are created just before S2 (#106, refined by #135 and ADR-48).
+- [x] Neon Postgres with SQLAlchemy 2, psycopg 3 and Alembic. `DATABASE_URL` in the Modal secret. Tests run on a local Postgres (`TEST_DATABASE_URL`, or Docker through testcontainers).
+- [x] New contracts: `Account`, `PlatformProfile`, `BrandKit`, `Persona`, `AssetSource`, `ContentItem`. `channels.toml` sources move into `sources`, with an import command.
+- [x] Posting queue moves from Dict keys to `posts` rows, keeping the ADR-23 status rules. A one-off import (dry run, count check) brings over the existing `post:*` keys, and a `jobs` table is backfilled from each job's `metadata.json`. A setting switches reads between the Dict and Postgres, so rollback is a config change. The daily cron stays as `posting_daily` (ADR-46).
+- [x] Alembic runs in the CI deploy job before `modal deploy` (ADR-16; the CI deploy job stays off until `DEPLOY_ENABLED` is set, so the owner migrates by hand, runbook §4c step 1). DB tests start Postgres with testcontainers (Docker), locally and in CI.
+- [x] Clip producer output wrapped into `ContentItem`s. realtalk.clipsdaily becomes account #1.
+- [x] Blueprints (`blueprints/<name>.toml`, versioned) and `clipforge account create --blueprint --lang --handle`. Write the three clip blueprints from 07.
+- [x] Campaign sources (e.g. Whop Content Rewards): required tags and links, and a submission list.
+- [x] Items deferred from S0's final review: a tap reads one clip's rows instead of scanning the whole Dict; a tap on an older message of a re-sent clip redraws every message of that clip, not just the tapped one.
+- [x] `producer_version` derived from the stage versions, prompt names and models; the git SHA only as `build` (ADR-43; replaces #85's rule).
+- [x] Slot guard: the tick skips a slot that already has a send, so a claim-key change can't double-send (#77). Until it's verified, the deploy blackout in runbook §1 applies.
+- [x] `posting/actions.py`: one backend for posted, skip, reject, reason, pause and next, with an actor on every write, used by the webhook and later by the admin routes (ADR-44).
+- [x] Ops alerts for silent failures and the daily reconcile `posting_daily` (ADR-45, ADR-46).
+- [x] Task 21 split: 21a (blueprints mounted, a read-only `db_doctor` Modal check, `.env.example`) before 21b (the database wired into `build_deps`, deployed only at rollout step 4c.2).
+- [x] Rollout rule: only realtalk.clipsdaily is created and hand-posted until S2; founder.tapes and hombre.en.construccion are created just before S2 (#106, refined by #135 and ADR-48).
+- [ ] ADR-24 retires (Task 23): after 7 days in a row on Postgres with `posting_daily: verify` at 0 differences (from 2026-10-06), a later session removes the Dict copy of the queue and `posting_daily`'s Dict touch, snapshot and verify.
 - **Exit:** everything from S0 works the same, but state lives in Postgres and any number of accounts can be defined.
 
 ## S2: Publishing: Upload-Post, review tiers, policy gate
