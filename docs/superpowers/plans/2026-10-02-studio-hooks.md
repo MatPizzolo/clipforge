@@ -21,7 +21,18 @@
 - **Workflow:**
   - Work only from the HK build card. **Sessions never commit, push, deploy or stop the app.**
   - Each task's last step is "check and record" (`scripts/check.sh` green, the task noted in the card's report). The owner commits at the card's checkpoints.
-  - **Preconditions for the build card:** card 010 (S1 rollout) is done, and S2a's migration 0002 (card 014) has landed on `main`. This plan relies on S2a's actor format (`system:` actors, `ACTOR_CHECK`) and its `/admin` route style.
+  - **Dependencies are deployed cards, not merges (#144).** Each part starts only when the cards it needs are deployed with their owner steps done; where a card isn't deployed yet, the part uses the named fallback instead of waiting:
+
+    | Part | Needs deployed | Fallback when it isn't |
+    |---|---|---|
+    | HK-1 | card 010 (S1 rollout), card 014 (S2a: migration 0002, `system:` actors, `ACTOR_CHECK`, `/admin` style) | none: HK-1 waits for both |
+    | HK-2 | HK-1 | — |
+    | | card 015 (S2b: `posts.state`, `publishing:inflight:<ref>`) | re-render's refusal checks `posted_at` only and says so in the code comment; the in-flight checks are added with a test when 015 is deployed |
+    | | card 016 (S2c: the digest's `DigestProvider` tuple) | no digest lines until 016; the providers ship with their tests, unregistered |
+    | | card 022 (S3-1: `cli_router`, the `admin` endpoint) | the interim mount: the CLI's routes in `create_app` next to S2's `/admin/*` on `web`, the dashboard-only routes on `web` behind the bearer token; S3-1 moves them |
+    | | card 023 (S3-2: the needs registry and `needs_providers`) | `HookWeakProvider` ships with its tests, unregistered, until 023 |
+    | | card 024 (S3-3: Review's re-render button) | the route works from the API and CLI tests; the button stays disabled until 024 |
+    | HK-3 | HK-2 and card 022 (S3-1's `admin` client in `web/`) | none: HK-3 waits; if S3c's workspace is deployed first, HK-3 is skipped (S3c's Hooks tab) |
 - **Python:**
   - `uv` only, never pip. **No new dependencies.**
   - Stage modules stay free of database and Modal code. **Only `src/clipforge/app.py` imports `modal`.**
@@ -51,7 +62,36 @@
   - The dashboard-only routes (`PUT /admin/items/{id}/hook-rating`, S3's `POST /admin/review/{item}/rerender`, #619) go on `admin` only; before S3-1 they sit on `web` behind the bearer token.
   - Regenerate `web/openapi.json` and `web/lib/api` after route changes (`npm --prefix web run gen`).
 - **Extension points, never edits (#142, #147):** the `hook_weak` needs provider registers through `runtime.build_deps(needs_providers=…)` and the digest lines through the digest's `DigestProvider` tuple. The hooks build doesn't edit `needs/` or `dispatch/digest.py`; if either isn't on `main`, leave the provider in `hooks/` and tell the coordinator.
-- **S3c's `HookFreezer`:** `freeze(conn, account_id, experiment_id)` and `release(conn, account_id, experiment_id)`, defined by card 018's S3c plan. If S3c's protocol is on `main` at build time, implement it from there; if not, define it in `src/clipforge/hooks/freezer.py` with exactly that signature and tell the coordinator, so S3c imports it instead of defining its own.
+- **One home for `HookFreezer` (coordinator, 2026-10-05):** `src/clipforge/hooks/freezer.py`, holding the `HookFreezer` Protocol (`freeze(self, conn: Connection, account_id: str, experiment_id: int) -> None`, `release(...)` alike) and `NoHookFreezer` (both methods do nothing). Whichever of HK-1 and S3c-3 lands first creates the file with exactly this content; the other imports it. `SqlHookFreezer` lives in `hooks/library.py` and implements it.
+
+  The content, copied verbatim from card 018's S3c plan, Task 17 (create the file only if S3c-3 hasn't already; if it exists, import it and change nothing):
+
+  ```python
+  # src/clipforge/hooks/freezer.py
+  """The hook-weight freeze (ADR-50; S3c spec §4.4). S3c's experiment start, stop and decide call it
+  inside their transaction; the hooks build implements it. One home, shared by S3c-3 and HK-1."""
+
+  from __future__ import annotations
+
+  from typing import Protocol
+
+  from sqlalchemy import Connection
+
+
+  class HookFreezer(Protocol):
+      def freeze(self, conn: Connection, account_id: str, experiment_id: int) -> None: ...
+      def release(self, conn: Connection, account_id: str, experiment_id: int) -> None: ...
+
+
+  class NoHookFreezer:
+      """Until the hooks build deploys: nothing to freeze."""
+
+      def freeze(self, conn: Connection, account_id: str, experiment_id: int) -> None:
+          return None
+
+      def release(self, conn: Connection, account_id: str, experiment_id: int) -> None:
+          return None
+  ```
 - **Security (rule 8):** every LLM line and every pattern field reaches the ASS file only through `captions.title_words()`. Field lengths are capped in `HookPatternData`. No secrets in stamps or logs.
 - **Cost (rule 7):** the captions call records its `StageCost` as today; re-render records its costs on the job.
 - **Tests:** DB tests use the `db` fixture and **fail, never skip**, without Postgres. The LLM is mocked (`tests/stages/helpers.py`'s fake client). Fast tests only.
@@ -77,7 +117,7 @@ The five conditions the spec implies but no task's main tests exercise, most lik
 | `src/clipforge/db/doctor.py` | changed | `EXPECTED_HEAD` |
 | `src/clipforge/db/hooks.py` | new | SQL behind `hooks/library.py`, `ratings.py`, `rerender.py` and `stats.py`'s reads |
 | `src/clipforge/db/posting.py` | changed | `_item_row` writes the stamp columns; reads `superseded_by` |
-| `src/clipforge/hooks/__init__.py`, `rotation.py`, `library.py`, `freezer.py` (only if S3c's protocol isn't on `main`), `seeds.py`, `variants.py`, `stats.py`, `ratings.py`, `needs.py`, `digest.py`, `rerender.py` | new | the hooks package |
+| `src/clipforge/hooks/__init__.py`, `rotation.py`, `library.py`, `freezer.py` (created by HK-1 or S3c-3, whichever lands first), `seeds.py`, `variants.py`, `stats.py`, `ratings.py`, `needs.py`, `digest.py`, `rerender.py` | new | the hooks package |
 | `src/clipforge/posting/actions.py` | changed | `supersede(posting, ref, new_ref, actor, now)` |
 | `src/clipforge/stages/captions.py` | changed | `stage_version()`, `keywords_prompt()`, the pick input, `keywords_v3` parsing, `HookResult`; the `keywords_v1` comment fix |
 | `src/clipforge/stages/runner.py` | changed | `producer_version` reads the two functions; `clip()` takes the pick; the keywords prompt by flag |
@@ -210,7 +250,7 @@ Run `scripts/check.sh --python`, then note the task.
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from tests.dbhelpers import insert_account   # add it if S2's helpers don't have it
+from tests.dbhelpers import insert_account, insert_item   # add them if S2's helpers don't have them
 
 def _pattern(conn, pid="hp_aaaaaaaa", account="realtalk-clips-en", blueprint=None):
     conn.execute(text("insert into hook_patterns (id, account_id, blueprint_name, status,"
@@ -328,14 +368,18 @@ def upgrade() -> None:
         sa.Column("pattern_id", sa.String(16), sa.ForeignKey("hook_patterns.id"), primary_key=True),
         sa.Column("weight", sa.Float, nullable=False),
         sa.Column("updated_by", sa.Text, nullable=False), sa.Column("updated_at", TS, nullable=False),
-        sa.CheckConstraint("weight >= 0", name="ck_hook_weights_nonneg"))
+        sa.CheckConstraint("weight >= 0", name="ck_hook_weights_nonneg"),
+        sa.CheckConstraint(ACTOR_CHECK.replace("actor", "updated_by"), name="ck_hook_weights_updated_by"))
     op.create_table("hook_freezes",
         sa.Column("id", sa.BigInteger, sa.Identity(), primary_key=True),
         sa.Column("account_id", sa.String(40), sa.ForeignKey("accounts.id"), nullable=False),
         sa.Column("experiment_id", sa.BigInteger, nullable=False),     # S3c's experiments.id
         sa.Column("rotation", JSONB, nullable=False),
         sa.Column("frozen_at", TS, nullable=False), sa.Column("frozen_by", sa.Text, nullable=False),
-        sa.Column("released_at", TS), sa.Column("released_by", sa.Text))
+        sa.Column("released_at", TS), sa.Column("released_by", sa.Text),
+        sa.CheckConstraint(ACTOR_CHECK.replace("actor", "frozen_by"), name="ck_hook_freezes_frozen_by"),
+        sa.CheckConstraint("released_by is null or (" + ACTOR_CHECK.replace("actor", "released_by") + ")",
+                           name="ck_hook_freezes_released_by"))
     op.create_index("ux_hook_freezes_open", "hook_freezes", ["account_id"], unique=True,
                     postgresql_where=sa.text("released_at is null"))
     op.create_table("hook_ratings",
@@ -408,6 +452,7 @@ Run `scripts/check.sh --python`, then note the task.
   - `clip_seed(source_hash: str, start: float, end: float, rotation: HookRotation) -> str` = `seed_for(source_hash, f"{start:.3f}", f"{end:.3f}", rotation.id)`
   - `pick(rotation: HookRotation | None, seed: str) -> HookPick | None`
   - `control_entry(rotation: HookRotation | None) -> RotationEntry | None` (the entry whose `data.control` is true)
+  - `weights_of(rotation: HookRotation) -> dict[str, float]` (`"<pattern_id>@<version>" -> weight`) and `control_stamp(rotation: HookRotation | None, title: str) -> HookStamp | None` (the flag-off stamp: the control entry's id and version, `text=title`, `drawn=False`, the rotation's weights; `None` without a rotation or a control), used by enqueue and package (Task 5)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -514,7 +559,7 @@ Run `scripts/check.sh --python`, then note the task.
 ### Task 4: The library service, the freezer and the seeds
 
 **Files:**
-- Create: `src/clipforge/db/hooks.py`, `src/clipforge/hooks/library.py`, `src/clipforge/hooks/seeds.py`, and `src/clipforge/hooks/freezer.py` only if S3c's `HookFreezer` isn't on `main` (Global Constraints)
+- Create: `src/clipforge/db/hooks.py`, `src/clipforge/hooks/library.py`, `src/clipforge/hooks/seeds.py`, and `src/clipforge/hooks/freezer.py` with the Global Constraints' exact content, unless S3c-3 already created it (then import it)
 - Test: `tests/hooks/test_library.py`, `tests/hooks/test_freezer.py`, `tests/hooks/test_seeds.py`
 
 **Interfaces:**
@@ -685,14 +730,14 @@ Run `scripts/check.sh --python`, then note the task.
 ### Task 5: The rotation on the job and the control stamp on items
 
 **Files:**
-- Modify: `src/clipforge/pipeline/steps.py` (`Deps.hooks: HookLibrary | None = None`, `Deps.hook_variants: bool = False`), `src/clipforge/service.py` (`create_job`), `src/clipforge/stages/package.py` (`Versions.hook_rotation`), `src/clipforge/posting/enqueue.py` (`ClipFacts.hook`, `items_for`), `src/clipforge/db/posting.py` (`_item_row` and the item reader), `src/clipforge/runtime.py` (`build_deps`)
+- Modify: `src/clipforge/pipeline/steps.py` (`Deps.hooks: HookLibrary | None = None`, `Deps.hook_variants: bool = False`), `src/clipforge/service.py` (`create_job`), `src/clipforge/stages/package.py` (`Versions.hook_rotation` and the flag-off control stamp on `PackagedClip.hook`), `src/clipforge/posting/enqueue.py` (`ClipFacts.hook`, `items_for`), `src/clipforge/db/posting.py` (`_item_row` and the item reader), `src/clipforge/runtime.py` (`build_deps`)
 - Test: `tests/test_service.py`, `tests/posting/test_enqueue.py`, `tests/db/test_posting_repo.py`, `tests/test_runtime.py`
 
 **Interfaces:**
 - Consumes: `HookLibrary.rotation_for` (Task 4); `control_entry` (Task 3).
 - Produces:
   - `service.create_job` sets `job_input.hooks` from `deps.hooks.rotation_for(account_id, "clips")` when the job has a channel whose source belongs to an account; any exception → `hooks=None`, `Job.hooks_note = "unavailable"` and a log warning;
-  - `package` writes `Versions.hook_rotation` = the rotation's id, else `job.hooks_note`, else `"none"`, so `metadata.json` says whether the job had a rotation (spec §2.1);
+  - `package` writes `Versions.hook_rotation` = the rotation's id, else `job.hooks_note`, else `"none"`, so `metadata.json` says whether the job had a rotation (spec §2.1), and, with the flag off, `PackagedClip.hook` = the same control stamp enqueue writes (`hooks/rotation.py::control_stamp(rotation, title) -> HookStamp | None`, used by both), so `metadata.json` and the item agree from HK-1;
   - `ClipFacts.hook: HookResult | None` (from `RenderedClip.hook`, or from `PackagedClip.hook.result`);
   - `items_for(..., rotation: HookRotation | None, flag_on: bool)`: with the flag off, the stamp is the control (`HookResult(pattern_id=<control id>, version=<its version>, text=c.title, drawn=False)`, weights from the rotation); with no rotation or no control entry, no stamp;
   - `db/posting._item_row` writes `hook_pattern_id`, `hook_version`, `hook_weights`, `hook_result`; the reader fills `ContentItem.hook_stamp` and `superseded_by`;
@@ -733,6 +778,11 @@ def test_no_rotation_no_stamp() -> None:
 ```
 
 ```python
+# tests/stages/test_package.py (add)
+def test_flag_off_metadata_carries_the_control_stamp(tmp_path) -> None:
+    meta = package_case(tmp_path, hook=None, rotation=rotation(entry("hp_ctl", 1.0, control=True)))
+    assert meta.clips[0].hook.result.pattern_id == "hp_ctl" and meta.versions.hook_rotation
+
 # tests/db/test_posting_repo.py (add)
 def test_stamp_columns_round_trip(db, seeded_account) -> None:
     item = make_item(hook_stamp=control_stamp())
@@ -856,8 +906,9 @@ Expected: PASS.
 
 **Owner deploy steps (HK-1).**
 
-Preconditions: card 010 done; S2a's migration on Neon (`db_doctor` head = 0002 or later); `clipforge posting verify` at 0.
+Preconditions: card 010 done; card 014 deployed (`db_doctor` head = 0002, or the head of whichever of S3's and S3c's migrations deployed since); `clipforge posting verify` at 0.
 
+0. **The #144 check:** no other code card is on `main` undeployed (`docs/ops/deploys.md` against `git log`).
 1. `uv run alembic upgrade head` (`DATABASE_URL_UNPOOLED` only), then `scripts/deploy.sh --dry-run` (shows the new head), then `scripts/deploy.sh --reason "HK-1: hook library, control stamps"`, outside the blackout (runbook §1).
 2. `uv run modal run src/clipforge/app.py::db_doctor`. Expected: the hooks head.
 3. `uv run clipforge hooks seed --dry-run`, then `uv run clipforge hooks seed`. Expected: "realtalk-clips-en: 6 patterns" (and each other clips account).
@@ -1076,7 +1127,7 @@ def test_keywords_v3_is_released_and_renders() -> None:
     assert "Hook: x" in text and "variants" in text
 ```
 
-Before writing the pinned tests, run `uv run python -c` on `main`'s code to print today's captions key for the fixture clip and today's `producer_version`, and paste the values in as `PINNED_V2_KEY` and `PINNED_PRODUCER_VERSION`.
+Before writing the pinned tests, run `uv run python -c` on `main`'s code to print today's captions key for the fixture clip and today's `producer_version`, and paste the values in as `PINNED_V2_KEY` and `PINNED_PRODUCER_VERSION`. **Re-pin from `main` at landing:** if another card changed a stage version, prompt or model on `main` meanwhile, print both again from `main` after rebasing and update the literals (they must equal `main`'s values, not the values at the time of writing).
 
 - [ ] **Step 2: Run and see them fail**
 
@@ -1180,7 +1231,7 @@ Expected: FAIL.
 - [ ] **Step 3: Implement**
 
 - `clip_step`: compute the pick after loading `spec` (pure, so a retry computes the same one) and pass it on. `PipelineStages.clip` forwards it to `captions.run` and copies `caps.hook` onto the `RenderedClip`.
-- `package`: build each `PackagedClip.hook` from `rendered.hook` and `job.input.hooks` (the same `_weights` helper as enqueue; move it to `hooks/rotation.py` as `weights_of(rotation) -> dict[str, float]` and use it in both places). Flag off: package writes the control stamp exactly as enqueue does (Task 5), so `metadata.json` and the item agree.
+- `package`: build each `PackagedClip.hook` from `rendered.hook` and `job.input.hooks` (the same `_weights` helper as enqueue; move it to `hooks/rotation.py` as `weights_of(rotation) -> dict[str, float]` and use it in both places). Flag off: unchanged from Task 5 (`control_stamp`).
 - `ClipFacts.from_rendered` reads `r.hook`; `from_packaged` reads `c.hook.result if c.hook else None`; `items_for` already does the rest (Task 5).
 
 - [ ] **Step 4: Run and see them pass**
@@ -1340,6 +1391,7 @@ Run `scripts/check.sh --python`, then note the task.
 **Interfaces:**
 - Consumes: `PostingRepo`, `posting/actions.reject` (Dual-written); S2's `publishing:inflight:<ref>` key and `posts.state`; `captions.run(..., pick)` (Task 8); `render.run`; `HookLibrary` (pattern lookup).
 - Produces:
+  - `Step.RERENDER` with `STEP_TIMEOUT_S[Step.RERENDER]` = the clip step's;
   - `RerenderChoice = PatternChoice(pattern: str  # "<id>@<v>") | TitleChoice(title: str = Field(max_length=120))`;
   - `RerenderRefused(Exception)` with a user-safe message;
   - `request(deps: Deps, item_id: str, choice: RerenderChoice, actor: str, now: datetime, *, preview: bool = False) -> RerenderTicket{new_item_id: str, estimate_usd: float}`;
@@ -1364,6 +1416,12 @@ def test_second_rerender_request_is_refused_while_the_first_runs(deps, queued_it
     with pytest.raises(RerenderRefused, match="already being re-rendered"):
         request(deps, queued_item, PatternChoice(pattern="hp_b@1"), "web:mat", NOW)
     assert first.new_item_id.endswith(":clip_01r1")
+
+def test_stale_claim_is_freed_after_the_step_timeout(deps, queued_item) -> None:
+    request(deps, queued_item, PatternChoice(pattern="hp_q@1"), "web:mat", NOW)
+    later = NOW + timedelta(seconds=STEP_TIMEOUT_S[Step.RERENDER] + 5 * 60 + 1)
+    t = request(deps, queued_item, PatternChoice(pattern="hp_b@1"), "web:mat", later)   # not refused
+    assert t.new_item_id.endswith(":clip_01r1")
 
 def test_preview_spawns_nothing_and_gives_the_estimate(deps, queued_item) -> None:
     t = request(deps, queued_item, TitleChoice(title="He quit at 40"), "web:mat", NOW, preview=True)
@@ -1398,6 +1456,20 @@ def test_supersede_writes_reason_and_column_through_actions(posting_dual, queued
     assert sql_item(posting_dual, queued_item).superseded_by == queued_item + "r1"
     assert dict_verdict(posting_dual, queued_item).reason is None        # verify stays at 0
 
+def test_crash_between_insert_and_supersede_is_finished_by_the_retry(harness_on, queued_item) -> None:
+    t = request(harness_on.deps, queued_item, PatternChoice(pattern="hp_q@1"), "web:mat", NOW)
+    harness_on.fail_once("supersede")                   # raises after repo.add, before supersede
+    harness_on.drain_rerender()                         # the first attempt fails, the retry finishes
+    assert harness_on.item(queued_item).superseded_by == t.new_item_id
+    assert harness_on.item_count_with_prefix(queued_item) == 2     # old + one new, no duplicate
+    assert harness_on.verify_differences() == 0
+
+def test_rerender_of_a_rerender_is_r2(harness_on, queued_item) -> None:
+    first = request(harness_on.deps, queued_item, PatternChoice(pattern="hp_q@1"), "web:mat", NOW)
+    harness_on.drain_rerender()
+    second = request(harness_on.deps, first.new_item_id, TitleChoice(title="He quit at 40"), "web:mat", NOW)
+    assert second.new_item_id.endswith(":clip_01r2")
+
 def test_superseded_items_leave_counts_and_the_pick(harness_on, queued_item) -> None:
     request(harness_on.deps, queued_item, PatternChoice(pattern="hp_q@1"), "web:mat", NOW)
     harness_on.drain_rerender()
@@ -1413,15 +1485,15 @@ Expected: FAIL.
 
 - `request()`:
   1. load the item (404 if missing) and its record; refuse if it is superseded, any platform has `posted_at`, any `posts.state` is past `pending`, or `publishing:inflight:<ref>` exists;
-  2. resolve the choice (`HookLibrary` lookup of `<id>@<v>` that fits `clips`, or the title), and `N` = 1 + the item's existing `r<n>` suffixes;
+  2. resolve the choice (`HookLibrary` lookup of `<id>@<v>` that fits `clips`, or the title); the **base** is the item's clip id without any `r<n>` suffix, and `N` = 1 + the highest `r<n>` among the base's items, so a re-render of `clip_01r1` is `clip_01r2`, never `clip_01r1r1`;
   3. estimate = the captions call (`settings.prices.llm_usd` over 1.5K in and 200 out) + one render (the job's mean render cost per clip from its `costs`, else $0.01);
   4. with `preview`, return the ticket;
-  5. otherwise claim `rerender:<item_id>` in the Dict with `skip_if_exists=True` (refuse "already being re-rendered" when taken), store the ticket under the claim key (choice, actor, `N`), write a `rerendered` event, and spawn `Step.RERENDER` with `(job_id, clip_id, ticket_key)`.
+  5. otherwise claim `rerender:<item_id>` in the Dict with `skip_if_exists=True`, store the ticket under the claim key (choice, actor, `N`, **`at`**), write a `rerendered` event, and spawn `Step.RERENDER` with `(job_id, clip_id, ticket_key)`. When the claim is taken, read its ticket: if `at` is older than `STEP_TIMEOUT_S[Step.RERENDER]` + 5 minutes (the attempt died after its retries ran out), the claim is stale, so overwrite it and go on; otherwise refuse "already being re-rendered".
 - `rerender_step` (Modal-free in `steps.py`; `app.py` adds the function with the clip step's image, timeout and `Retries(max_retries=2)`):
   1. load the ticket, the job, the clip's `ClipSpec` and the cached transcript;
   2. build the `HookPick`, or pass the given title as `manual_title` (Task 8: its own cache key, `manual=True`, `pattern_id=None`);
   3. run the clip pipeline (`deps.stages.clip(ctx, spec, transcript, pick=…)`) under clip id `<clip_id>r<N>` for its output paths;
-  4. enqueue the new `ContentItem` (same platforms, score, episode, `queued_at` of the old item so it keeps its place; stamp from the job's rotation; `title` = the given title or the best line as written), then call `posting/actions.supersede(posting, old_ref, new_ref, actor, now)`, which rejects the old item with reason `superseded:<new id>` and sets `superseded_by` (no other `post_events` writer);
+  4. insert the new `ContentItem` with **`posting.repo.add(item, platforms)` directly**, not `enqueue.enqueue`: `enqueue` skips it because `queue.overlaps` still sees the old item, which isn't rejected yet. `add` is idempotent by id, so a retry re-adds nothing. The item keeps the old item's platforms, score, episode and `queued_at` (its place in the queue), carries the stamp from the job's rotation, and takes `title` = the given title or the best line as written. Then call `posting/actions.supersede(posting, old_ref, new_ref, actor, now)`, which rejects the old item with reason `superseded:<new id>` and sets `superseded_by` (no other `post_events` writer). Both writes are idempotent, so a crash between them is finished by the step's retry;
   5. release the `rerender:<item_id>` claim. On a `PermanentError` ("the source is gone"), release the claim and raise an ops alert.
 - `db/posting`'s eligible pick excludes items with `superseded_by` set (`posting/queue.py` derives "rejected" for them through the verdict, as today). S2's ladder and demotion counts and S3c's reject-rate metric exclude rejects with reason `superseded:<id>` (spec §10.4, §10.6): if those modules are on `main`, add the exclusion with a test there; otherwise tell the coordinator.
 - **`metadata.json` is not rewritten** (spec §3.2): the new files go under `<job_id>/rerender/<clip_id>r<N>/`, and the record is the new item, `superseded_by` and the `rerendered` hook event.
@@ -1434,28 +1506,29 @@ Expected: PASS.
 - [ ] **Step 5: Check and record — checkpoint HK-2**
 
 1. Run the full `scripts/check.sh`.
-2. Ask `pr-reviewer`, `pipeline-reviewer` (captions, render inputs, `producer_version`) and `security-reviewer` (the new routes, LLM text into ASS) to review.
+2. Ask `pr-reviewer`, `pipeline-reviewer` (captions, render inputs, `producer_version`), `migration-reviewer` (Task 11 changes `posting/repo.py` and `db/posting.py`: the Dual write of `supersede`, `posting verify`) and `security-reviewer` (the new routes, LLM text into ASS) to review.
 3. Update `docs/ARCHITECTURE.md` (captions: hook variants; the flag; re-render), `.env.example` (`HOOK_VARIANTS`), `docs/ops/secrets.md` (the `HOOK_VARIANTS` row: not a secret, a setting in `clipforge-secrets`; missing = off), `docs/studio/04-roadmap.md` and `ROADMAP.md`.
 4. Write the report.
 5. Suggested commit: `NNN: hk-2: keywords_v3 hook variants behind HOOK_VARIANTS, ranking, ratings, re-render`.
 
 **Owner deploy steps (HK-2).**
 
-1. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "HK-2: hook variants (flag off)"`, outside the blackout. Clip output is still unchanged (flag off).
+0. **The #144 check:** no other code card is on `main` undeployed (`docs/ops/deploys.md` against `git log`). Note which of cards 015, 016, 022, 023 and 024 are deployed: they decide which fallbacks of the Global Constraints' table are in force.
+1. `uv run modal run src/clipforge/app.py::db_doctor` (the hooks head, unchanged: HK-2 has no migration), then `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "HK-2: hook variants (flag off)"`, outside the blackout. Clip output is still unchanged (flag off).
 2. Check that no other clips stage or prompt bump is due this week (#439); if one is, ship them together instead.
 3. Add `HOOK_VARIANTS=true` to `clipforge-secrets` with `docs/ops/secrets.md`'s add-only procedure, then `scripts/deploy.sh --reason "HOOK_VARIANTS on"`. Every clips account's `producer_version` changes once: expect ADR-49's 5-item window per account (about 15 reviews).
 4. Clip one episode. Its items' title cards show rewritten lines; `metadata.json` has `hook.result.variants`; `uv run clipforge hooks list realtalk-clips-en` shows items per pattern.
 5. Try `uv run clipforge hooks stats <pattern>` and one re-render from the API (`POST /admin/review/<item>/rerender?preview=true`, then without `preview`).
 
 **Rollback (HK-2):**
-- The variants only: set `HOOK_VARIANTS=false` (or remove it) and redeploy. Captions use their old cache keys again and stamps go back to the control.
+- The variants only: set `HOOK_VARIANTS=false` (or remove it) and redeploy. Captions use their old cache keys again and stamps go back to the control. **`producer_version` returns to its previous value, and that is a change too:** S2 counts the producer window per version (`WindowCounts.producer`, ADR-49), so an account opens a new 5-item window only if it has fewer than 5 counted review decisions under the old version. Accounts reviewed under the old version for at least 5 items see no window; an account created after the flip, or one with no counted decisions yet (before S2b), gets one. Turning the flag on again later returns to the variants' version, whose decisions are already counted.
 - The whole part: a revert deploy (dry run first). No migration in HK-2.
 
 ---
 
 # Part HK-3: the interim page
 
-Starts when S3's dashboard build has the `admin` client and its route-handler pattern on `main` (card 019's plan). If S3c's account workspace lands first, skip this part: S3c's Hooks tab is built on the same routes, and `/hooks?account=` redirects there.
+Starts when HK-2 and card 022 (S3-1: the `admin` client and its route-handler pattern) are deployed (#144). If S3c's account workspace lands first, skip this part: S3c's Hooks tab is built on the same routes, and `/hooks?account=` redirects there.
 
 ### Task 12: `/hooks?account=<id>` in `web/`
 
@@ -1528,7 +1601,10 @@ Expected: PASS.
 3. Write the report.
 4. Suggested commit: `NNN: hk-3: interim hooks page`.
 
-**Owner steps (HK-3):** the Vercel deploy as runbook §5b (no Modal deploy). Open `/hooks?account=realtalk-clips-en` on the phone and the laptop.
+**Owner steps (HK-3):**
+0. **The #144 check:** no other code card is on `main` undeployed (`docs/ops/deploys.md` against `git log`), and card 022 is deployed.
+1. `uv run modal run src/clipforge/app.py::db_doctor` (the head is unchanged; HK-3 has no migration).
+2. The Vercel deploy as runbook §5b (no Modal deploy). Open `/hooks?account=realtalk-clips-en` on the phone and the laptop.
 
 **Rollback (HK-3):** revert the merge; Vercel redeploys the previous build.
 

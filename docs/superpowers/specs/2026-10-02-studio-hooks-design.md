@@ -215,7 +215,7 @@ All six have `fits = ["clips"]` and `max_words = 8` (the highlights prompt's lim
 
 ### 4.4 Freeze during setup experiments (R5)
 
-- **The contract is S3c's `HookFreezer` protocol** (card 018's plan; coordinator, 2026-10-02), which takes the caller's connection:
+- **The contract is the `HookFreezer` protocol** agreed with card 018 (coordinator, 2026-10-02), which takes the caller's connection. It has one home, `src/clipforge/hooks/freezer.py` (the Protocol plus `NoHookFreezer`): whichever of HK-1 and S3c-3 lands first creates it with identical content, and the other imports it (coordinator, 2026-10-05).
   ```python
   class HookFreezer(Protocol):
       def freeze(self, conn: Connection, account_id: str, experiment_id: int) -> None: ...
@@ -259,9 +259,9 @@ The S3 Review page's "re-render" (and the Hooks page's "try this pattern on this
 
 - **Route:** S3's `POST /admin/review/{item}/rerender` (#619; one re-render path for Review and the Hooks page) with `{"pattern": "<pattern_id>@<version>"}` or `{"title": "..."}`, and `?preview=true` for the cost line. The handler calls `hooks/rerender.py::request(item_id, choice, actor, now)` (Modal-free), which validates and spawns `rerender_step(job_id, clip_id, choice)` in `app.py`.
 - **What runs:** only captions and render for the same `ClipSpec` (same source, start and end), from the cached transcript, highlights and reframe. A pattern runs `keywords_v3` with that pick; a title runs it in control mode with the given title as the source line (key words only), and the result has `manual = true` and `pattern_id = None`; its captions key carries `hook = "manual:<sha16 of the title>"` (§2.2), so two titles never share a cached result.
-- **The new item:** id `<job_id>:<clip_id>r<N>` (N = 1, 2, …), a new stamp (the job's rotation weights, plus the actor in the `rerendered` event), the old item's platforms and its place in the queue (S2's planner keeps the slot; before S2, the assisted pick sees the new item with the old one's score and episode).
+- **The new item:** id `<job_id>:<base clip id>r<N>` (N = 1, 2, … over the base clip, so a re-render of `clip_01r1` is `clip_01r2`), inserted with `posting.repo.add` directly (idempotent by id; `enqueue` would skip it as overlapping the old item), then the old item is superseded; a crash between the two is finished by the step's retry. It has a new stamp (the job's rotation weights, plus the actor in the `rerendered` event), the old item's platforms and its place in the queue (S2's planner keeps the slot; before S2, the assisted pick sees the new item with the old one's score and episode).
 - **The old item:** a new `posting/actions.supersede(posting, ref, new_ref, actor, now)`, the one writer of verdicts and `post_events`, rejects it with reason **`superseded:<new id>`** and sets `superseded_by`, in one action. The verdict is Dual-written as a reject with no `RejectReason` (the Dict's `PostVerdict.reason` stays `None`, so `posting verify` stays at 0); the reason is on the `rejected` `post_events` row (`data.reason`). That reason is excluded from S2's ladder and demotion counts, S3c's reject-rate metric (§10.4, §10.6) and hook stats.
-- **Refused** (409, with the reason) when any platform of the item is posted, handed off or in flight (`publishing:inflight:<ref>`), or when the item is already superseded. A missing source video is a `PermanentError` with "the source is gone".
+- **Refused** (409, with the reason) when any platform of the item is posted, handed off or in flight (`publishing:inflight:<ref>`), when the item is already superseded, or while another re-render of it runs (a `rerender:<item>` Dict claim; a claim older than the step's timeout plus 5 minutes is stale and freed). A missing source video is a `PermanentError` with "the source is gone".
 - **Cost:** one captions call (about $0.0025) and one render (about $0.005–0.01 of CPU), shown by `preview` before the owner confirms; recorded on the job's costs like any clip.
 - **S3's Review button** stays disabled ("arrives with the hooks build", #619) until HK-2 ships the route.
 
