@@ -2,6 +2,7 @@
 
 Date: 2026-10-01 · Card: [009](../../cards/009-s3-dashboard-design.md) · Status:
 - §1 routine, §2 autopilot model, §3 jobs mapped to the loop, §4 Telegram and the dashboard, §5 staged availability, §6 information architecture: **approved by the owner at checkpoint A (2026-10-01)**, after two rounds of the coordinator's review. Decision log #420–#430.
+- **Revised 2026-10-02 (card 019): §11**, the delta after S2's plan (routes S2 owns, the `admin` endpoint split, the build order, log #610–#623). Where §11 differs from §1–§10, §11 wins. **For the owner's review at card 019's checkpoint A.**
 - §7 pages (revised after the owner's review: §7.3 type tabs, §7.8 Personas, log #431–#432; §8 revised for the owner's rulings #433–#436), §8 gaps (revised again after merging `main`: #437–#439; with the coordinator's six additions: crons, the queue filler, the "needs me" API, where autopilot settings live, the hook-variant cost, S2's card), §9 proposed ADRs (A, B, C; for the owner's review at B, then the coordinator accepts them), §10 proposed changes to other documents: **written at checkpoint B (2026-10-01), for the owner's review.** Mockups and `DESIGN.md` in `docs/design/dashboard/` (impeccable finish review: 8 material fixes in 2 correction rounds; 7 resolved at the final verdict, the last one fixed after it and confirmed by a computed-style check). 08 §2c carries the proposed 08 edits.
 
 Builds on, and doesn't reopen: ADR-29 (review tiers, policy gate), ADR-38 (the dashboard over the API only), ADR-39 (disclosed synthetic personas), ADR-42 and the [S3c spec](2026-09-30-studio-s3-workspaces-design.md) (versioned setup, experiments, notes), ADR-43 (derived producer version), ADR-44 (one home per task), ADR-45 (notification budget), D8 (Review is a queue manager until S2), D9 (the `admin` endpoint and its token). Facts: [01](../../studio/01-vision-and-strategy.md) (money, review policy), [03](../../studio/03-tools-and-models.md) (cost model), [07](../../studio/07-channel-portfolio.md) and [09](../../studio/09-account-registry.md) (portfolio, accounts, pairs), [08 §2](../../studio/08-dashboard-and-operations.md#2-dashboard-information-architecture-nextjs) (page list).
@@ -114,7 +115,7 @@ The owner's daily budget is **~20 minutes** (editable in Settings). Home shows "
 |---|---|---|---|---|
 | **Produce** | The queue filler keeps N days of runway: clips from approved sources, story scripts rotating series and pillars, avatar scripts from approved offers, carousels for model accounts | New sources and series; batches over the line; topics, if they want to steer | **Produce** (batch planner), the account's Overview | none (`/clip` retires when Produce ships, ADR-44) |
 | **Review** | The policy gate and routing by dial | Items in the `review` lane: the dial, the format and producer-version windows, sponsored items, gate failures, spot checks | **Review** | one-tap approve or reject for items due within 2 h (§4) |
-| **Publish** | Upload-Post at the slots (S2) | The brake, rescheduling, assisted posting on accounts with Publish off | **Calendar** | one-tap brake; assisted posting |
+| **Publish** | Upload-Post at the slots (S2) | The brake, rescheduling, assisted posting on accounts with Publish off | **Calendar** (rescheduling: a later card, §11.11; writers: `dispatch/plan.py` for one slot, the accounts service for the schedule) | one-tap brake; assisted posting |
 | **Measure** | Analytics (S7), costs, payout-program progress, the lifecycle day | Marking campaign submissions; CSV imports | **Results**, the account's Results tab | the 09:00 digest |
 | **Scale** | Winners flagged, dubs queued (Scale on), hook patterns ranked | Experiments, hook patterns, promotions, new accounts | **Experiments**, the account's **Hooks** tab, **Accounts → Compare** | digest lines only |
 | **Setup** | — | Style, hooks, autopilot, personas, sources | The account's **Autopilot**, **Style**, **Hooks** and Setup tabs; **Personas**; **Sources** | none |
@@ -556,3 +557,156 @@ Added to 08 as a new subsection, **§2c "Proposed by card 009 (pending the owner
 - S6: the queue filler (§8.2) and story hook variants.
 - S7: "budget enforcement before job start" moves to `create_job` in the first card that creates jobs automatically (S6's filler, or earlier); S7 keeps the reporting. The dispatcher is accepted earlier, at S2 (§8.1).
 - A new hooks card after S1's rollout and before S6 (§8.5).
+
+## 11. Revised 2026-10-02 (card 019): the delta after S2's plan
+
+Card 019 reconciles this spec with the S2 plan (`docs/superpowers/plans/2026-10-02-studio-s2.md`, cards 014–016) before S3's build plan is written. It is a delta, not a rewrite: §1–§10 stand except where this section says otherwise. Log #610–#623: the owner's rulings at card 019's checkpoint A (#610–#617), the coordinator's note on the endpoint split (#618), the re-render owner (#619), the coordinator's reviews of checkpoint A (#620, #621), the plan (#622) and the coordinator's review of the plan (#623).
+
+### 11.1 Inventory: what S2 builds that S3's pages call
+
+**Route paths.** S2 puts its dashboard routes under `/admin/` on `create_app`. S3 keeps that prefix for every route it adds, so one path works on both endpoints (§11.2): the routes §7 and §8.3 call `GET /needs`, `GET /settings` and so on are **`GET /admin/needs`, `GET /admin/settings`, …** The page paths (`/act/…`, `/review`, …) are the dashboard's and don't change.
+
+| Route | Page(s) | Owner | Backend (writer) |
+|---|---|---|---|
+| `GET /admin/accounts/{id}/autopilot` → `{autopilot, waiting_on, history}` | Account → Autopilot, Overview, `/act` | **S2, reused** (Task 8) | `accounts/autopilot.py` |
+| `PUT /admin/accounts/{id}/autopilot` (`{field, value, reason}` or `{preset, reason}`) | Account → Autopilot | **S2, reused** (Task 8) | `accounts/autopilot.py` |
+| `POST /admin/accounts/{id}/autopilot/promote`, `GET /admin/accounts/{id}/ladder` | Home row `promotion_ready`, `/act`, Autopilot, Overview | **S2, reused** (Task 21) | `accounts/autopilot.py`, `accounts/ladder.py` |
+| `GET /admin/policy/dry-run?account=` | none in S3 (CLI) | **S2, reused** (Task 8) | `policy/gate.py` (read-only) |
+| `GET /admin/review?account=`, `POST /admin/review/{item}/approve\|reject`, `PUT /admin/review/{item}/copy` | Review → Review lane, `/act/review_due/…` | **S2, reused** (Task 15) | `review/service.py` |
+| `GET /admin/publisher/check/{account}` | `/act/publisher_disconnected/…` (evidence) | **S2, reused** (Task 19) | read-only |
+| `POST /admin/links`, `GET /admin/links?account=` | none in S3 (CLI; a Links tab is later) | **S2, reused** (Task 25) | `tracking.py` |
+| `GET /accounts`, `GET /accounts/{id}`, `POST /accounts`, `PATCH /accounts/{id}`, `GET /sources…`, `POST /sources`, `PUT /sources/{id}`, `GET /jobs/{id}`, `POST /jobs/{id}/resume`, `GET /posting` (on `admin`, every write requires `X-Clipforge-Actor: web:<login>`) | Compare, account view, Sources, Jobs, Home (S3a) | **S1/S3a, reused** | existing services |
+| `POST /admin/review/batch` `{refs, action: "approve"}` → per-ref `Decision` | Review → Review lane (batch bar) | **S3** (G21: S2's Task 15 builds no batch route) | loops `ReviewService.approve` |
+| `POST /admin/posting/{ref}/pin` and `DELETE …/pin` (D8's reorder, as "move to the front") | Review → Queue | **S3** (`posting/actions.pin`) | `posting/actions.py` |
+| `GET /admin/posting/queue?account=` (next up, eligible, held, pinned; added at checkpoint B) | Review → Queue | **S3** | read-only (`posting/queue.py`) |
+| `POST /admin/posting/{ref}/skip`, `POST …/reject` `{reason?}`, `PUT …/reason` `{reason}`, `PUT …/posted` `{platform, on}` | Review → Queue, `/act/held_clips/…` | **S3 route**, S1 backend | `posting/actions.py` (`skip`, `reject`, `set_reason`, `set_posted`) |
+| `POST /admin/accounts/{id}/strikes` `{platform, note}` | Account → Autopilot (manual entry, G12) | **S3 route**, S2 backend | `AutopilotService.record_strike` (Task 21) |
+| `POST /admin/accounts/{id}/pause` `{on, reason}` | Calendar, account header | **S3 route**, S2 backend | `posting/actions.pause` (writes the brake, Task 4) |
+| `GET /admin/needs?account=&level=&after=`, `GET /admin/needs/{kind}/{subject}`, `POST /admin/needs/{kind}/{subject}/{action}`, `POST /admin/needs/{kind}/{subject}/snooze` | Home, `/act` | **S3** (§8.3) | router only; dispatches to the owners below |
+| `GET /admin/fleet/scoreboard?date=`, `GET /admin/slots?from=&to=&account=` (a day for Home, a week for Calendar) | Home, Calendar | **S3** (G2) | read-only |
+| `GET /admin/accounts/compare?days=7` | Accounts → Compare | **S3** (G3) | read-only |
+| `GET /admin/accounts/{id}/activity?date=`, `GET /admin/accounts/{id}/overview` | Account → Activity, Overview | **S3** (G14, G17) | read-only |
+| `GET /admin/accounts/{id}/sources`, `GET /admin/accounts/{id}/episodes` | Account → Sources & episodes, Produce | **S3** (§7.3 clips) | read-only |
+| `POST /admin/batches/preview`, `POST /admin/batches`, `GET /admin/jobs?account=&status=` | Produce, Jobs tab | **S3** (G7's S3 half) | `service.create_job`; `produce/batches.py` (new, the writer of `batches`) |
+| `GET /admin/results/costs?from=&to=&accounts=` | Results → Costs | **S3** (G8, G19) | read-only |
+| `GET /admin/settings`, `PUT /admin/settings` | Settings, Home meter, Produce | **S3** (G18) | `settings_service.py` (new, the writer of `settings`) |
+
+**Not built by S2 or S3:** re-render from Review (G21's last part) belongs to **the hooks build** (coordinator, #619): its first real use is "re-render this clip with another hook or title", and the hooks build already changes the clip step and the captions inputs. It adds the route (proposed path `POST /admin/review/{item}/rerender`); S6 adds re-render for its own producer later. S3 builds no re-cut path: Review's **Re-render** action ships disabled ("arrives with the hooks build") and calls that route once it exists.
+
+**S2's pieces S3 changes (small, in S3's cards):**
+- `review/cards.py` gains the **Open ↗** button to `/act/review_due/<item>` (S2 §7.1 leaves it out until S3 serves the page).
+- `dispatch/digest.py`'s `EXISTING_PAGES` (a constant with a test, S2 Task 23) grows with each page S3 ships, under the link-contract test.
+- `accounts/ladder.py`'s runway input moves from S2's simple runway (queued ÷ slots) to `accounts/runway.py` (§3.3: unclipped imported episodes included), built in S3-2.
+
+**"Needs me" rows (§7.11) mapped to their source and action backend:**
+
+| Kind | Source (read) | Action → backend |
+|---|---|---|
+| `review_due`, `review_batch` | `content_items` review columns + `slot_plans` (S2b) | approve / reject → `review/service.py` |
+| `publish_failed`, `publisher_disconnected`, `strike` | `publishing.open_problems()` (S2c, Task 24) | retry → `publishing/state.py` retry claim; post by hand → `posting/actions.set_posted`; reconnect → a link to Upload-Post's connect page plus `publisher check`; strike → open the account |
+| `spend_line` | `batches` with `status='pending'` (S3) | approve / decline → `produce/batches.py` |
+| `cap_reached` | not built in S3 (the cap card, §8.2) | — |
+| `permission_expired`, `held_clips` | `sources` + the hold rules (`sources.py`), posting records (S1) | open the source; skip / reject → `posting/actions.py` |
+| `runway_low` | `accounts/runway.py` (S3) | open Produce / the source |
+| `promotion_ready`, `demotion_done` | `ladder()` (S2c), `autopilot_events` with actor `system:demotion` (S2a) | promote → `AutopilotService.promote`; "not yet" → snooze |
+| `experiment_decision`, `series_approval`, `hook_weak` | S3c-3, S3c, the hooks card | added by those cards (each registers its provider) |
+| `job_failed` | `jobs` (`status='failed'`, `jobs.error` from S2a's migration) | resume → `service.resume_job` |
+| `outage` | the `posting:outage` Dict flag | go → `posting/actions.pause(on=False)` (clears the flag, as `/go` does); restore → `service.restore_posting` |
+| `view_collapse` | S7 | — |
+
+**Providers and landing order.** `GET /admin/needs` assembles rows from one provider per kind (`needs/providers.py`, a registry). A provider whose source belongs to an S2 card that hasn't merged yet (for example `promotion_ready` before card 016) **ships with whichever of the two cards lands second**: the S3 card if S2's is on `main`, otherwise S2's card's follow-up note names it. A provider never imports a module that isn't on `main`.
+
+### 11.2 The `admin` endpoint (owner, #610, #611; coordinator #618)
+
+- **Split by caller (#610).** `create_app(ctx, surface: Literal["web", "admin"])`. Both surfaces mount the routes that exist today and S2's `/admin/*` routes. Only `admin` mounts S3's new routes (an `admin_router`, one `APIRouter` per area, so S3c and the hooks card add routers). Only `web` mounts the public routes (`/telegram/webhook`, `/jobs/{id}/download`, `/webhooks/upload-post`, `/media/{item}.mp4`, `/go/{slug}`).
+- **Auth.** `web`: `API_TOKEN`, as today (the CLI keeps working unchanged). `admin`: a second `@modal.asgi_app(requires_proxy_auth=True)` function in `app.py` (D9), so Modal refuses a request without the proxy token pair before it reaches the app; then every route checks `ADMIN_API_TOKEN` (missing → 503, never open). Writes on `admin` require `X-Clipforge-Actor: web:<login>` (validated by `actions.web_actor`; missing or malformed → 400).
+- **Vercel (#611).** Production env vars: `ADMIN_API_URL`, `ADMIN_API_TOKEN`, `MODAL_PROXY_KEY`, `MODAL_PROXY_SECRET`. `web/lib/upstream.ts` stays the only module that reads them; it sends `Modal-Key`, `Modal-Secret`, `Authorization: Bearer …` and the actor (the session's GitHub login). `CLIPFORGE_API_URL` and `API_TOKEN` leave Vercel once S3a's Home and job page read through `admin` (S3-1).
+- **Rotation (runbook §5b, new text in S3-1's owner steps).** Proxy pair: create a new token in Modal's workspace settings, set both values in Vercel, redeploy the dashboard, check Home loads, revoke the old token. `ADMIN_API_TOKEN`: add the new value with the `docs/ops/secrets.md` procedure, redeploy the app (`scripts/deploy.sh`), set it in Vercel, redeploy the dashboard. Between the two redeploys the dashboard answers "API rejected the token" for about a minute; the brake still works from Telegram.
+- **Follow-up, dated (#618): the CLI cut-over.** "Split by caller" leaves S2's control routes (autopilot, publisher, brake, links) on the public `web` endpoint behind `API_TOKEN` alone, which ADR-38 meant to avoid. Once `admin` has been live for 7 days, **S3-5b** moves the CLI to `admin` (`CLIPFORGE_ADMIN_URL`, the proxy pair and `ADMIN_API_TOKEN` in the laptop's `.env`). The CLI's routes are: `/jobs` (POST, GET, resume), `/jobs/backfill`, `/accounts` (GET, POST, PATCH), `/sources` (GET, POST, PUT, events, submissions), `/posting`, `/posting/rebuild|import|verify|restore`, and S2's `/admin/*` (autopilot, policy dry-run, publisher check, links). Uploads use `modal volume put` and `--fetch` uses `ModalCliDownloader`, so neither touches `web`. **Proposed (#623), against ADR-38's intent otherwise:** at the cut-over, *every* bearer route leaves `web`, S1's `/accounts` and `/sources` writes included, so `web` serves only the public routes and `API_TOKEN` retires a week later. If the owner prefers, S1's routes can stay on `web` behind `API_TOKEN`; S2's `/admin/*` leave either way. Task 1 already puts the CLI's routes in their own router, so the cut-over is a mount change.
+- **Review:** S3-1's checkpoint runs `security-reviewer` on the endpoint split, proxy auth, the token checks and the actor header, alongside `pr-reviewer` (#618).
+
+- **Routes added before S3-1.** A route that another card needs before `admin` exists (the hooks build's interim `/hooks?account=` page routes and #619's `POST /admin/review/{item}/rerender`) is mounted on `web` under `/admin/` with `API_TOKEN`, like S2's. If it is a dashboard-only route, S3-1 (or whichever lands second) moves it to the `admin` router; otherwise it follows S3-5b's cut-over with the rest of `/admin/*`.
+
+### 11.3 Build order (owner, #612)
+
+Six checkpoints, one card each (S3-5's two 7-day tasks split into S3-5b, #623). Each one deploys alone and has its own rollback (the plan has the steps). **Gates are on deploys, not merges (#623):** every deploy ships all of `main`, so a checkpoint starts only when every earlier code card it lands after is **deployed with its owner steps done** (card 014's S2a checks, and likewise for S2b and S2c), and every S3 owner deploy first checks that no other code card is on `main` undeployed (`docs/ops/deploys.md` against `git log`) and that `db_doctor` shows the expected head before `alembic upgrade head`.
+
+| Checkpoint | What | Lands after |
+|---|---|---|
+| **S3-1** | the `admin` endpoint, proxy auth, `ADMIN_API_TOKEN`, `upstream.ts` on `admin`, S3's migration (§11.8), `GET|PUT /admin/settings` and the Settings page | card 010 done; card 014 **deployed** with its owner steps done (S3's migration takes the number after 0002) |
+| **S3-2** | the needs API with the providers whose sources are on `main`, `needs_log`, snoozes, Home (needs, meter, scoreboard, slots), `/act`, the link-contract test, Open buttons on ops alerts and review cards, alert redraw (§11.7), `accounts/runway.py` | S3-1 |
+| **S3-3** | Review (Queue and Review lane tabs, §11.4), Calendar, the pin action, the batch approve route | S3-2 |
+| **S3-4** | Produce (batch planner, `batches`, the Jobs tab), the job page's Resume button, Sources pages | S3-3 |
+| **S3-5** | Results → Costs, Compare, the account read view (§11.6), the strike form | S3-4 |
+| **S3-5b** | `/clip`, `/status <id>` and typed `/resume` retired (§11.9); the CLI cut-over (§11.2) | S3-5, and both 7-day waits (#623) |
+
+The dashboard is used online only after card 004 (the S3a Vercel deploy). Every checkpoint can merge and deploy before that; the owner checks it locally (`AUTH_DISABLED=1` with `ADMIN_API_URL` pointed at the deployed `admin`) until then.
+
+### 11.4 Review before and after S2b (owner, #613)
+
+- **Two tabs from S3-3.** **Queue** is D8's queue manager for accounts on the assisted path (Publish off, or no connected profile; this stays useful after S2): next up per account, move to the front, skip, reject with a reason, correct a posted mark, all through `posting/actions.py` with `web:<login>`. It never sends. **Review lane** calls S2's `/admin/review` routes and S3's batch approve; until S2b is deployed it says "The review lane arrives with publishing (S2b)". Its **Re-render** action is shown disabled with "arrives with the hooks build" (#619).
+- **Move to the front (the reorder).** `posting/actions.pin(posting, ref, on, actor, now)` is the **only writer** of `content_items.queue_pin` (a timestamp, §11.8; `on=False` sets it to NULL). It also writes a `post_events` row (`pinned` or `unpinned`, actor `web:<login>`). Nothing else clears it (ADR-14): `posting/queue.pick_next` treats a pin as **active only while `queue_pin` is later than the item's last send**, and prefers active pins, oldest first, then today's rules. So a send ends the pin without writing it, and an old pin can never make an item jump the queue again.
+- **On accounts that publish through Upload-Post,** the slot plan is made at 08:50 (S2); a pin made after that takes effect at the next plan. On assisted accounts it takes effect at the next slot.
+- **Postgres only, on purpose.** The pin isn't written to the Dict; with `STATE_READS=dict` the action answers 409 "needs the database" (S3 lands after rollout step 7). `posting verify` excludes `queue_pin` and the `pinned`/`unpinned` events on purpose. After a rollback to `dict`, pins are ignored; when reads return to Postgres, the last-send rule keeps any pin older than the item's last send inactive.
+- **Phone:** the Queue and the lane as lists; a row opens `/act/review_due/<item>` or `/act/held_clips/<account>`.
+
+### 11.5 Produce creates clip jobs (owner, #614)
+
+- `POST /admin/batches/preview {account_id, kind: "clips", inputs: [{source_id, volume_path | url}], options}` writes nothing and returns `{estimate: {stages: [{stage, usd}], total_usd}, review_minutes, month_spend_usd, cap_usd, line_usd, over_line}`. The estimate uses `config.Prices` and the account's measured cost per source hour from `jobs.costs` (the median of its last 20 done jobs; the type default before that).
+- `POST /admin/batches` (same body, actor required): under the line, it creates one job per input through `service.create_job` with the source's credit and permission (the same `JobInput` fields `clipforge clip` sends) and returns the job ids. Over the line, it writes a `batches` row with `status='pending'` and returns its `spend_line` row id; approving that row (Home, `/act`) creates the jobs, and declining it closes the row. The writer is `produce/batches.py`.
+- Inputs are episodes already on the Volume (uploaded by `clipforge clip`, listed by `GET /admin/accounts/{id}/episodes` as "imported, not clipped") or direct links. Fetching stays local until S11 (ADR-34).
+- **`source_id` is required and validated for every input, direct links included:** an unknown source, or one belonging to another account, answers **400**. The preview flags, and the create refuses with **409** (naming the rule), any source the hold rules in `sources.py` would hold (expired or narrowed permission).
+- **Approving a pending batch is a conditional update** (`status='pending'` → `approved`, in `produce/batches.py`); only the caller whose update matched creates the jobs, then writes `created` and the job ids. A double tap, or Telegram and the dashboard at once, can't create jobs twice: the second caller gets "already approved by … at …".
+- **Caps are shown, not enforced** (ADR-48, #435): owner-started batches are not automatic job creation. Other kinds (story, band, avatar) arrive with their producers.
+- **One source for the line and the cap:** both are read only from S2's `autopilot` row (`batch_line_usd`, `monthly_cap_usd`; S2's migration seeds them: $2, and the cap per type of §2.6). `settings` holds no per-account or per-type line or cap. The fleet cap, which has no account row, is the one spend value in `settings`.
+
+### 11.6 The account read view (owner, #615)
+
+`/accounts/<id>` in S3 has **Overview, Autopilot, Activity** and, for `clips` accounts, **Sources & episodes** (read-only). Autopilot uses S2's routes: the presets, the controls with what each waits on, a required reason for any change to the Review dial, Promote when the ladder says ready, and a strike form (`POST /admin/accounts/{id}/strikes`; the strike event's actor is `web:<login>`, while the demotion it triggers stays `system:demotion`, ADR-48). Style, Hooks, Setup & History, Experiments and Notes come with S3c and the hooks card; the More menu doesn't appear until they exist. S3c replaces this view with its workspace and keeps these tabs.
+
+### 11.7 Polling and keeping Telegram in sync (owner, #616)
+
+- **Polling:** Home and Review every 15 s; `/act` refetches on focus and after each action; Results, Compare and the account view on load and on focus; nothing while the tab is hidden (log #50).
+- **Every dashboard action goes through the owning service,** which redraws its own Telegram messages: `posting/actions.redraw_all` for posting cards, `ReviewService` through `review_messages` for review cards.
+- **Alerts are tracked in the Dict.** `OpsAlerts.alert(..., row_id=)` records the message of every alert that carries an Open button under `alert:msg:<row id>` (chat id, message id, text; short-lived like the other claims, one writer: `ops.py`). After a needs action, the router calls `OpsAlerts.mark_done(row_id, actor, surface, at)`, which edits that message to "Done by web:<login> at 14:02" and drops the button. Best-effort: a failed edit is logged and never fails the action. Only the **latest** message per row is kept and redrawn (a re-sent alert after the hourly dedup overwrites the key). The message id is recorded when the message is **actually sent**, on the instant path and on the quiet-hours fold path alike (the folded message records itself under each row id it lists, and its edit marks only that row's line as done). An alert counted in "N more → dashboard" has no message of its own to redraw.
+- **Open buttons.** From S3-2, every alert that maps to a row carries `path="/act/<kind>/<subject>"` (S2 already passes it for its failure rows); the other ops alerts keep their current paths (`/jobs/<id>`, …). Subjects may contain `:` (`<item>:<platform>`), which a path segment allows; the dashboard splits on the first `/` only.
+
+### 11.8 Data and the migration (assigned at landing)
+
+S3's one migration takes the next number after `main`'s head when S3-1 lands (#620: S2a's 0002 first, then whichever of the hooks build, S3 and S3c lands next, one at a time) and moves `EXPECTED_HEAD` in `src/clipforge/db/doctor.py` in the same change (#438). Expand-only. It carries the deferred items only if no migration before it did (in practice S2a's 0002 carries them).
+- `needs_log(row_id text, appeared_at timestamptz, acted_at NULL, action text NULL, surface text NULL, actor NULL, snoozed_until NULL, snoozed_by NULL; PK row_id, appeared_at)`, one writer, the needs router (snoozes fold in here; no `needs_snoozes` table). **An action claims its row first** (#623): a conditional `acted_at IS NULL` update before the owning service runs, released if the service refuses, so two concurrent taps can't run an action twice. `appeared_at` is the provider's source time (the job's failure time, the batch's creation, the event's time), so the same row always has the same key. The row is written insert-if-absent when the owner acts on it or snoozes it, **never on a GET poll**. A decision taken in Telegram on the owning service's own buttons (✅, ⏭, 🗑, a review card) isn't in `needs_log`; each provider's `done(subject)` reads it from that service's record (`post_events.actor`, `content_items.approved_by`), and the failure alert's [Resume] goes through the needs router with `surface="telegram"` (#623), so `/act` shows "Done by telegram:… at …" either way; a snooze sets `snoozed_until` (3 days). `GET /admin/needs` reads it to hide snoozed rows and to show measured minutes after 30 days.
+- `settings(key text PK, value jsonb, updated_by text, updated_at)` for the attention budget, the fleet cap, payout-program thresholds and the fixed subscriptions list (G8). Lines and caps per account stay in `autopilot` (§11.5). Missing keys read as the §2.6/§7.9 defaults; quiet hours stay read-only from `config.py`.
+- `batches(id identity PK, account_id, request jsonb, estimate_usd numeric, status text check in (pending, approved, declined, created), created_by, created_at, decided_by NULL, decided_at NULL, job_ids jsonb NULL)`; one writer, `produce/batches.py`.
+- `content_items.queue_pin timestamptz NULL`; one writer, `posting/actions.pin`.
+
+§10.2's data list becomes `needs_log` (with snoozes), `settings`, `batches` and `queue_pin`.
+
+### 11.9 The Telegram bridges (owner, #617)
+
+- **`REVIEW_BATCH`** (S2's 09:00 review batch) stays on until the Review page has worked **online** (card 004 done) for 7 days after S3-3's deploy. Then the owner sets `REVIEW_BATCH=off` with the `docs/ops/secrets.md` procedure and redeploys; only the 2 h cards remain (#427).
+- **`/clip`** retires in **S3-5b**, at least 7 days after S3-4's Produce has been used online. It then answers "Clip jobs start in Produce now: <DASHBOARD_URL>/produce". The runbook (11) tells the owner where jobs start (Produce on the phone or laptop; `clipforge clip` on the laptop for local files) and that the failure alert's [Resume] stays.
+- **`/status <job_id>`** and typed **`/resume`** retire in S3-5b too: S3-4 gives the job page its Resume button (`POST /jobs/{id}/resume`, S1), and 08 §2 retires both once the page has it, under the same 7-day rule.
+- **What stays:** `/status` with no argument (the posting summary); the failure alert's **[Resume]** button; and on the laptop `clipforge status <id>` and `clipforge resume <id>`. The runbook names these as the replacements.
+
+### 11.11 Open items (for the coordinator's Open table)
+
+- **Calendar drag-to-reschedule** (08 §2) isn't in S3. Writers: `dispatch/plan.py` for one slot (S2's `slot_plans`), the accounts service for an account's schedule. Proposed owner: a small follow-up card after S2b is deployed (or S7).
+
+### 11.10 Proposed edits to 04 and 06 (for the coordinator)
+
+**04, S3 section:**
+- Replace "API additions: accounts, personas, items, posts, calendar, review actions, costs" with: "API on the `admin` endpoint (all under `/admin/`): the needs API, scoreboard, slots, compare, account overview, activity, sources and episodes, batches, jobs list, costs, settings, the pin and posting actions, batch approve, strikes, pause. S2's autopilot, review, policy, publisher and link routes are reused, never duplicated (spec §11.1)."
+- Add: "Built in six checkpoints, S3-1 to S3-5b (spec §11.3), each its own card, gated on the earlier card being deployed; online use needs card 004."
+- In the pages item, replace "Until S2 adds approve-to-publish … (D8)" with: "Review has two tabs: Queue (D8's queue manager for assisted accounts, through `posting/actions.py`, including move to the front) and Review lane (S2's routes, plus batch approve). Re-render ships disabled until the hooks build adds its route."
+- Change the Vercel item to: "Vercel Pro project with `ADMIN_API_URL`, `ADMIN_API_TOKEN`, `MODAL_PROXY_KEY`, `MODAL_PROXY_SECRET`; `admin` is a second `@modal.asgi_app(requires_proxy_auth=True)` reusing `create_app` with `surface="admin"` (D9). `web` keeps the public routes and, until S3-5b's CLI cut-over, S2's `/admin/*` for the CLI."
+- Add to the exit: "`REVIEW_BATCH` is off and `/clip` is retired, each after 7 days of its page online."
+
+**`docs/ops/secrets.md` (in S3-1's owner steps, by its card):** entries for `ADMIN_API_TOKEN` (in `clipforge-secrets`, added by the dashboard procedure) and the four Vercel production variables `ADMIN_API_URL`, `ADMIN_API_TOKEN`, `MODAL_PROXY_KEY` and `MODAL_PROXY_SECRET`, each with where it lives, who reads it and the rotation steps of §11.2.
+
+**06, the S3 card:**
+- Replace actions 1 and 3's API list with a pointer to spec §11.1 (routes) and §11.3 (checkpoints); drop "personas, items, posts, decisions" (S7, S8, S6).
+- Action 3: Accounts → Compare and the minimal account view (Overview, Autopilot, Activity, Sources & episodes for clips) **are** built in S3 (#439, #615); the studio map and workspaces stay S3c.
+- Action 4: add "split by caller (#610): `web` keeps the CLI's routes until S3-5b's cut-over; `security-reviewer` at S3-1".
+- Owner: add "the Modal proxy token pair and `ADMIN_API_TOKEN`, set in Vercel (runbook §5b), with the rotation steps".
+- Action 6: "Tests: pytest for every route (both surfaces where mounted), Vitest units, Playwright on the mock API for every page on phone and laptop, and the link-contract test (§7.10)."
+- Cost: $2 stays (the build cards are mostly CPU tests; no GPU).

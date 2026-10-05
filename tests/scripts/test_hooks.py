@@ -251,6 +251,16 @@ def test_scope_guard_allows_env_example(repo: Path) -> None:
     assert decision(run_hook("scope_guard.py", event, repo)) is None
 
 
+def test_scope_guard_allows_a_spikes_own_scratch_folder(repo: Path) -> None:
+    # card 017: scratch/ is gitignored, so only this guard applies the scratch/<stream>/ rule
+    git(repo, "checkout", "-q", "-b", "x4/visuals")
+    own = edit_event("Write", str(repo / "scratch" / "x4" / "probe.py"))
+    assert decision(run_hook("scope_guard.py", own, repo)) is None
+    other = edit_event("Write", str(repo / "scratch" / "x2" / "probe.py"))
+    out = decision(run_hook("scope_guard.py", other, repo))
+    assert out is not None and "outside the scope of x4/visuals" in out["permissionDecisionReason"]
+
+
 def test_scope_guard_on_main_allows_only_coord_paths(repo: Path) -> None:
     git(repo, "checkout", "-q", "main")
     assert (

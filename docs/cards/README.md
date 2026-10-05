@@ -30,8 +30,14 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [014](014-s2a-dispatch-gate.md) | S2a: rails: migration 0002, the dispatcher, the brake, autopilot on Hands-on, the gate (log-only) and routing (plan Tasks 1–8) | proposed | 010 done (step 7 verified, verify 0, schedule copies, Neon head 0001) |
 | [015](015-s2b-publishing.md) | S2b: Upload-Post publishing for realtalk on Hands-on: R5's real call first, then publish state, webhook, reconcile, review cards, hand-off (plan Tasks 9–20) | proposed | 014 deployed + one clean day; Basic bought; R5 read by the owner |
 | [016](016-s2c-ladder-launch.md) | S2c: the ladder, the digest, failure rows, tracking links; founder.tapes and hombre launch (plan Tasks 21–26) | proposed | 015 deployed + a day on Hands-on; O3; one permitted source each; two more profiles |
-| [017](017-x0-ci-speed.md) | X0: one CI run per commit, docs-only fast path, caches and timeouts, xdist measured, the flaky service test, PR template, dependabot, `scratch/` | proposed | — |
+| [017](017-x0-ci-speed.md) | X0: one CI run per commit, docs-only fast path, caches and timeouts, xdist measured, the flaky service test, PR template, dependabot, `scratch/` | done 2026-10-02 (PR #37) | — |
 | [018](018-s3c-plan.md) | S3c: spec revised for ADR-48, ADR-50 and the migration order, then the implementation plan (no code) | proposed | — (the build: 010 done, S3's `admin` endpoint) |
-| [019](019-s3-dashboard-plan.md) | S3: dashboard v1, the spec delta after S2's plan and the build plan in card-sized checkpoints (no code) | proposed | — (the build: 010 done, after 014's routes; online: 004) |
+| [019](019-s3-dashboard-plan.md) | S3: dashboard v1, the spec delta after S2's plan and the build plan in card-sized checkpoints (no code) | done 2026-10-02 (PR #38) | — (the build: cards 022–027) |
 | [020](020-hk-hooks-design.md) | HK: the hook library, spec and plan (no code) | proposed | — (the build: 010 done, its migration after 014's) |
 | [021](021-s5-media-design.md) | S5: media servers and producer registry, spec and plan (no code) | proposed | PR #33 (card 012) merged |
+| [022](022-s3b-admin.md) | S3-1: the `admin` endpoint, proxy auth, S3's migration, Settings, `upstream.ts` on `admin` (plan Tasks 1–5) | proposed | 010 done; 014 deployed with its owner steps; online: 004 |
+| [023](023-s3b-needs.md) | S3-2: "needs me", runway, scoreboard and slots, Open buttons and alert redraw, Home, `/act`, the link contract (plan Tasks 6–11) | proposed | 022 deployed |
+| [024](024-s3b-review.md) | S3-3: Review (Queue and Review lane), move to the front, batch approve, pause, Calendar (plan Tasks 12–15) | proposed | 023 deployed; lane rows need 015 deployed; Re-render waits for the hooks build |
+| [025](025-s3b-produce.md) | S3-4: Produce with batches and estimates, the Jobs tab, Resume, Sources (plan Tasks 16–18) | proposed | 024 deployed |
+| [026](026-s3b-results.md) | S3-5: Results → Costs, Compare, the account read view (plan Tasks 19–21) | proposed | 025 deployed; strikes and Promote need 016 deployed |
+| [027](027-s3b-cutover.md) | S3-5b: `/clip`, `/status <id>` and typed `/resume` retired; the CLI on `admin`, `web` public-only (#146); `REVIEW_BATCH` off (plan Tasks 22–23) | proposed | 026 deployed, then each 7-day window |

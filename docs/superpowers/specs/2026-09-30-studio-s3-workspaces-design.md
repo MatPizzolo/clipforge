@@ -28,7 +28,7 @@ Date: 2026-09-30 · Status (revised by card 003, 2026-09-30; **accepted by the o
 - **ADR-50 (hooks):**
   - The hook library, its versions and its weights stay outside the setup (§1.3).
   - The hook stamp sits next to `setup_version` on items, never inside it (§1.1).
-  - Rotation weights freeze while an experiment runs: card 020 owns the freeze, and S3c pushes it (start calls `hooks.freeze`, stop and decide call `hooks.release`, §4.4).
+  - Rotation weights freeze while an experiment runs: card 020 owns the freeze, and S3c pushes it through its `HookFreezer` protocol (start calls `freeze`, stop and decide call `release`, §4.4).
   - Hook metrics are on the Hooks tab, not in the metric registry (§4.1).
 - **Pages:**
   - Accounts has two views: S3 builds Compare first, and S3c adds the Map and enriches Compare (§2.2).
@@ -41,11 +41,12 @@ Date: 2026-09-30 · Status (revised by card 003, 2026-09-30; **accepted by the o
 - **§7's open items** are answered where S1's merged code settles them; the rest were the owner's questions at checkpoint A (§7).
 - **§8 is new.** It lists the changes for 04, 06 and 08. Those in S3c's files (04's S3c section, 06's S3c card, 08 §2 and §2b) are applied directly; 04's graph and HK section are left to the coordinator.
 - **The coordinator's review of checkpoint A** added:
-  - every setup write that changes `posting` rewrites the schedule copy through `publish_schedule` after its commit, with S1's `_checked` validation (§5.3);
+  - every setup write that changes `posting` rewrites the schedule copy through the one writer (S2a's `write_schedule_copy`, which keeps `publish_via` and `profile`) after its commit, with S1's `_checked` validation (§5.3);
   - the hooks freeze is pushed by experiment start, stop and decide (§4.4);
   - `SETUP_SOURCE=off` means edit and review only, with live posting fields still reaching production (§5.6);
   - registry fixes (§1.4);
   - the landing order is S2a's 0002 first, then whichever of the hooks, S3 and S3c migrations lands next (§5.3);
+  - at checkpoint B: start conditions as "deployed"; the schedule copy through S2a's `write_schedule_copy`; S2's publisher edit kept; `/admin/` routes and S3's `cli_router`; one `HookFreezer` protocol; sends attributed by claim time; the needs row through `needs_providers` (log #263);
   - the format window and the digest line are injected into S2 (option (a), log #261): `SetupRepo.format_window` and `experiments.digest_line`, wired in `runtime.build_deps`; no S2 module changes (§2.9, §3.5).
 
 Decision: [ADR-42](../../DECISIONS.md#adr-42-versioned-categories-blueprints-and-accounts-in-the-database) in `docs/DECISIONS.md` (accepted 2026-09-30), which replaces ADR-35's "blueprints are files" part. It is refined by ADR-48 (the review tier and the budget leave the setup) and ADR-50 (the hook library lives outside it).
@@ -131,7 +132,7 @@ Each **account version** stores the exact category version and blueprint version
 
 **The setup's identity (D1, log #88).** There is no separate setup id:
 - A setup is identified by `(account_id, account_version)`. The pinned parent versions inside that account version make the pair complete.
-- Everything that refers to a setup uses that pair: `JobInput.setup`, `content_items.setup_version` (with the item's `account_id`), `post_events.data.setup_version`, `experiment_accounts.from_version`/`to_version` and the `/setup/preview` request (§3.4).
+- Everything that refers to a setup uses that pair: `JobInput.setup`, `content_items.setup_version` (with the item's `account_id`), the version in force at a send's claim time (`SetupRepo.version_at`), `experiment_accounts.from_version`/`to_version` and the `/setup/preview` request (§3.4).
 
 **The hook stamp sits next to the setup, never inside it (ADR-50).**
 - An item's full recipe is `(account_id, setup_version)` plus the hooks card's `hook_pattern_id`, `hook_version` and `hook_weights`, each in its own `content_items` column.
@@ -336,7 +337,7 @@ S3c's pages use the deep-link formats of [08 §2b](../../studio/08-dashboard-and
 | highlights → clips | `pipeline/steps.py` | the account's language, from the job's stamped setup | The language-mismatch hold below |
 | captions | stage | caption preset, keywords prompt version | §3.3 |
 | Enqueue (package) | posting | the **job's** stamped version | Enabled platforms per item (as S1 built). Copies `setup_version` onto each `content_items` row |
-| Send (tick, then S2's dispatcher and hand-off) | posting | the account's **current** version | Hashtags, CTA, bio link, slots. These are posting-time settings, not baked into the item. An assisted send records the version in `post_events.data.setup_version`. An Upload-Post hand-off (written by S2's `publishing/state.py`, which S3c doesn't edit) is attributed by time: the version in force when it was sent (`SetupRepo.version_at`). So posting experiments are attributed by send either way (§4.1; plan Task 14) |
+| Send (tick, then S2's dispatcher and hand-off) | posting | the account's **current** version | Hashtags, CTA, bio link, slots. These are posting-time settings, not baked into the item. Each send is attributed by time, to the version in force at its hand-off claim (`SetupRepo.version_at`): `sends.at` for an assisted send, `posts.claimed_at` for an Upload-Post hand-off. No posting writer is edited (§4.1; plan Task 14) |
 
 **Prompts stay files** (CLAUDE.md rule 4). The setup stores only which **released** version to use, chosen from `prompts/metadata.json`. Editing prompt text is still a repo change that creates the next version.
 
@@ -385,7 +386,7 @@ Saving a version and starting an experiment show the same preview, from one serv
     - loosening a rule without `confirm_loosen`.
 - **Validation:** a proposal that doesn't validate answers 422 with field errors (§5.2), exactly as the save would. A stale `expected_version` answers 409 with the latest version.
 - **It writes nothing:**
-  - The save (`PUT …`) and the experiment start (`POST /experiments/{id}/start`) recompute the same function inside their transaction and refuse if the result is `blocked`, so the preview and the write can't disagree.
+  - The save (`PUT …`) and the experiment start (`POST /admin/experiments/{id}/start`) recompute the same function inside their transaction and refuse if the result is `blocked`, so the preview and the write can't disagree.
   - A drift between preview and write (someone saved in between) is caught by `expected_version` (409).
 - **In the dashboard:**
   - The save dialog shows the diff, what re-runs, who is affected and "no extra cost for new jobs" before the required note and Save.
@@ -432,7 +433,7 @@ The story, band, avatar and model producers (S6 and later) take `EffectiveSetup`
 
 ### 4.1 Metrics
 
-A metric registry: name, unit, direction (higher is better or not), availability (now or S7), and attribution (per item via `content_items.setup_version`, or per send via `post_events.data.setup_version`).
+A metric registry: name, unit, direction (higher is better or not), availability (now or S7), and attribution (per item via `content_items.setup_version`, or per send via the version in force at its claim time, `SetupRepo.send_versions`).
 
 **Available now (S1 tables):**
 
@@ -482,7 +483,8 @@ A metric registry: name, unit, direction (higher is better or not), availability
 - A pause, a source hold or a posting outage during a **day-based** window extends it by the days nothing was sent. The banner says so.
 - **Autopilot changes aren't blocked** (they aren't setup, §1.3). They show as markers (§2.7). A demotion or a dial change mid-run is visible next to the result, not hidden in it.
 - **Hook rotation weights freeze** while the account runs an experiment (ADR-50), so both sides rotate hooks the same way. The hooks card (card 020) owns the weights and the freeze; S3c **pushes** the change:
-  - `POST /experiments/{id}/start` calls the hooks service's `hooks.freeze(account, experiment_id)` for each chosen account, and `stop` and `decide` call `hooks.release(account, experiment_id)`.
+  - S3c defines one protocol, `HookFreezer`, with `freeze(conn, account_id, experiment_id)` and `release(conn, account_id, experiment_id)`, and the hooks build implements it. `POST /admin/experiments/{id}/start` calls `freeze` for each chosen account; `stop` and `decide` call `release`.
+  - Until the hooks build deploys, `runtime.build_deps` passes a no-op freezer. If the hooks build deploys after S3c-3, it freezes the experiments already running at its deploy.
   - Each call runs inside the same transaction that flips `experiment_accounts.running`, so the freeze and the running flag can't disagree.
   - Both are no-ops for an account with no hook weights.
   - A `running` experiment whose window closed still counts as running until `decide` or `stop`, so the weights stay frozen until the decision.
@@ -499,6 +501,8 @@ All on S3's **`admin`** endpoint (ADR-38, D9) with `ADMIN_API_TOKEN`. The author
 - Its setup fields (handles, chat, slots, time zone, hashtags) become a proposal against the current version, with the CLI's actor and an automatic note ("account edit from the CLI").
 - `review_tier` in the request is refused with 422 "the review tier is the Review dial: `clipforge autopilot set <account> review_dial …`" (ADR-48).
 
+Every route in this table is under `/admin/` (for example `GET /admin/categories`), in S3's `admin_routers`, on the `admin` surface only. The CLI's routes (`PATCH /accounts/{id}`, `/setup/import`, `/setup/verify`, `/setup/export`) are in S3's `cli_router`, which S3-5b's cut-over moves to `admin` (log #146).
+
 | Area | Routes |
 |---|---|
 | Categories | `GET /categories`, `GET /categories/{code}`, `PUT /categories/{code}` (save → new version), `GET …/versions`, `GET …/versions/{n}`, `POST …/versions/{n}/restore` |
@@ -511,8 +515,8 @@ All on S3's **`admin`** endpoint (ADR-38, D9) with `ADMIN_API_TOKEN`. The author
 
 - **No new cron:** "window closed" and "needs a decision" are **derived on read** from the stored `running` status and the data (ADR-27 keeps three crons). Only `decide` and `stop` write a final status.
   - The same derived read, `experiments.needs_decision(db, now) -> list[ExperimentRef]`, feeds the digest provider `experiments.digest_line` (§2.9), S3's "needs me" row `experiment_decision`, and Compare's focus ranking.
-- **Start, stop and decide push the hooks freeze** (§4.4): `hooks.freeze`/`hooks.release` run in the same transaction as the `running` flag.
-- **Every write that changes `posting`** calls `publish_schedule` after its commit (§5.3).
+- **Start, stop and decide push the hooks freeze** (§4.4): `HookFreezer.freeze`/`release` run in the same transaction as the `running` flag.
+- **Every write that changes `posting`** calls the schedule-copy writer after its commit (§5.3).
 - **Every write runs the preview first.** `PUT …` saves, `…/restore`, `…/apply` and `…/start` call the §3.4 function in their transaction and refuse with its `blocked` reason, so there is one dry-run path. The earlier `GET /experiments/{id}/estimate` is folded into it.
 - **Contract (#49):** `POST /jobs` gains an optional `setup` in `JobInput`. `GET /jobs/{id}` and `GET /posting` don't change (`PostingOverview.accounts` already carries per-account data). `web/openapi.json` is regenerated in the same checkpoint.
 
@@ -541,16 +545,17 @@ All on S3's **`admin`** endpoint (ADR-38, D9) with `ADMIN_API_TOKEN`. The author
 - `accounts.current_version int NULL` (filled by the import, then always set).
   - The existing `accounts` columns that §1.4 maps (`blueprint`, `blueprint_version`, `kind`, `language`, `niche`, `platforms`, `brand`, `posting`, `paired_account_id`, `persona_id`) become a **projection** of the current version, written only by the versions service. S1 and S2 code reading `accounts` keeps working (one writer per column group, ADR-41).
   - `review_tier` and `monthly_budget_usd` are left as they are (§1.3), and `publisher` keeps S2's writer.
-  - **The posting schedule copy (ADR-41).** The tick, and S2's dispatcher after it, read `posting:schedule:<account>`, whose one writer is `accounts/service.publish_schedule`. Every write that changes an account's projected `posting`:
+  - **The posting schedule copy (ADR-41).** The tick, and S2's dispatcher after it, read `posting:schedule:<account>`, whose one writer is S2a's `accounts/service.write_schedule_copy(kv, account, autopilot)` (it replaced S1's `publish_schedule` and adds `publish_via` and `profile`). Every write that changes an account's projected `posting`:
     - a save, a restore, "Apply to accounts" and `PATCH /accounts/{id}`;
-    - calls `publish_schedule` after its transaction commits, for each account it changed, so the copy keeps its one writer;
+    - calls `write_schedule_copy` after its transaction commits, for each account it changed, with that account's `autopilot` row (or `hands_on(account)` when it has none), so the copy keeps its one writer and an Upload-Post account keeps `publish_via="upload_post"`;
     - validates the proposed schedule with S1's `_checked` first (the posting chat must be in `TELEGRAM_ALLOWED_USER_IDS`, 1–12 slots, a valid time zone and hashtags), refusing with 422 as the save would.
+  - S2's publisher edit (`--publisher-profile`, `--facebook-page-id`, `--clear-publisher`) keeps its own path: it writes `accounts.publisher` (not a projected column) and writes no version. `PATCH /accounts/{id}` splits a request that carries both.
   - A failed copy write after a commit is an error the caller sees. Repeating the save, or the daily sync (`sync_schedules`), rewrites it, as for S1's edit today.
 - `experiments(id, scope_type, scope_id, hypothesis, change jsonb, metric, window_kind, window_size, recut_backlog, status, started_at, ended_at, decision, reason, decided_at, decided_by, thin_data, author, created_at)`.
 - `experiment_accounts(experiment_id, account_id, from_version, to_version, running bool)`. A partial unique index on `(account_id) WHERE running` allows **one running experiment per account**; `start` sets `running`, and `stop` and `decide` clear it in the same transaction as the experiment's status.
 - `notes(id, target_type, target_id, kind, status, text, experiment_id, author, created_at, updated_at)`. A learning is a `learning` note on the category, listed under the playbook; the playbook text itself is versioned in `category_versions`.
 - `content_items.setup_version int NULL`, FK `(account_id, setup_version)` → `account_versions`. It is NULL for items made before versioning ("before versioning").
-- `post_events.data.setup_version`: a JSON key only.
+- Sends carry no stamp: they are attributed by time (§3.1).
 
 **Actors and append-only rules:**
 - The `author` columns of the `*_versions` tables, `experiments` and `notes`, and `experiments.decided_by`, use the actor format S2a's 0002 checks on `post_events.actor`: `telegram:<id>`, `web:<login>`, `session:<name>`, `cli:<user>` or `system:<component>`. They are `NOT NULL` except `decided_by`, with a check constraint using the same pattern, at most 80 characters.
@@ -598,7 +603,7 @@ Local Postgres, as in S1. Previews are build-only, so the checks run locally and
   - a save, a restore, an apply and a `PATCH` that change `posting` rewrite `posting:schedule:<account>` after the commit (and only then), and a disallowed posting chat is refused with nothing written;
   - the author check accepts `system:migration` and rejects a bad actor;
   - a save refused by the preview writes nothing;
-  - `start` calls `hooks.freeze` and `stop`/`decide` call `hooks.release` in the transaction that flips `running` (a failed call rolls the flip back); `running_experiment` answers while the window is closed but undecided;
+  - `start` calls `HookFreezer.freeze` and `stop`/`decide` call `release` in the transaction that flips `running` (a failed call rolls the flip back); `running_experiment` answers while the window is closed but undecided;
   - `SetupRepo.format_window` returns `None` without a flagged version, else the newest flagged version and the decisions counted under S2's rule (system actors and assisted taps excluded);
   - the migration's head equals `EXPECTED_HEAD`.
 - **Pipeline:**
@@ -640,15 +645,16 @@ Local Postgres, as in S1. Previews are build-only, so the checks run locally and
 
 | Part | Builds | Can start | Switch |
 |---|---|---|---|
-| **S3c-1a: data and routes** | its migration (the next in landing order; no deferred items), the resolver and field registry, the versions service (projection, `format_changed`, 409), `POST /setup/preview` (diff, re-runs, affected, blocked; D4), `setup import` (with the drafted playbooks) and `verify`, the admin routes for categories, blueprints, account setup, versions, diff, restore, notes and pickers, `PATCH /accounts/{id}` writing versions, the CLI | S1's rollout (card 010) done, S2a's migration landed (and any hooks or S3 migration already on `main`; S3c rebases onto it), S3's `admin` endpoint deployed | `SETUP_SOURCE=off`; nothing visible yet; the owner runs `setup import` and `setup verify` in production |
-| **S3c-1b: pages** | the Accounts Map and Compare's versions and experiment columns, the category, blueprint and account workspaces at the §2.9 paths (Style, Setup & History with origins, diff and restore; Overview's experiment and notes slots), notes and + Note | S3c-1a deployed, and S3's Accounts pages (Compare and the minimal account view) merged (owner ruling, §7 Q5) | `SETUP_SOURCE=off`: edit and review only |
-| **S3c-2: wiring into the clip producer** | `create_job` reads and stamps the setup; `content_items.setup_version`; the send records its version; caption preset in the captions key (only when not `default`); prompts from released versions; the language-mismatch hold; `SetupRepo.format_window` wired as S2's `format_source` in `runtime.build_deps`; the Framing & captions tab and Style's preview frame | S3c-1b; S2a deployed (it defines `FormatWindowSource` and `ReviewRepo`'s `format_source`) | `SETUP_SOURCE=db` after `verify` reports 0 differences |
-| **S3c-3: experiments and results** | the experiment flow and page (`/experiments/<id>`, the only place to keep or revert, D7) with autopilot markers, the re-cut estimate in the preview, one running per account, the edit block during a run, the `hooks.freeze`/`release` calls, results with the metrics available now, the Wilson verdict and 10-item floor, the Experiments nav item, the `experiment_decision` row, the derived count and `experiments.digest_line` registered as a digest provider in `runtime.build_deps`, learnings in the playbook | S3c-2; S2c's digest deployed (it defines `DigestProvider` and `gather(…, providers=)`) | — |
+| **S3c-1a: data and routes** | its migration (the next in landing order; no deferred items), the resolver and field registry, the versions service (projection, `format_changed`, 409), `POST /setup/preview` (diff, re-runs, affected, blocked; D4), `setup import` (with the drafted playbooks) and `verify`, the admin routes for categories, blueprints, account setup, versions, diff, restore, notes and pickers, `PATCH /accounts/{id}` writing versions, the CLI | S1's rollout (card 010) done, S2a deployed (card 014) and S3-1 deployed (card 022: the `admin` endpoint); its migration is numbered after any hooks or S3 migration already on `main`. | `SETUP_SOURCE=off`; nothing visible yet; the owner runs `setup import` and `setup verify` in production |
+| **S3c-1b: pages** | the Accounts Map and Compare's versions and experiment columns, the category, blueprint and account workspaces at the §2.9 paths (Style, Setup & History with origins, diff and restore; Overview's experiment and notes slots), notes and + Note | S3c-1a deployed, and S3-5 deployed (card 026: Compare and the account read view) (§7 Q5, log #263) | `SETUP_SOURCE=off`: edit and review only |
+| **S3c-2: wiring into the clip producer** | `create_job` reads and stamps the setup; `content_items.setup_version`; sends attributed by their claim time (`SetupRepo.send_versions`); caption preset in the captions key (only when not `default`); prompts from released versions; the language-mismatch hold; `SetupRepo.format_window` wired as S2's `format_source` in `runtime.build_deps`; the Framing & captions tab and Style's preview frame | S3c-1b; S2a deployed (it defines `FormatWindowSource` and `ReviewRepo`'s `format_source`) | `SETUP_SOURCE=db` after `verify` reports 0 differences |
+| **S3c-3: experiments and results** | the experiment flow and page (`/experiments/<id>`, the only place to keep or revert, D7) with autopilot markers, the re-cut estimate in the preview, one running per account, the edit block during a run, the `HookFreezer` calls (a no-op until the hooks build), results with the metrics available now, the Wilson verdict and 10-item floor, the Experiments nav item, the `experiment_decision` row (an S3 needs provider registered in `runtime.build_deps`), the derived count and `experiments.digest_line` registered as a digest provider in `runtime.build_deps`, learnings in the playbook | S3c-2 deployed; S2c deployed (card 016: `DigestProvider`) | — |
 | **In S7** | views, retention, followers, clicks and revenue in the metric registry, with maturity ages | S7 | — |
 
 - **Other cards that read S3c:**
   - **S2** enforces §3.5's "a format change sends the first 10 items to `review`" through its `FormatWindowSource`; S3c-2 provides `SetupRepo.format_window` and wires it in `runtime.build_deps` (§3.5). S2c's digest takes S3c-3's `experiments.digest_line` as a provider.
-  - **The hooks card** provides `hooks.freeze(account, experiment_id)` and `hooks.release(account, experiment_id)`, which S3c-3's start, stop and decide call (§4.4).
+  - **The hooks build** implements S3c's `HookFreezer` (`freeze`/`release`, given the transaction's connection), which S3c-3's start, stop and decide call (§4.4).
+  - **S3's needs router** takes S3c-3's `experiment_decision` provider from `runtime.build_deps` (log #147).
   - **S6 and later producers** read `EffectiveSetup` from their first version, so S3c-2's contract should come **before S6** (a soft dependency).
 - **Graph:** `S1 → S3c`, `S3 → S3c` (admin endpoint), `S2a → S3c` (migration order, format window), `HK -.-> S3c` (migration order only), `S3c -.-> S6` (soft), `S7 → S3c` (engagement metrics).
 - **Done when:** the owner changes realtalk's max clip length through an experiment, sees before and during for reject rate and posted rate, chooses Keep, and the learning shows in the clips playbook; all through the dashboard, on phone and laptop.
@@ -666,7 +672,7 @@ Local Postgres, as in S1. Previews are build-only, so the checks run locally and
 - **Q2, `PATCH /accounts/{id}`: same request shape, writing a version** through the versions service, with `review_tier` refused (422, pointing to `clipforge autopilot`) (§5.1).
 - **Q3, the category playbooks: drafted** by S3c-1a from 01, 07 and 09 (about 150–300 words each), for the owner to edit in the dashboard (§5.4).
 - **Q4, the build split: four parts.** S3c-1a (data and routes), S3c-1b (pages), S3c-2 (producer wiring), S3c-3 (experiments and results); each deploys alone (§6).
-- **Q5, the start order:** S3c-1a starts once `admin` is deployed and S2a's migration has landed; S3c-1b waits until S3's Accounts pages (Compare and the minimal account view) are merged (§6).
+- **Q5, the start order:** S3c-1a starts once S2a and S3-1 (`admin`) are deployed; S3c-1b once S3-5 (Compare and the account read view) is deployed (§6; restated as "deployed" by the coordinator's review of the plan, log #144, #263).
 - **Q6, the digest line, and the format window (the coordinator's finding 2): option (a).** S2's plan was amended instead of S3c editing S2's modules (log #142, #261, superseding #259):
   - S2 takes an injected `FormatWindowSource` (Task 6) and `DigestProvider`s (Task 23);
   - S3c-2 implements `SetupRepo.format_window`, and S3c-3 implements `experiments.digest_line`;
@@ -677,10 +683,10 @@ Local Postgres, as in S1. Previews are build-only, so the checks run locally and
 **Applied by card 018 (S3c-only):**
 - **04, the S3c section:**
   - the migration as "the next in landing order", without `post_events.actor`;
-  - the dependency on S2a's migration;
+  - the start conditions as "deployed" (S2a and S3-1 for 1a; S3-5 for 1b; S2c for 3);
   - four parts (Q4): S3c-1a data and routes, S3c-1b pages (the Map, Compare's columns, Style and Setup & History), S3c-2, S3c-3;
   - S3c-2 wires the format window into S2's routing and builds Framing & captions;
-  - S3c-3 adds autopilot markers, the hooks freeze and release calls, the derived decision count and its digest provider; S3c-2 the format-window source.
+  - S3c-3 adds autopilot markers, the `HookFreezer` calls (a no-op until the hooks build), the derived decision count and its digest provider; S3c-2 the format-window source.
 - **06, the S3c card:**
   - the same, plus the read list (the S3 dashboard spec §7.3, §7.4, §8.4, §8.5, §8.7; the S2 plan's Tasks 2, 3 and 6);
   - the start order (Q5) and the plan link (added at checkpoint B);
@@ -693,5 +699,5 @@ Local Postgres, as in S1. Previews are build-only, so the checks run locally and
 **For the coordinator to fold in (outside S3c's files):**
 - **04's dependency graph and the paragraph under it:** add `S2 --> S3c` (S2a's migration lands first, and S3c-2 wires S2's routing call site), and say S3c starts after S1's rollout, S2a's migration and S3's `admin` endpoint.
 - **04's S2 section:** nothing more to change (the coordinator amended S2's plan and cards 014 and 016 for the injected sources, log #142).
-- **04's HK section:** say that S3c-3's experiment start, stop and decide call `hooks.freeze` and `hooks.release` (§4.4), and that migrations land S2a's 0002 first, then whichever of the hooks, S3 and S3c migrations lands next, one at a time, each numbered at landing.
+- **04's HK section:** say that S3c-3's experiment start, stop and decide call the `HookFreezer` protocol S3c defines (`freeze`/`release`, given the transaction's connection; §4.4), and that migrations land S2a's 0002 first, then whichever of the hooks, S3 and S3c migrations lands next, one at a time, each numbered at landing.
 - **No new ADR.** ADR-42's status line already says it is refined by ADR-48 and ADR-50, and nothing here changes a decision. The language ruling (Q1) is a log row, not an ADR, because it changes no contract.

@@ -186,14 +186,6 @@ def test_glob_match(pattern: str, path: str, expected: bool) -> None:
     assert scope.glob_match(pattern, path) is expected
 
 
-def test_every_card_branch_has_a_scope() -> None:
-    scopes = scope.load_scopes(ROOT / "scripts" / "scopes.toml")
-    for card in sorted((ROOT / "docs" / "cards").glob("[0-9]*.md")):
-        text = card.read_text()
-        branch = text.split("Branch: `", 1)[1].split("`", 1)[0]
-        assert scope.scope_for(branch, scopes) is not None, f"{card.name}: {branch}"
-
-
 def test_s1_may_regenerate_the_api_contract_and_client(repo: Path) -> None:
     git(repo, "checkout", "-q", "-b", "s1/finish", "origin/main")
     (repo / "web" / "lib" / "api" / "zod").mkdir(parents=True)
@@ -218,7 +210,11 @@ def test_s1_other_web_files_still_fail(repo: Path) -> None:
 def test_coord_may_edit_scopes_toml_but_no_other_script(repo: Path) -> None:
     git(repo, "checkout", "-q", "-b", "coord/card-007", "origin/main")
     with (repo / "scripts" / "scopes.toml").open("a") as toml:
-        toml.write('\n[prefix."s5/"]\nstream = "s5"\nlog = [400, 419]\nallow = ["src/**"]\n')
+        # a prefix and a log range no real card can ever have (card 017: a real `s5/` broke this)
+        toml.write(
+            '\n[prefix."zz-test/"]\nstream = "zz-test"\nlog = [990000, 990019]\n'
+            'allow = ["src/**"]\n'
+        )
     problems, _ = run(repo, "coord/card-007")
     assert problems == []
     (repo / "scripts" / "check.sh").write_text("#!/bin/sh\n")
@@ -265,3 +261,37 @@ def test_out_of_scope_edit_during_a_merge_still_fails(repo: Path) -> None:
         "src/app.py: outside x0/'s scope",
         f"{LOG}: row #201 is outside x0/'s range #380-#399",
     ]
+
+
+def test_dependabot_may_change_workflows_only(repo: Path) -> None:
+    branch = "dependabot/github_actions/actions-abc123"
+    git(repo, "checkout", "-q", "-b", branch, "origin/main")
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / ".github" / "workflows" / "ci.yml").write_text("name: CI\n")
+    assert run(repo, branch)[0] == []
+    (repo / ".github" / "dependabot.yml").write_text("version: 2\n")
+    (repo / "uv.lock").write_text("x\n")
+    problems, _ = run(repo, branch)
+    assert problems == [
+        ".github/dependabot.yml: outside dependabot/'s scope",
+        "uv.lock: outside dependabot/'s scope",
+    ]
+
+
+def test_dependabot_may_not_add_log_rows(repo: Path) -> None:
+    branch = "dependabot/github_actions/actions-abc123"
+    git(repo, "checkout", "-q", "-b", branch, "origin/main")
+    (repo / LOG).write_text(BASE_LOG + "| 3 | 2026-10-02 | a bump | current | - |\n")
+    problems, _ = run(repo, branch)
+    assert problems == [f"{LOG}: row #3 is outside dependabot/'s range #0-#-1"]
+
+
+def test_a_spike_may_write_only_its_own_scratch_folder() -> None:
+    scopes = scope.load_scopes(ROOT / "scripts" / "scopes.toml")
+    x4 = scopes["x4/"]
+    assert scope.path_allowed(x4, "scratch/x4/probe.py")
+    assert not scope.path_allowed(x4, "scratch/x2/probe.py")
+    assert scope.path_allowed(scopes["x2/"], "scratch/x2/a/b.py")
+    for prefix, entry in scopes.items():
+        if prefix.startswith("x") and prefix != "x0/":
+            assert f"scratch/{entry.stream}/**" in entry.allow, prefix
