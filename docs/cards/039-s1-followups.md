@@ -1,6 +1,6 @@
 # Card 039: S1 follow-ups from the rollout
 
-Status: proposed
+Status: done 2026-10-05 (deployed 23:36 UTC, deploy-20261005-2336; GET /posting about 4.5 s, down from 13–24 s)
 Stream: S1 · Branch: `s1/followups` · Worktree: `../clipForge-s1` (created with `scripts/worktree.sh s1/followups` after card 010's worktree is removed)
 Decision-log range: #200–#249 (append only; #200–#225 are taken, re-read the log)
 Model: mid-tier
