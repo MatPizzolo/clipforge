@@ -52,4 +52,4 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [036](036-s3c-pages.md) | S3c-1b: the Accounts Map and the category, blueprint and account workspaces (plan Tasks 8–10) | proposed | 035 and 026 deployed |
 | [037](037-s3c-wiring.md) | S3c-2: the clip producer reads the setup; `SETUP_SOURCE=db` is a separate owner redeploy (plan Tasks 11–16) | proposed | 036 deployed (014 for `FormatWindowSource`) |
 | [038](038-s3c-experiments.md) | S3c-3: experiments and results, the digest line, the needs row, the hooks freeze (plan Tasks 17–21) | proposed | 037 and 016 deployed |
-| [039](039-s1-followups.md) | S1: follow-ups from the rollout (bad STATE_READS, slow posting overview, CLI retry, callback answers) | proposed | 010 done |
+| [039](039-s1-followups.md) | S1: follow-ups from the rollout (bad STATE_READS, slow posting overview, CLI retry, callback answers) | done 2026-10-05 | 010 done |
