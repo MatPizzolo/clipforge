@@ -7,14 +7,15 @@ on:
 jobs:
   gpu:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: Install ffmpeg (with libass)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
         with:
           enable-cache: true
       - run: uv sync --locked

@@ -54,7 +54,7 @@ Before changing a model on any quality-level stage, run an eval (ADR-4, docs/EVA
 | Dashboard hosting | **Vercel Pro** | Cloudflare Pages | $20/mo (includes $20 of usage) | Hobby is "non-commercial personal use only"; the fair-use page counts ads, and sites whose primary purpose is affiliate linking, as commercial. A monetized studio's dashboard needs Pro |
 | Dashboard auth | **Auth.js** (one owner) | Clerk (free up to 50k MRU) | $0 | |
 | API client | **@hey-api/openapi-ts** | openapi-typescript | $0 | Export the OpenAPI spec in CI; the docs routes stay off |
-| LLM tracing | **Langfuse Cloud Hobby** | self-hosted | $0 (50k units/mo) | |
+| LLM tracing | **Langfuse Cloud Hobby**, pending draft ADR-53 (moved out of S5, 2026-10-05) | self-hosted | $0 (50k units/mo) | An optional card after S6 if the owner accepts ADR-53 |
 | Errors | **Sentry Developer** | — | $0 (5k errors/mo) | Initialize in `@enter` or at module level from a Modal secret |
 | Stock media | **Pexels** (200 req/h), **Pixabay** | — | $0 | Credit Pexels in the app. Cache Pixabay results for 24 h and download files, don't hotlink |
 | Band data | **MusicBrainz** (1 req/s, User-Agent with contact) + **Wikidata** (CC0) | — | $0 | Last.fm needs a separate agreement for commercial use. Spotify's Web API is effectively closed to new apps |
@@ -161,7 +161,7 @@ claude plugin install typesafe@typesafe-ai
 | auto-editor | Unlicense | Silence and filler cutting | Borrow the idea: we already have word timestamps, so cut in ffmpeg |
 | **pycaps** | MIT (alpha) | Animated caption effects | Borrow the presets and port them to ASS tags, plus **Noto Emoji** (Apache/OFL) overlays |
 | Revideo / Motion Canvas | MIT | Code-driven motion graphics | Only if ASS limits us (Remotion needs a company license) |
-| **Langfuse** | MIT core | LLM tracing, prompt versions, cost | Adopt |
+| **Langfuse** | MIT core | LLM tracing, prompt versions, cost | Pending ADR-53 (not in S5) |
 | **promptfoo** | MIT | CI gate on prompt version bumps | Adopt, next to `clipforge eval` |
 | DeepEval | Apache-2.0 | pytest-native LLM-judge metrics | Borrow |
 | **Umami** | MIT | Analytics for a link-in-bio page | Adopt when the bio pages exist |

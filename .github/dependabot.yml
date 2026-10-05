@@ -1,0 +1,13 @@
+# GitHub Actions only (card 017): keeps the commit SHAs that every workflow pins current.
+# Python and npm dependencies change through cards (uv.lock, web/package-lock.json), not here.
+# Branches are `dependabot/github_actions/...`; scripts/scopes.toml lets them change only
+# .github/workflows/**.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

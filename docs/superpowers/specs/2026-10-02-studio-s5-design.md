@@ -10,7 +10,6 @@ S5 builds what every generative producer needs, so that S6 (the story producer) 
 - `modal.Cls` media servers for **narration** (Qwen3-TTS + the aligner, one server), **stills** (Qwen-Image-2512 + Lightning) and **music** (ACE-Step 1.5), with weights on the `clipforge-models` Volume;
 - a **pipeline registry**: per-producer step lists drive `dispatch`, `resume` and the sweeper through one engine; clips move onto it unchanged;
 - `app.py` split into a `modal_app/` package (still the only Modal layer);
-- LLM tracing in Langfuse, off until keys exist;
 - the renderer additions X4 asked for (crossfades, a duck depth, captions from narration timings), without changing clip output;
 - a no-op **hello** producer that proves the GPU step pattern end to end.
 
@@ -25,11 +24,12 @@ S5 builds what every generative producer needs, so that S6 (the story producer) 
 | Renderer additions | **In S5**, as optional Timeline fields whose defaults reproduce today's clip output exactly and stay out of the render cache key; bump `render.STAGE_VERSION` only if clip output actually changes (§8). Story values come from the producer's settings |
 | Grouping GPU work | **Per item, warm window**: one item per server call; S6 submits an account's day of items together; capped containers keep them on one warm container |
 | `app.py` split | **First task of S5's build, its own checkpoint**, a pure move |
-| Langfuse | **Hosted (Cloud Hobby), behind `LLMClient`, off unless keys exist**; metadata only |
+| Langfuse | ~~Hosted (Cloud Hobby), behind `LLMClient`, off unless keys exist~~ **Superseded 2026-10-05: S5 ships without tracing**; Langfuse becomes an optional later card (after S6) behind draft ADR-53 (log #597) |
 | Measurement | **Yes**: a ~$1.50 probe of memory-snapshot cold starts (§5.4); spent ~$1.2 |
 | Registry shape | **Data registry with one engine** (§6) |
 | Section 1 changes | A narration failing its guard twice fails the item with an ops alert (no "review"); full cache-key inputs per stage; GPU seconds and `ctx.report` in every new stage; Kokoro only as a model-level fallback per account |
 | Coordinator note | `scaledown_window` per server in the registry, sized from the gap between items plus a margin (60–120 s); idle-tail cost next to cold-start cost |
+| Plan review (2026-10-05, owner rulings relayed by the coordinator, log #597–#605) | Langfuse out of S5 (ADR-53 draft); #590 approved; clips records keep today's JSON shape for rollback; a strict golden test; S5-3 deploys alone; `producer_version` pinned to the value recorded at card start; S5-2 slotted between deployed cards; `create_job` refuses an undeployed producer; cost caps per card |
 | Coordinator review of the written spec (2026-10-03, log #591–#596) | The split is its own card after card 014 is deployed (§7.1); clips' `producer_version` frozen at `clips:4c44b731` (§6.4); the loudness-label fix deferred (§8.2); queued and running bounds from a registry batch cap (§5.2); the bed level relative to the narration (§8.1); crossfades on real frames first, inputs normalized (§8.2); the warm-window assumption measured at S5-4 (§5.2) |
 
 Out of scope: the story producer and its steps (S6), b-roll and RIFE (S6), talking heads (S8, after X2), the Judge (S6), Kokoro serving (only if an account needs it), the bulk LLM router (ADR-32, deferred), database tables (none).
@@ -263,7 +263,7 @@ class Producer:
 
 - Today's tests for the steps, resume and the sweeper run unchanged against the engine.
 - A golden test runs a whole clips job with fake stages and compares, before and after the refactor: the Dict keys written, the spawn sequence, `outputs`, and the `metadata.json` fields.
-- **`producer_version` stays exactly `clips:4c44b731`** (today's value with the default models, computed 2026-10-03). The facts behind it become per producer: clips hash a frozen list of today's 7 stages (ingest, transcribe, highlights, reframe, captions, render, package) and their versions, never the new `narrate`, `stills` or `music` stages, so adding a stage for another producer never moves clips' version or opens an ADR-49 window. A pinned test asserts the literal `clips:4c44b731` with default settings; the stage modules and cache keys aren't touched.
+- **`producer_version` stays exactly the value `runner.producer_version` gives on `main` at the build card's start** (`clips:4c44b731` with the default models on 2026-10-03), recorded in the card's report before the refactor and pinned in a test (log #602). The facts behind it become per producer: clips hash a frozen list of today's 7 stages (ingest, transcribe, highlights, reframe, captions, render, package) and their versions, never the new `narrate`, `stills` or `music` stages, so adding a stage for another producer never moves clips' version or opens an ADR-49 window. The pinned test asserts that recorded value with default settings; the stage modules and cache keys aren't touched.
 
 ### 6.5 The hello producer
 
@@ -295,11 +295,8 @@ class Producer:
 - **Transient** (retried twice, then a clean failure): CUDA out-of-memory, ffmpeg errors, Volume lag.
 - A container whose `enter` fails is retried by Modal; the sweeper is the backstop. Messages are sanitized as today (`sanitize.clean`, `redact`).
 
-### 7.4 Langfuse
-- `llm.py` gains `TracingLLMClient`, which wraps any `LLMClient`; the protocol is unchanged.
-- Per call: name `prompt_name@version`, model, input and output tokens, USD, latency, and job, clip and stage ids. **No prompt or completion text** unless `LANGFUSE_CAPTURE_IO=true` (off; a later owner choice).
-- It flushes in a `finally` at the end of each step, capped at 2 s, because a serverless container can freeze before a background export runs. A tracing error is logged and never fails a call.
-- Off unless `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_HOST` are in `clipforge-secrets` (added by the `docs/ops/secrets.md` procedure, after card 010). A clips job makes about 20 calls, so Hobby's 50k units cover about 2,000 jobs a month.
+### 7.4 LLM tracing: not in S5
+The owner moved Langfuse out of S5 (2026-10-05, log #597). S5 changes nothing in `llm.py` or the `LLMClient` protocol. Tracing becomes an optional card after S6, behind draft ADR-53 in docs/studio/05 (vendor, region, fields sent, retention, the `LANGFUSE_CAPTURE_IO` off-switch, the three secrets), which the owner accepts or rejects. Until then, `metadata.json` and the `jobs` table keep recording tokens and cost per stage (rule 7), as today.
 
 ## 8. Renderer additions
 
@@ -345,27 +342,26 @@ The render tests for crossfades, padding and the envelope also run in a `debian:
 - The guard with fake TTS: a runaway is capped by `max_new_tokens`, a dropped sentence is caught by the WER, a retry uses a new seed, a second failure is permanent with an ops alert.
 - Stage cache keys: each input listed in §3.2 changes the key; ids and ranks don't.
 - The engine: today's step, resume and sweep tests unchanged; the clips golden run; the hello run with fakes, including resume and a sweep with `queue_s`.
+- Rollback: a new clips `JobInput`/`Job` dump has only today's fields (§9.3).
 - Render: pinned clip keys, golden graphs, crossfade, envelope, `%` in a still path, short b-roll; the same tests in bookworm.
-- Langfuse: the wrapper with a fake exporter (no text sent, an exporter error doesn't fail the call).
 - `@pytest.mark.gpu`: one real call per server on Modal (run by the owner at the servers' checkpoint).
 
 ### 9.2 Build checkpoints (each deploys alone, after S1's rollout and outside the blackout, only through `scripts/deploy.sh`)
-Every checkpoint is a code card deployed with its owner steps done before the next code card merges (#144), taking its turn with the S2 and S3 cards (#145). S5 has **no Neon migration**. `JobInput.producer`/`params` change the API contract, so S5-2 regenerates `web/openapi.json` (`uv run python scripts/export_openapi.py`) and the client (`npm --prefix web run gen`).
+Every checkpoint is a code card deployed with its owner steps done before the next code card merges (#144), taking its turn with the S2 and S3 cards (#145). S5 has **no Neon migration**. Cost caps per card: S5-1 $0.05, S5-2 $0.25, S5-3 $0.25, S5-4 $5 (log #605). `JobInput.producer`/`params` change the API contract, so S5-2 regenerates `web/openapi.json` (`uv run python scripts/export_openapi.py`) and the client (`npm --prefix web run gen`).
 1. **The `modal_app/` split** (its own card, right after card 014 is deployed and before card 015 or 022 starts, §7.1). Deploying changes nothing live; `smoke`.
-2. **Registry and engine, clips on it.** `smoke`, then one real channel job.
-3. **`media/`, the three stages, the renderer additions.** No live change; bookworm render tests.
+2. **Registry and engine, clips on it** (its own slot between deployed cards, never while card 025 or ADR-48's caps change in `create_job` is open; log #603). `smoke`, then one real channel job.
+3. **`media/`, the three stages, the renderer additions.** Its own deploy (log #601: it changes `render_graph`, `captions` and `doctor` on the live clip path): the bookworm render tests, `smoke`, one real channel job served from the render cache.
 4. **Weight functions, servers and hello.** Owner: `weights --model` for each entry, `--prep` for Qwen-Image, `doctor`, deploy, `uv run clipforge run --producer hello`, the gpu-marked tests.
-5. **Langfuse**, once the keys are in the secret (after card 010).
 
 ### 9.3 Rollback
-Revert the checkpoint's PR. Clips never call a server. Reverting the engine restores `steps.py`; step names, function names and Dict keys are unchanged, so jobs in flight survive either direction. Weights left on the Volume are harmless.
+Revert the checkpoint's PR. Clips never call a server. Reverting the engine restores `steps.py`; step names, function names and Dict keys are unchanged, so jobs in flight survive either direction. **Records stay readable by the old code:** `JobInput` is a strict contract (`extra="forbid"`), so the new fields are left out of every dump while they hold their defaults (`producer` "clips", `params` None; `Job.producer`, `Job.waiting_for` likewise, log #599). Every clips record the new code writes (`job:<id>`, the `jobs` row's input, `metadata.json`) has today's JSON shape, and a test checks it against today's field sets. Only produced jobs (hello) carry the fields, and the old code never reads those. Weights left on the Volume are harmless.
 
 ### 9.4 Monthly cost
 - S5's way of running adds about $0.03 (Narrator) and $0.09 (stills) of cold start plus idle tail per account per day: about **$7 a month** in 03's scenario 1 (2 story accounts) and about **$35 a month** in scenario 2 (9 accounts with stills, 13 with narration), inside 03's "+30% cold starts" line.
-- The build's own runs cost about $3 (downloads, prep, hello, the gpu tests). Langfuse is $0. Volume storage is the owner's check (§5.5).
+- The build's own runs cost about $3 (downloads, prep, hello, the gpu tests). Volume storage is the owner's check (§5.5).
 
 ### 9.5 Safety
-No new routes or secrets beyond the optional Langfuse keys. Producer params are validated against the producer's model before a job exists. Server paths resolve through `JobContext.path`, and every contract path is relative (ADR-13). The models Volume is read-only in servers. The registry test blocks non-commercial models before any code can load them.
+No new routes or secrets. Producer params are validated against the producer's model before a job exists. Server paths resolve through `JobContext.path`, and every contract path is relative (ADR-13). The models Volume is read-only in servers. The registry test blocks non-commercial models before any code can load them.
 
 ## 10. Proposed ADR-52: media servers and the producer registry
 
@@ -377,6 +373,8 @@ Draft in docs/studio/05 (the next free number is ADR-52, per 05's header). Refin
 - no `@modal.batched` until there are many small concurrent calls.
 
 ## 11. Proposed changes to other documents
+
+- **05 (this card):** draft ADR-53, LLM tracing in Langfuse, for the owner to accept or reject; the optional tracing card follows S6 if accepted.
 
 Edited by this card at checkpoint B (in scope): **03** (§5.4's measured numbers), **04** (the S5 section: b-roll moves to S6, the renderer additions land in S5, the Narrator replaces the separate aligner), **05** (ADR-52).
 

@@ -1,6 +1,6 @@
 # 05: Proposed ADRs
 
-Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39. Accepted later: ADR-41 (S1, written into `docs/DECISIONS.md` by card 002 on 2026-09-30) and ADR-42 to ADR-46 (2026-09-30), ADR-47 (two-pass loudness, 2026-10-01), ADR-48 to ADR-50 (autopilot, the producer-version window, the hook library; 2026-10-01), and ADR-27 (the dispatcher) and ADR-33 (tracking links only) with card 011's S2 spec (2026-10-02). Accepted ADRs live only in `docs/DECISIONS.md`, which is binding; this file keeps one-line pointers to them, except ADR-43 to ADR-46. The drafts left are ADR-36, 37, 40, 51 and 52 (proposed) and ADR-32 (deferred). The next free number is ADR-53. To accept a draft, copy it into `docs/DECISIONS.md` with `Status: Accepted` and the acceptance date. ADR-24 is already taken by the Dict keep-alive (plan C Task 6).
+Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39. Accepted later: ADR-41 (S1, written into `docs/DECISIONS.md` by card 002 on 2026-09-30) and ADR-42 to ADR-46 (2026-09-30), ADR-47 (two-pass loudness, 2026-10-01), ADR-48 to ADR-50 (autopilot, the producer-version window, the hook library; 2026-10-01), and ADR-27 (the dispatcher) and ADR-33 (tracking links only) with card 011's S2 spec (2026-10-02). Accepted ADRs live only in `docs/DECISIONS.md`, which is binding; this file keeps one-line pointers to them, except ADR-43 to ADR-46. The drafts left are ADR-36, 37, 40, 51, 52 and 53 (proposed) and ADR-32 (deferred). The next free number is ADR-54. To accept a draft, copy it into `docs/DECISIONS.md` with `Status: Accepted` and the acceptance date. ADR-24 is already taken by the Dict keep-alive (plan C Task 6).
 
 ---
 
@@ -82,3 +82,15 @@ Decision:
 - Derived weights (fused LoRAs, converted precisions) are prepared once on the `clipforge-models` Volume with a manifest that servers check at startup; servers mount the Volume read-only and never download.
 - No `@modal.batched` until there are many small concurrent calls.
 Consequences: a new producer is a step list and handlers; a new model is a registry entry and an adapter. Cold starts are paid once per batch, and the idle tail is bounded by the window. One server per model family means S6's b-roll and S8's talking head reuse the pattern.
+
+## ADR-53: LLM tracing in Langfuse
+Date: 2026-10-05 · Status: Proposed (moved out of S5 by the owner on 2026-10-05, log #597; for the owner to accept or reject; if accepted, built in an optional card after S6)
+Context: Every stage already records LLM tokens and cost per stage in `metadata.json` and the `jobs` table (rule 7). S6 adds scripts, copy and the Judge, where prompt iteration is daily work and a per-call view (prompt version, latency, failures, retries) helps. Langfuse (MIT core) has a hosted free tier.
+Decision (proposed):
+- **Vendor and region:** Langfuse Cloud, Hobby plan ($0, 50k units a month), in the US region (`https://us.cloud.langfuse.com`), the nearest to Modal; the self-hosted option stays rejected (it needs a server, Postgres and ClickHouse, against ADR-9).
+- **Where:** a `TracingLLMClient` wrapping any `LLMClient` in `llm.py`; the protocol gains an optional `meta` argument (prompt name and version, job, clip and stage ids). Off unless the keys exist.
+- **Fields sent:** prompt `name@version`, model, input and output tokens, estimated USD, latency, job/clip/stage ids, and the error class on a failed call. **No prompt or completion text** unless `LANGFUSE_CAPTURE_IO=true`, an owner switch that stays off (transcripts and scripts stay in our storage).
+- **Retention:** Hobby's data retention as published (30 days at the time of writing); nothing in Langfuse is a record we need: `metadata.json` and the `jobs` table stay the cost record.
+- **Secrets:** `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` in `clipforge-secrets`, added by the `docs/ops/secrets.md` procedure.
+- **Failure:** the wrapper flushes at the end of each step (2 s cap); an exporter error is logged and never fails a call or a step.
+Consequences: one more vendor that sees metadata only, a dashboard of calls per prompt version, and an off switch (remove the keys). Rejecting it leaves today's per-stage cost records as the only LLM telemetry.
