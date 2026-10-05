@@ -127,6 +127,7 @@ Amended 2026-10-01 by ADR-48 and ADR-50 (S3 dashboard spec §10.3), applied to t
 - Card 018 also renumbered the migration (landing order; `post_events.actor` is S2a's) and split S3c-1 in two (owner, log #257).
 
 Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../superpowers/specs/2026-09-30-studio-s3-workspaces-design.md). Versioned categories, blueprints and accounts in the database (ADR-42, replacing ADR-35's "blueprints are files"), with notes, experiments and results. The implementation plan: [docs/superpowers/plans/2026-10-02-studio-s3c.md](../superpowers/plans/2026-10-02-studio-s3c.md) (four parts, 21 tasks).
+Build cards (log #148): 035 S3c-1a (`s3c/data`), 036 S3c-1b (`s3c/pages`), 037 S3c-2 (`s3c/wiring`), 038 S3c-3 (`s3c/experiments`), one at a time, each after the previous one and its listed cards are deployed.
 - [ ] **S3c-1a, data and routes** (after card 010, with S2a (card 014) and S3-1 (card 022, the `admin` endpoint) deployed):
   - its migration, the next in landing order (S3 dashboard spec §8.7): categories, versions, experiments, notes, `content_items.setup_version`, `accounts.current_version`; no deferred items;
   - the resolver and field registry, and the versions service (`format_changed`, the `accounts` projection);
@@ -181,7 +182,8 @@ Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../supe
 - **Exit (met 2026-10-01, card 006, PR #13, deployed):** one renderer produces both a clip and a synthetic test Timeline at 1080x1920 and under 50 MB, with two-pass loudness (ADR-47).
 
 ## HK: Hook library (after S1's rollout, before S6; ADR-50)
-Designed and planned by card 020 ([spec](../superpowers/specs/2026-10-02-studio-hooks-design.md), [plan](../superpowers/plans/2026-10-02-studio-hooks.md); log #550–#562). Its build card starts after card 010 and lands its migration after card 014's (landing order: S2a's 0002, then whichever of hooks, S3 and S3c is next). Three deployable parts:
+Designed and planned by card 020 ([spec](../superpowers/specs/2026-10-02-studio-hooks-design.md), [plan](../superpowers/plans/2026-10-02-studio-hooks.md); log #550–#562). Its build card starts after card 010 and lands its migration after card 014's (landing order: S2a's 0002, then whichever of hooks, S3 and S3c is next). Three deployable parts.
+Build cards (log #148): 028 HK-1 (`hk/library`), 029 HK-2 (`hk/variants`), 030 HK-3 (`hk/page`), one at a time, each after the previous one is deployed.
 - [ ] **HK-1, data and library:** pattern versions (append-only), a seed library per clips account (the "Highlight title" control plus 5 patterns, equal weight, #552), the rotation frozen on each job, control stamps on items and in `metadata.json`, owner-set weights (#556), the freeze snapshot behind S3c's `HookFreezer` (#554, #559), admin routes and `clipforge hooks`.
 - [ ] **HK-2, variants:** 2–3 lines in the drawn pattern per clip, in one `keywords_v3` Haiku call (about $0.0025 per item, #550, #551), behind `HOOK_VARIANTS`, flipped on alone after the deploy, which opens ADR-49's window once per clips account (#555); ranking before S7 (posted, reject and approval rates, dashboard 👍/👎, #553) with the `hook_weak` needs row and digest lines through the extension points (#560); re-rendering one item on S3's `POST /admin/review/{item}/rerender` (G21, #557). After S7, the 3-second hold and views at 24 h join the ranking.
 - [ ] **HK-3, the interim `/hooks?account=` page** (after S3's admin client; S3c's Hooks tab replaces it).
@@ -190,6 +192,7 @@ Designed and planned by card 020 ([spec](../superpowers/specs/2026-10-02-studio-
 
 ## S5: Media servers and producer registry
 Design and plan: **card 021** (2026-10-02/03): the spec `docs/superpowers/specs/2026-10-02-studio-s5-design.md` (owner-approved section by section, log #580–#605) and the plan `docs/superpowers/plans/2026-10-03-studio-s5.md`. Built as four code cards after S1's rollout, each deployed before the next code card merges (#144); the first (the `app.py` split) lands right after card 014 (S2a) is deployed and before card 015 or 022 starts. ADR-52 is proposed in 05. Cost caps: S5-1 $0.05, S5-2 $0.25, S5-3 $0.25, S5-4 $5 (log #605).
+Build cards (log #148): 031 S5-1 (`s5/split`), 032 S5-2 (`s5/registry`), 033 S5-3 (`s5/media`), 034 S5-4 (`s5/servers`), one at a time, each after the previous one is deployed.
 - [ ] **S5-1:** `app.py` split into a `modal_app/` package (still the only Modal layer, with `app.py` as the deploy entry); nothing changes live.
 - [ ] **S5-2:** pipeline registry: per-producer step lists drive `dispatch`, `resume` and the sweeper through one engine; clips run on it unchanged (`clips:4c44b731` frozen); a `hello` producer.
 - [ ] **S5-3:** `media/` protocols with fakes, `registry.toml` with a license-allowlist test; the `narrate` (TTS + X1's guard + word timings), `stills` and `music` stages; the renderer additions X4 asked for (crossfades, a duck depth, a bed level relative to the voice, captions from narration timings) without changing clip output (`render.STAGE_VERSION` stays 4).

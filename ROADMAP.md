@@ -69,10 +69,10 @@ Full list with exit criteria, dependencies and action cards: [docs/studio/04-roa
 - [ ] S3a: dashboard shell (`web/`, login, Home over today's API): the shell is built; the Vercel deploy is card 004
 - [ ] S3: Next.js dashboard v1 (separate `admin` Modal endpoint; after S1, alongside S2; planned in card 019; built in six cards, each after the previous one is deployed: S3-1 `admin` endpoint and Settings, card 022; S3-2 needs, Home and `/act`, card 023; S3-3 Review and Calendar, card 024; S3-4 Produce, Jobs and Sources, card 025; S3-5 Results, Compare and the account view, card 026; S3-5b Telegram retirements and the CLI cut-over, card 027)
 - [ ] S3b: Notion one-way mirror (connector, no code)
-- [ ] S3c: account workspaces: versioned categories, blueprints and accounts, experiments, notes (ADR-42; after S1 and S3's `admin` endpoint)
+- [ ] S3c: account workspaces: versioned categories, blueprints and accounts, experiments, notes (ADR-42; after S1 and S3's `admin` endpoint; planned in card 018; built in four cards: S3c-1a data and routes, card 035; S3c-1b pages, card 036; S3c-2 producer wiring, card 037; S3c-3 experiments, card 038)
 - [x] S4: Timeline renderer (card 006, 2026-10-01; two-pass loudness ADR-47; deployed)
-- [ ] HK: hook library and rotation (ADR-50; after S1's rollout, before S6)
-- [ ] S5: media servers and producer registry
+- [ ] HK: hook library and rotation (ADR-50; after S1's rollout, before S6; planned in card 020; built in three cards: HK-1 library, card 028; HK-2 variants, card 029; HK-3 interim page, card 030)
+- [ ] S5: media servers and producer registry (planned in card 021; built in four cards: S5-1 the `modal_app/` split, card 031; S5-2 registry and engine, card 032; S5-3 media stages, card 033; S5-4 servers and hello, card 034)
 - [ ] S6: story producer, plus the Judge, decision ledger and lanes (wave 2)
 - [ ] S7: analytics, money, budgets, dispatcher cron
 - [ ] S8: avatar producer and personas (wave 3)
