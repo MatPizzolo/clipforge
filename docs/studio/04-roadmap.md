@@ -152,9 +152,12 @@ Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../supe
 - **Exit (met 2026-10-01, card 006, PR #13, deployed):** one renderer produces both a clip and a synthetic test Timeline at 1080x1920 and under 50 MB, with two-pass loudness (ADR-47).
 
 ## HK: Hook library (after S1's rollout, before S6; ADR-50)
-Its card is written after the rollout.
-- [ ] Pattern versions (append-only), item stamping (`hook_pattern_id@version` and the weights in force), 2–3 variants per item in the clips producer (one Haiku call, about $0.0025 per item; the captions prompt bump opens ADR-49's window), weighted rotation frozen during experiments, ranking before S7 (owner 👍/👎, approval and reject rates) and after S7 (3-second hold, views at 24 h), admin routes and the Hooks tab. Outline: S3 dashboard spec §8.5.
-- **Exit:** every new clip records its hook pattern and version, and the Hooks tab ranks patterns per account.
+Designed and planned by card 020 ([spec](../superpowers/specs/2026-10-02-studio-hooks-design.md), [plan](../superpowers/plans/2026-10-02-studio-hooks.md); log #550–#562). Its build card starts after card 010 and lands its migration after card 014's (landing order: S2a's 0002, then whichever of hooks, S3 and S3c is next). Three deployable parts:
+- [ ] **HK-1, data and library:** pattern versions (append-only), a seed library per clips account (the "Highlight title" control plus 5 patterns, equal weight, #552), the rotation frozen on each job, control stamps on items and in `metadata.json`, owner-set weights (#556), the freeze snapshot behind S3c's `HookFreezer` (#554, #559), admin routes and `clipforge hooks`.
+- [ ] **HK-2, variants:** 2–3 lines in the drawn pattern per clip, in one `keywords_v3` Haiku call (about $0.0025 per item, #550, #551), behind `HOOK_VARIANTS`, flipped on alone after the deploy, which opens ADR-49's window once per clips account (#555); ranking before S7 (posted, reject and approval rates, dashboard 👍/👎, #553) with the `hook_weak` needs row and digest lines through the extension points (#560); re-rendering one item on S3's `POST /admin/review/{item}/rerender` (G21, #557). After S7, the 3-second hold and views at 24 h join the ranking.
+- [ ] **HK-3, the interim `/hooks?account=` page** (after S3's admin client; S3c's Hooks tab replaces it).
+- Story hooks (S6) use the same library and interface: the first line, the hook frame brief and the title card from one drawn pattern (#558).
+- **Exit:** every new clip records its hook pattern and version, and the Hooks page ranks patterns per account.
 
 ## S5: Media servers and producer registry
 - [ ] `media/` protocols plus `registry.toml` with a license-allowlist test. A `clipforge-models` Volume with one-off weight download functions.

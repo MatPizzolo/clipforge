@@ -170,6 +170,11 @@ Implementation notes:
 - **Review** has a Queue tab (assisted accounts: move to the front, skip, reject, posted correction) and a Review lane tab (S2's routes, plus batch approve).
 - **Bridges end after 7 days online:** `REVIEW_BATCH` after the Review page (S3-3); `/clip`, `/status <job_id>` and typed `/resume` in S3-5b, after Produce and the job page's Resume (S3-4); `/status` with no argument, the failure alert's [Resume], `clipforge status <id>` and `clipforge resume <id>` stay.
 
+**Hooks (card 020's spec, 2026-10-02; [hooks spec](../superpowers/specs/2026-10-02-studio-hooks-design.md) §5, §6, §7; log #550–#562).**
+- **Home:** the account workspace's **Hooks** tab (`/accounts/<id>?tab=hooks`, S3c). Until S3c's workspace exists, a standalone page **`/hooks?account=<id>`**, which then redirects to the tab. Both paths join the link contract. The page holds the library (pattern, version, status, weight with ❄ while a setup experiment freezes the rotation), each pattern's rates against the "Highlight title" control with a 90% interval, and Edit, Approve, Retire, Share to blueprint and Weight (with the suggested value pre-filled).
+- **Dashboard only:** 👍/👎 per hook (on the Review page and the Hooks page), weight changes, and re-rendering one item with another pattern or title (Review's re-render button, disabled until the hooks build's HK-2). Telegram has no hook task: its review cards stay approve/reject (#427, #553).
+- **Digest:** `hook_weak`, one line per pattern likely worse than the control with ≥ 10 decided items, with a suggested weight, linking to the Hooks page. Never instant (ADR-45).
+
 ## 3. Notion mirror (one-way)
 
 
