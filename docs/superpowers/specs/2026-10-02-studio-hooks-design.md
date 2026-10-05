@@ -32,7 +32,7 @@ Hooks are the lever the owner most wants to improve (ADR-50). This card designs 
 | R7 | Who moves weights | **The owner, with suggestions.** Weights change only on a tap; the system ranks and suggests |
 | R8 | Where the pick happens (the owner's change to §1) | **In the clip step, before captions**, from the job's frozen rotation, seeded by `source_hash`, `start`, `end` and the rotation's id. The chosen `pattern_id@version` is an explicit captions input in its cache key. Weights stay out of the cache |
 
-Coordinator additions (2026-10-02): the re-render route (G21, §6); the landing order now includes S3's migration (§3.3); routes mount on `web` behind the bearer token until S3-1's `admin` endpoint exists (§7.1).
+Coordinator additions (2026-10-02): the re-render route (G21, §6); the landing order now includes S3's migration (§3.3); routes mount on `web` behind the bearer token until S3-1's `admin` endpoint exists (§7.1); the freeze through S3c's `HookFreezer` (§4.4). **Coordinator review of checkpoint A (2026-10-03), folded in:** one re-render path on S3's `POST /admin/review/{item}/rerender` (#619); every path under `/admin`; `HookWeakProvider` and digest providers (#142, #147), including the stale-freeze line; integer experiment ids and a no-op freeze for accounts without a library; the CLI's routes in `cli_router` (#146); a manual title in the cache key; superseded items rejected through `posting/actions.supersede` with reason `superseded:<id>`; `ContentItem.title` as written; `HookResult.drawn`; `hook_stamp` versus `ContentItem.hook`; `control` unversioned; re-renders not in `metadata.json`; "no promises" in two seeds.
 
 ## 1. Contracts (`models.py`, rule 2)
 
@@ -47,7 +47,6 @@ class HookPatternData(Contract):          # the versioned body; an edit writes v
     fits: list[HookFit]                         # which producers may draw it
     max_words: int = Field(default=10, ge=2, le=10)   # the title card shows at most 10
     frame_brief: str | None = Field(default=None, max_length=300)  # story: what frame 0 shows
-    control: bool = False                       # ship the producer's own line unchanged
 
 class HookPattern(Contract):
     id: str                                     # "hp_" + 8 base32 characters
@@ -55,6 +54,8 @@ class HookPattern(Contract):
     blueprint_name: str | None
     status: HookStatus
     current_version: int
+    control: bool = False                       # ship the producer's own line unchanged; set once at
+                                                # creation, never versioned (`hook_patterns.control`)
 
 class HookPatternVersion(Contract):
     pattern_id: str; n: int; data: HookPatternData
@@ -62,17 +63,18 @@ class HookPatternVersion(Contract):
 
 class RotationEntry(Contract):
     pattern_id: str; version: int; weight: float = Field(gt=0)
+    control: bool = False                       # copied from HookPattern.control
     data: HookPatternData                       # the version's body, so steps never read the DB
 
 class HookRotation(Contract):                   # frozen on the job at create_job
     account_id: str
     entries: list[RotationEntry]
-    frozen_by: str | None = None                # the experiment id when a freeze snapshot was used
+    frozen_by: int | None = None                # S3c's experiments.id when a freeze snapshot was used
     @property
     def id(self) -> str: ...                    # sha256 of the sorted (pattern_id, version, weight)[:16]
 
 class HookPick(Contract):                       # what the clip step passes to captions
-    pattern_id: str; version: int; data: HookPatternData
+    pattern_id: str; version: int; control: bool; data: HookPatternData
 
 class HookVariants(LLMOutput):                  # shared reply sub-model (clips and story)
     variants: list[str] = Field(min_length=1, max_length=3)
@@ -83,7 +85,10 @@ class HookResult(Contract):                     # stage output, cached with capt
     version: int | None
     variants: list[str] = []                    # as written, before cleaning
     chosen: int | None = None
-    text: str                                   # the shipped line (the title card's text)
+    text: str                                   # the shipped line as written (ContentItem.title);
+                                                # the title card shows title_words(text), cleaned and upper-cased
+    drawn: bool = False                         # the pattern came from the weighted draw (flag on);
+                                                # False for flag-off control stamps and manual titles
     fallback: bool = False                      # rule 5 failed twice: the producer's own line shipped
     manual: bool = False                        # a title given in a re-render
 
@@ -91,14 +96,17 @@ class HookStamp(Contract):                      # the item's record
     result: HookResult
     rotation_id: str | None
     weights: dict[str, float] = {}              # "<pattern_id>@<version>" -> weight, from the job's rotation
-    frozen_by: str | None = None
+    frozen_by: int | None = None
 ```
+
+**`hook_stamp` is the title card, not `ContentItem.hook`.** `ContentItem.hook` and `content_items.hook` keep highlights' first spoken line, verbatim, as today; `hook_stamp` records the on-screen title card's pattern and text.
 
 Additive changes to existing contracts (all optional, so cached results and stored jobs still validate):
 - `JobInput.hooks: HookRotation | None = None`, frozen by `service.create_job` (§2.1).
 - `CaptionFiles.hook: HookResult | None = None`.
 - `RenderedClip.hook: HookResult | None = None`, `PackagedClip.hook: HookStamp | None = None` (so the stamp lands in `metadata.json`).
 - `ContentItem.hook_stamp: HookStamp | None = None`; `ContentItem.superseded_by: str | None = None`.
+- `Job.hooks_note: Literal["unavailable"] | None = None`; `Versions.hook_rotation: str | None = None` (the rotation id, `"unavailable"` or `"none"`).
 - `KeywordsReply` gains `variants: list[str] | None = None` and `best: int | None = None` for `keywords_v3`; its docstring is corrected from `keywords_v1` (§2.6).
 
 ## 2. Clip variants
@@ -107,18 +115,18 @@ Additive changes to existing contracts (all optional, so cached results and stor
 
 | Moment | Who | What |
 |---|---|---|
-| Job created | `service.create_job` | Resolves the account's rotation (§4.2) and freezes it as `JobInput.hooks`. No account, no database or a database error: `None`, and the job metadata records `hooks: "unavailable"` (best-effort, like S1's `jobs` row). An edit mid-job never changes a running job |
+| Job created | `service.create_job` | Resolves the account's rotation (§4.2) and freezes it as `JobInput.hooks`. No account, no database or a database error: `None`, `Job.hooks_note = "unavailable"`, and `metadata.json` records it in `versions.hook_rotation` (best-effort, like S1's `jobs` row). An edit mid-job never changes a running job |
 | Clip step, before captions | `pipeline/steps.clip_step` → `stages/runner.py` | `hooks.rotation.pick(job.input.hooks, seed)` with `seed = sha256(source_hash, f"{start:.3f}", f"{end:.3f}", rotation.id)`. Pure: retries, duplicated spawns and resume pick the same pattern. Returns a `HookPick` or `None` (empty rotation). Skipped while `HOOK_VARIANTS` is off (§2.5) |
 | Captions | `stages/captions.run(ctx, spec, transcript, deps, pick)` | Writes the variants in the `keywords_v3` call (§2.3); returns `CaptionFiles` with `hook` |
 | Render, package | unchanged stages | `RenderedClip.hook` and `PackagedClip.hook` carry the result; the Timeline contract doesn't change (the overlay's text changes, so render re-runs) |
-| Enqueue | `posting/enqueue.items_for` | `ContentItem.hook_stamp = HookStamp(result, rotation.id, rotation weights, frozen_by)`; `ContentItem.title` = the shipped text, so the post copy matches the video. `ClipCandidate.title` keeps the highlights title |
+| Enqueue | `posting/enqueue.items_for` | `ContentItem.hook_stamp = HookStamp(result, rotation.id, rotation weights, frozen_by)`; `ContentItem.title` = the best line **as written** (not upper-cased), so the post copy matches the video and S2's `copy_for` doesn't produce all-caps YouTube and Facebook titles; only the title card shows the cleaned, upper-cased text. `ClipCandidate.title` keeps the highlights title |
 
 Stage modules stay free of database and Modal code: the rotation arrives inside the job record (ADR-9, ADR-12).
 
 ### 2.2 Cache key (ADR-8)
 
 - With the flag **off**, the captions key is exactly today's (`STAGE_VERSION` "3", `keywords: "keywords_v2:<model>"`), pinned by a test.
-- With the flag **on**, `STAGE_VERSION` is "4", the prompt is `keywords_v3`, and the key gains `hook = "<pattern_id>@<version>:<sha256 of the version's data>[:16]"` or `"none"`. The pick is an input; the stamp's weights are not, because they are attached at enqueue from the job's own rotation (R8). Same moment and same pattern: a cache hit. Another pattern: only captions and render re-run.
+- With the flag **on**, `STAGE_VERSION` is "4", the prompt is `keywords_v3`, and the key gains `hook = "<pattern_id>@<version>:<sha256 of the version's data>[:16]"`, `"manual:<sha256 of the title>[:16]"` for a re-render's given title (§6), or `"none"`. The pick is an input; the stamp's weights are not, because they are attached at enqueue from the job's own rotation (R8). Same moment and same pattern: a cache hit. Another pattern: only captions and render re-run.
 - Highlights' cache is untouched: its `title` stays the source line for every account.
 
 ### 2.3 `prompts/keywords_v3.md`
@@ -136,7 +144,7 @@ A new file (rule 4), recorded in `prompts/metadata.json` (`released`, `model_def
 ### 2.5 The release flag (R6)
 
 `Settings.hook_variants: bool = False` (`HOOK_VARIANTS`).
-- **Off:** `captions.stage_version(settings) == "3"`, `captions.keywords_prompt(settings) == "keywords_v2"`, so `producer_version` is byte-identical to today's (pinned). Every item ships today's title, so the pick is skipped and the item is stamped with the account's **control** pattern (`HookResult(pattern_id=<control>, version=<its version in the rotation>, text=<highlights title>)`); with no rotation, no stamp. Stamps always say what shipped.
+- **Off:** `captions.stage_version(settings) == "3"`, `captions.keywords_prompt(settings) == "keywords_v2"`, so `producer_version` is byte-identical to today's (pinned). Every item ships today's title, so the pick is skipped and the item is stamped with the account's **control** pattern (`HookResult(pattern_id=<control>, version=<its version in the rotation>, text=<highlights title>, drawn=False)`); with no rotation, no stamp. Only drawn stamps (flag on) enter the stats (§5), so these flag-off stamps don't swell the control's baseline. Stamps always say what shipped.
 - **On:** "4", `keywords_v3`; `runner.producer_version` reads the stage version and prompt name through the same two functions, so the clips `producer_version` changes once, opening ADR-49's window of 5 items on each clips account (about 15 reviews across realtalk, founder.tapes and hombre).
 - The owner flips it on alone right after HK-2 deploys, unless another clips stage or prompt bump is due the same week (then they ship together, #439).
 
@@ -154,20 +162,20 @@ The call is recorded under the captions stage, as today. `keywords_v2` costs abo
 
 | Table | Columns | One writer |
 |---|---|---|
-| `hook_patterns` | `id text PK`, `account_id FK NULL`, `blueprint_name text NULL`, `status text` (`draft`, `approved`, `retired`), `current_version int`, `control bool`, `created_at`, `updated_at`; check: exactly one of `account_id`, `blueprint_name` | `hooks/library.py` |
+| `hook_patterns` | `id text PK`, `account_id FK NULL`, `blueprint_name text NULL`, `status text` (`draft`, `approved`, `retired`), `current_version int`, `control bool` (set at creation, never versioned), `created_at`, `updated_at`; check: exactly one of `account_id`, `blueprint_name` | `hooks/library.py` |
 | `hook_pattern_versions` | `pattern_id FK`, `n int`, `data jsonb` (`HookPatternData`), `author text NOT NULL`, `note text NULL`, `created_at`; PK `(pattern_id, n)`; **append-only**: a trigger rejects UPDATE and DELETE (as S3c's `*_versions`) | `hooks/library.py` |
 | `hook_weights` | `account_id FK`, `pattern_id FK`, `weight float NOT NULL CHECK (weight >= 0)`, `updated_by`, `updated_at`; PK `(account_id, pattern_id)` | `hooks/library.py` |
-| `hook_freezes` | `id identity`, `account_id FK`, `experiment_id text`, `rotation jsonb` (`HookRotation`), `frozen_at`, `frozen_by` (actor), `released_at NULL`, `released_by NULL`; partial unique index on `account_id WHERE released_at IS NULL` | `hooks/library.py` |
+| `hook_freezes` | `id identity`, `account_id FK`, `experiment_id bigint` (S3c's `experiments.id`), `rotation jsonb` (`HookRotation`), `frozen_at`, `frozen_by` (actor), `released_at NULL`, `released_by NULL`; partial unique index on `account_id WHERE released_at IS NULL` | `hooks/library.py` |
 | `hook_ratings` | `item_id PK FK content_items`, `rating smallint CHECK (rating IN (-1, 1))`, `actor`, `at` | `hooks/ratings.py` |
 | `hook_events` | `id identity`, `at`, `actor`, `account_id NULL`, `pattern_id NULL`, `kind` (`seeded`, `created`, `version`, `approved`, `retired`, `shared`, `weight`, `frozen`, `released`, `rated`, `rerendered`), `data jsonb` (from → to, reason); **append-only** by trigger | `hooks/library.py`, `hooks/ratings.py`, `hooks/rerender.py` (each its own kinds) |
 
-New columns on `content_items`: `hook_pattern_id text NULL`, `hook_version int NULL` (composite FK to `hook_pattern_versions`), `hook_weights jsonb NULL`, `hook_result jsonb NULL` (variants, chosen, fallback, manual, the rotation id, `frozen_by`), `superseded_by text NULL FK content_items`. Written once, at enqueue (the stamp) or by `hooks/rerender.py` (`superseded_by`); NULL for items made before HK.
+New columns on `content_items`: `hook_pattern_id text NULL`, `hook_version int NULL` (composite FK to `hook_pattern_versions`), `hook_weights jsonb NULL`, `hook_result jsonb NULL` (variants, chosen, fallback, manual, the rotation id, `frozen_by`), `superseded_by text NULL FK content_items`. The stamp columns are written once, at enqueue; `superseded_by` is written by `posting/actions.supersede` (§6), the one writer of verdicts and `post_events`. NULL for items made before HK.
 
 Every `actor` and `author` column uses the S2 actor format (`telegram:`, `web:`, `session:`, `cli:`, `system:`; at most 80 characters) with the same check constraint. The seeds use `system:migration`.
 
 ### 3.2 Item records outside Postgres
 
-- `metadata.json`: `PackagedClip.hook` (the full `HookStamp`).
+- `metadata.json`: `PackagedClip.hook` (the full `HookStamp`) and `versions.hook_rotation`. **Re-renders are not written into `metadata.json`:** they happen after package, and rewriting the job's durable record from another step would give `metadata.json` a second writer. A re-render is recorded in Postgres (the new item with its stamp, `superseded_by` on the old one, the `rerendered` hook event) and its files sit under `<job_id>/rerender/<clip_id>r<N>/`.
 - The Dict (`STATE_READS=dict`, until S1 Task 23): the posting item keeps today's fields; the stamp lives in Postgres and `metadata.json` only. `posting verify` compares neither the stamp nor `superseded_by`; the superseded item's reject is Dual-written (§6), so verify stays at 0.
 
 ### 3.3 The migration
@@ -185,23 +193,23 @@ Every `actor` and `author` column uses the S2 actor format (`telegram:`, `web:`,
 | Name | Structure (given to the LLM) | Example EN | Example ES |
 |---|---|---|---|
 | **Highlight title** (control) | Ship the clip's own title unchanged | — | — |
-| **Number + stakes** | Lead with a specific number from the clip and what it cost or won | `$40K GONE IN ONE WEEK` | `40 MIL PERDIDOS EN UNA SEMANA` |
+| **Number + stakes** | Lead with a specific number from the clip and what it cost or won. Only numbers and claims said in the clip; no promises | `$40K GONE IN ONE WEEK` | `40 MIL PERDIDOS EN UNA SEMANA` |
 | **Open question** | A question the clip answers, without giving the answer | `WHY DID HE WALK AWAY?` | `¿POR QUÉ LO DEJÓ TODO?` |
-| **Bold claim** | The speaker's strongest claim, stated flatly | `COLLEGE IS A SCAM` | `LA UNIVERSIDAD ES UNA ESTAFA` |
+| **Bold claim** | The speaker's strongest claim, stated flatly. Only claims said in the clip; no promises | `COLLEGE IS A SCAM` | `LA UNIVERSIDAD ES UNA ESTAFA` |
 | **Contrarian** | Name the common belief, then flip it | `EVERYONE SAYS SAVE. DON'T.` | `TODOS DICEN AHORRA. NO.` |
 | **The moment when** | The turning point as a scene: "the day…", "the moment…" | `THE DAY I GOT FIRED` | `EL DÍA QUE ME DESPIDIERON` |
 
-All six have `fits = ["clips"]`, `max_words = 8` (the highlights prompt's limit today), and `control = true` only for the first. The control ships about 1 item in 6 and is the baseline every other pattern is judged against. Approving this spec approves the six (R3); the owner edits them from the Hooks page or the CLI like any pattern.
+All six have `fits = ["clips"]` and `max_words = 8` (the highlights prompt's limit today); only the first is created with `hook_patterns.control = true`. The "no promises" lines keep rewritten titles inside what the speaker said, because ADR-29's gate checks health and earnings claims. The control ships about 1 item in 6 and is the baseline every other pattern is judged against. Approving this spec approves the six (R3); the owner edits them from the Hooks page or the CLI like any pattern.
 
 ### 4.2 Rotation (`hooks/rotation.py`, pure)
 
 - `resolve(patterns, weights, open_freeze) -> HookRotation`: an open freeze's snapshot wins; otherwise the approved patterns whose `fits` include the producer, with weight > 0, at their **current** versions. Patterns shared to the account's blueprint are included with the account's own weight row (0 until the owner sets one).
 - `pick(rotation, seed) -> HookPick | None`: a weighted draw from `int(seed, 16) / 2**256` over the entries in `(pattern_id, version)` order. `None` when the rotation is empty: the producer behaves as the control and stamps nothing.
-- `hooks/library.py::rotation_for(account_id, producer, now) -> HookRotation` reads the tables and calls `resolve`; `service.create_job` calls it.
+- `hooks/library.py::rotation_for(account_id, producer) -> HookRotation` reads the tables and calls `resolve`; `service.create_job` calls it.
 
 ### 4.3 Weights (R7)
 
-- Only an owner tap changes a weight: the Hooks page, `clipforge hooks weight <pattern> <weight> --account <id> --reason`, or `PUT /hooks/{id}/weight`. Each change writes a `weight` event (from → to, reason, actor).
+- Only an owner tap changes a weight: the Hooks page, `clipforge hooks weight <pattern> <weight> --account <id> --reason`, or `PUT /admin/hooks/{id}/weight`. Each change writes a `weight` event (from → to, reason, actor).
 - Approving a draft sets its weight to 1.0 unless one is given. Retiring sets it to 0 and keeps the history; a retired pattern can be approved again.
 - The system **suggests** (§5): "likely worse than control" suggests halving or retiring; "likely better" suggests doubling. A suggestion is a button that pre-fills the change; nothing moves on its own.
 
@@ -210,14 +218,14 @@ All six have `fits = ["clips"]`, `max_words = 8` (the highlights prompt's limit 
 - **The contract is S3c's `HookFreezer` protocol** (card 018's plan; coordinator, 2026-10-02), which takes the caller's connection:
   ```python
   class HookFreezer(Protocol):
-      def freeze(self, conn: Connection, account_id: str, experiment_id: str) -> None: ...
-      def release(self, conn: Connection, account_id: str, experiment_id: str) -> None: ...
+      def freeze(self, conn: Connection, account_id: str, experiment_id: int) -> None: ...
+      def release(self, conn: Connection, account_id: str, experiment_id: int) -> None: ...
   ```
   S3c's experiment start, stop and decide (keep or revert) call it **inside their own transaction**, for every account in the experiment's scope. Until the hooks build, `runtime.build_deps` wires S3c's no-op.
-- **The hooks build implements it** as `hooks/library.py::SqlHookFreezer` on `hook_freezes` (the one writer) and wires it in `runtime.build_deps` in place of the no-op. `freeze` stores the live rotation (as `resolve` would build it now) and `release` closes the open row; both run on the given connection, are idempotent, and write `frozen` and `released` events with actor `system:experiment` and the experiment id in `data` (the protocol carries no actor; the person who started or decided the experiment is on S3c's own records).
+- **The hooks build implements it** as `hooks/library.py::SqlHookFreezer` on `hook_freezes` (the one writer) and wires it in `runtime.build_deps` in place of the no-op. `freeze` stores the live rotation (as `resolve` would build it now) and `release` closes the open row; `freeze` is a no-op for an account with no `hook_weights` rows (no library yet), as S3c's plan expects; both run on the given connection, are idempotent, and write `frozen` and `released` events with actor `system:experiment` and the experiment id in `data` (the protocol carries no actor; the person who started or decided the experiment is on S3c's own records).
 - **If the hooks build deploys after S3c-3** (experiments already running), `clipforge hooks seed` freezes each running experiment's accounts right after writing their patterns, through the same `SqlHookFreezer` and S3c's read of running experiments. That's the one-off that creates the library, so no account can rotate unfrozen during a running experiment. Before S3c-3 there is nothing to freeze, and the step reports "0 running experiments".
 - While a freeze is open, `rotation_for` returns the snapshot. Edits, approvals, retirements and weight taps are still saved (the library is never blocked, ADR-50) and apply at release. The Hooks page shows ❄ and "changes apply when experiment <id> ends". So both sides of an experiment rotate hooks the same way, and the weights in force are on every item.
-- An open freeze whose experiment is no longer `running` (a crash between the two writes) becomes a digest line once S3c exists; it is never released silently.
+- An open freeze whose experiment is no longer `running` (a crash between the two writes) becomes a digest line, owned by the hooks build because it owns `hook_freezes` (§7.3); it is never released silently.
 
 ### 4.5 Sharing
 
@@ -225,37 +233,37 @@ All six have `fits = ["clips"]`, `max_words = 8` (the highlights prompt's limit 
 
 ## 5. Ranking (`hooks/stats.py`, pure, derived on read)
 
-No cron and no stored scores: `GET /hooks/{id}/stats` and the Hooks page compute them from the items, verdicts, review events, ratings and (after S7) metrics.
+No cron and no stored scores: `GET /admin/hooks/{id}/stats` and the Hooks page compute them from the items, verdicts, review events, ratings and (after S7) metrics.
 
-**Per pattern** (versions pooled, with a per-version breakdown), compared with the account's **control**:
+**Per pattern** (versions pooled, with a per-version breakdown), compared with the account's **control**, over **drawn** items only (`HookResult.drawn`), so flag-off control stamps and manual titles never enter a rate:
 
 | Measure | Definition | From |
 |---|---|---|
-| Items | stamped items, excluding superseded and fallback | `content_items` |
+| Items | drawn items, excluding superseded and fallback | `content_items` |
 | Fallback rate | fallback ÷ stamped | `hook_result` |
 | Posted rate | posted on ≥ 1 platform ÷ decided (S3c §4.1) | verdicts, `posts` |
-| Reject rate | rejected ÷ decided (S3c §4.1), excluding `superseded` | verdicts |
+| Reject rate | rejected ÷ decided (S3c §4.1), excluding rejects with reason `superseded:<id>` | verdicts, `post_events` |
 | Approval rate | approved ÷ counted review decisions (S2 §5.2: person actors only, R2) | `post_events` (`approved`, `reviewed`), from S2b |
 | 👍 share | 👍 ÷ rated | `hook_ratings` |
 | After S7: 3-second hold, views at 24 h | median with p25–p75, items past their maturity age (48 h) only | S7's metrics tables |
 
 - **Verdicts** follow S3c §4.3: a 90% Wilson interval per rate, **too few items** below 10 decided on either side, then **likely better**, **no clear difference** or **likely worse** against the control. Continuous metrics compare p25–p75 ranges.
-- **Weak** = likely worse than the control on the reject rate, the approval rate or the 👍 share, with ≥ 10 decided items each. `hooks.stats.weak(account_id) -> list[WeakPattern]` feeds the `hook_weak` "needs me" row (S3 §7.11) at **digest** level only (ADR-45), with a suggested weight.
+- **Weak** = likely worse than the control on the reject rate, the approval rate or the 👍 share, with ≥ 10 decided items each. `hooks.stats.weak(...) -> list[WeakPattern]` feeds the `hook_weak` "needs me" row (S3 §7.11) at **digest** level only (ADR-45), with a suggested weight, through `HookWeakProvider` and the digest line (§7.3).
 - Settled only: an item still queued or undecided counts as pending, never as a failure.
 
-**Ratings (R4):** `hooks/ratings.py::rate(item_id, rating, actor, now)` upserts `hook_ratings` (the latest wins) and writes a `rated` event. Only the dashboard calls it (`PUT /items/{id}/hook-rating`); Telegram doesn't change.
+**Ratings (R4):** `hooks/ratings.py::rate(item_id, rating, actor, now)` upserts `hook_ratings` (the latest wins) and writes a `rated` event. Only the dashboard calls it (`PUT /admin/items/{id}/hook-rating`); Telegram doesn't change.
 
 ## 6. Re-rendering one item (G21)
 
 The S3 Review page's "re-render" (and the Hooks page's "try this pattern on this item") call one service.
 
-- **Route:** `POST /items/{id}/rerender` with `{"pattern": "<pattern_id>@<version>"}` or `{"title": "..."}`, and `?preview=true` for the cost line. The handler calls `hooks/rerender.py::request(item_id, choice, actor, now)` (Modal-free), which validates and spawns `rerender_step(job_id, clip_id, choice)` in `app.py`.
-- **What runs:** only captions and render for the same `ClipSpec` (same source, start and end), from the cached transcript, highlights and reframe. A pattern runs `keywords_v3` with that pick; a title runs it in control mode with the given title as the source line (key words only), and the result has `manual = true` and `pattern_id = None`.
+- **Route:** S3's `POST /admin/review/{item}/rerender` (#619; one re-render path for Review and the Hooks page) with `{"pattern": "<pattern_id>@<version>"}` or `{"title": "..."}`, and `?preview=true` for the cost line. The handler calls `hooks/rerender.py::request(item_id, choice, actor, now)` (Modal-free), which validates and spawns `rerender_step(job_id, clip_id, choice)` in `app.py`.
+- **What runs:** only captions and render for the same `ClipSpec` (same source, start and end), from the cached transcript, highlights and reframe. A pattern runs `keywords_v3` with that pick; a title runs it in control mode with the given title as the source line (key words only), and the result has `manual = true` and `pattern_id = None`; its captions key carries `hook = "manual:<sha16 of the title>"` (§2.2), so two titles never share a cached result.
 - **The new item:** id `<job_id>:<clip_id>r<N>` (N = 1, 2, …), a new stamp (the job's rotation weights, plus the actor in the `rerendered` event), the old item's platforms and its place in the queue (S2's planner keeps the slot; before S2, the assisted pick sees the new item with the old one's score and episode).
-- **The old item:** `superseded_by` is set, and it leaves the queue through `posting/actions.reject(posting, ref, actor, now)` (Dual-written, so `posting verify` stays at 0) with no reason, plus a `superseded` `post_events` row. Superseded items are excluded from review counts (S2's windows and ladder), the reject rate and hook stats.
+- **The old item:** a new `posting/actions.supersede(posting, ref, new_ref, actor, now)`, the one writer of verdicts and `post_events`, rejects it with reason **`superseded:<new id>`** and sets `superseded_by`, in one action. The verdict is Dual-written as a reject with no `RejectReason` (the Dict's `PostVerdict.reason` stays `None`, so `posting verify` stays at 0); the reason is on the `rejected` `post_events` row (`data.reason`). That reason is excluded from S2's ladder and demotion counts, S3c's reject-rate metric (§10.4, §10.6) and hook stats.
 - **Refused** (409, with the reason) when any platform of the item is posted, handed off or in flight (`publishing:inflight:<ref>`), or when the item is already superseded. A missing source video is a `PermanentError` with "the source is gone".
 - **Cost:** one captions call (about $0.0025) and one render (about $0.005–0.01 of CPU), shown by `preview` before the owner confirms; recorded on the job's costs like any clip.
-- **S3's Review button** stays disabled until HK-2 ships (the route answers 404 before then).
+- **S3's Review button** stays disabled ("arrives with the hooks build", #619) until HK-2 ships the route.
 
 ## 7. Surfaces
 
@@ -263,16 +271,21 @@ The S3 Review page's "re-render" (and the Hooks page's "try this pattern on this
 
 | Route | What |
 |---|---|
-| `GET /accounts/{id}/hooks` | the library: pattern, version, status, scope, weight (❄ when frozen), items, rates with intervals, verdicts |
-| `POST /hooks` | create a **draft** (also + Hook idea's target, S3 §1) |
-| `PUT /hooks/{id}` | a new version (`data`, `note`) |
-| `POST /hooks/{id}/approve`, `/retire`, `/share` | status and scope changes |
-| `PUT /hooks/{id}/weight` | `{account_id, weight, reason}` |
-| `GET /hooks/{id}/stats` | §5 for one pattern, with versions |
-| `PUT /items/{id}/hook-rating` | `{rating: 1 | -1}` |
-| `POST /items/{id}/rerender` | §6 |
+| Route | What | Used by | Router |
+|---|---|---|---|
+| `GET /admin/accounts/{id}/hooks` | the library: pattern, version, status, scope, weight (❄ when frozen), items, rates with intervals, verdicts | CLI, dashboard | `cli_router` |
+| `POST /admin/hooks` | create a **draft** (also + Hook idea's target, S3 §1) | CLI, dashboard | `cli_router` |
+| `PUT /admin/hooks/{id}` | a new version (`data`, `note`) | CLI, dashboard | `cli_router` |
+| `POST /admin/hooks/{id}/approve`, `/retire`, `/share` | status and scope changes | CLI, dashboard | `cli_router` |
+| `PUT /admin/hooks/{id}/weight` | `{account_id, weight, reason}` | CLI, dashboard | `cli_router` |
+| `POST /admin/hooks/seed` | §4.1 (`dry_run`) | CLI | `cli_router` |
+| `GET /admin/hooks/{id}/stats` | §5 for one pattern, with versions | CLI, dashboard | `cli_router` |
+| `PUT /admin/items/{id}/hook-rating` | `{rating: 1 | -1}` | dashboard | admin only |
+| `POST /admin/review/{item}/rerender` | §6 (S3's path, #619) | dashboard | admin only |
 
-They mount on S3-1's **`admin`** endpoint when it exists. If the hooks build lands first, they mount on **`web` behind the bearer token** (as S1's `/accounts` and `/sources` routes do today) and move to `admin` with S3-1 (coordinator, 2026-10-02). Every write takes an actor; errors answer "Store unavailable, nothing changed" like `posting/actions`.
+**Where they mount** (coordinator, 2026-10-02; #610, #146):
+- The routes the CLI also uses (`clipforge hooks …`) go into S3's `cli_router`. Until S3-5b's cut-over they are mounted on both `web` (`API_TOKEN`) and `admin`; at S3-5b they move to `admin` only, with the rest of `cli_router`.
+- The dashboard-only routes (the rating and re-render) go on `admin` only. If the hooks build lands before S3-1's `admin` endpoint exists, they mount on `web` behind the bearer token and move to `admin` with S3-1. Every write takes an actor; errors answer "Store unavailable, nothing changed" like `posting/actions`.
 
 ### 7.2 CLI
 
@@ -282,7 +295,11 @@ They mount on S3-1's **`admin`** endpoint when it exists. If the hooks build lan
 
 - **Interim page** `/hooks?account=<id>` in `web/`: the library table, ❄ and the freeze notice, the approval rate per pattern as a dot with its 90% interval and direct labels (plus a table view), Edit (v+1), Approve, Retire, Share to blueprint, Weight with the suggestion pre-filled, and the recent items with 👍/👎.
 - **The Hooks tab** at `/accounts/<id>?tab=hooks` in S3c's workspace replaces it; `/hooks?account=<id>` then redirects there. Both paths join the link contract (S3 §7.10), so cards 018 and 019 can link them now.
-- **Digest:** the `hook_weak` row ("realtalk: 'Contrarian' is likely worse than the control on rejects, 4 of 12 → set weight 0.5?") links to `/hooks?account=<id>` (later the tab). Never instant.
+- **Needs row:** `hooks/needs.py::HookWeakProvider`, S3's `Provider` protocol for kind `hook_weak` (S3 plan Task 6), registered through `runtime.build_deps(needs_providers=…)` (#147), so the hooks build never edits `needs/`. `rows` lists §5's weak patterns per account (subject `<account_id>:<pattern_id>`, level digest, about 1 minute); actions `apply` (sets the suggested weight through `HookLibrary.set_weight` with the tapping actor and the reason "suggested: likely worse than control on <measure>") and `open` (`/hooks?account=<id>`); `done` reads the pattern's last `weight` or `retired` hook event.
+- **Digest lines** through S2c's `DigestProvider`s (#142), registered in `runtime.build_deps`, so `dispatch/digest.py` isn't edited:
+  - `hooks.digest.weak_line`: "realtalk: 'Contrarian' is likely worse than the control on rejects, 12 of 20 → set weight 0.5?", linking to `/hooks?account=<id>` (later the tab);
+  - `hooks.digest.stale_freeze_line`: "hooks frozen by experiment 12, which isn't running" for an open `hook_freezes` row whose experiment isn't `running` (read through S3c's experiments repo; registered only once S3c's table exists). The hooks build owns it because it owns `hook_freezes`.
+- Never instant (ADR-45).
 
 ## 8. Story hooks (S6) on the same interface
 
@@ -295,7 +312,7 @@ X4 found that the story's hook is a beat, not a caption: frame 0 is a striking i
 | avatar (S8) | the script's first line |
 
 - **One library, one draw, one stamp per item.** A pattern's `fits` says which producers may draw it; story patterns are seeded by S6 with its accounts.
-- **The shared interface** (`hooks/variants.py`): `render_task(pick, language, n=3) -> str` (the prompt block), `HookVariants` (the reply sub-model each producer embeds in its own versioned prompt's reply), and `settle(reply: HookVariants | None, fallback_text, pick) -> HookResult` (cleaning, rule 5's fallback). Rotation and stamping are `hooks/rotation.py` and `HookStamp`, as for clips.
+- **The shared interface** (`hooks/variants.py`): `render_task(pick, language, source_line, n=3) -> str` (the prompt block), `HookVariants` (the reply sub-model each producer embeds in its own versioned prompt's reply), and `settle(reply: HookVariants | None, pick, fallback_text, *, drawn: bool) -> HookResult` (cleaning, rule 5's fallback). Rotation and stamping are `hooks/rotation.py` and `HookStamp`, as for clips.
 - **S6's use:** its `create_job` freezes a rotation for `story`; its script step picks with `seed = sha256(brief hash, rotation.id)`, puts `render_task` into its script prompt, writes the best opening as the first line (07: in the first 3–5 s, never "welcome back"), passes `frame_brief` to the shot plan, and stamps the item. The fallback is the script's own first line. About 2K tokens in and 300 out more than a script without hooks: **about $0.0035 per story item**.
 
 ## 9. Build, tests, safety, rollback, cost
@@ -305,7 +322,7 @@ X4 found that the story's hook is a beat, not a caption: frame 0 is a striking i
 | Part | Contents | Owner steps | The owner sees |
 |---|---|---|---|
 | **HK-1** data and library (flag off; clip output unchanged) | the `keywords_v1` comment fix first; contracts; the migration (numbered at landing, `EXPECTED_HEAD`); `hooks/library.py` (with `SqlHookFreezer`, wired in `runtime.build_deps`), `rotation.py`; `hooks seed` (freezing running experiments, §4.4); `JobInput.hooks` at create; control stamps at enqueue and in `metadata.json`; routes and CLI | migrate (`DATABASE_URL_UNPOOLED`, the runbook's way), `scripts/deploy.sh --dry-run`, deploy, `clipforge hooks seed`, then one clip job: its item shows `hook_pattern_id` = the control | `clipforge hooks list --account realtalk-clips-en` shows six patterns |
-| **HK-2** variants | `keywords_v3` and `metadata.json`; the flag; the pick in the clip step; `HookResult` through captions, render, package; `ContentItem.title` = the shipped text; `stats.py`, `ratings.py`, `weak()`; re-render | deploy; set `HOOK_VARIANTS=true` (docs/ops/secrets.md's add-only procedure) and redeploy; review the 5-item windows | the first clip with a rewritten title card, its stamp and its variants in `metadata.json` |
+| **HK-2** variants | `keywords_v3` and `metadata.json`; the flag; the pick in the clip step; `HookResult` through captions, render, package; `ContentItem.title` = the best line as written; `stats.py`, `ratings.py`, `HookWeakProvider` and the digest lines; re-render on S3's route with `actions.supersede` | deploy; set `HOOK_VARIANTS=true` (docs/ops/secrets.md's add-only procedure) and redeploy; review the 5-item windows | the first clip with a rewritten title card, its stamp and its variants in `metadata.json` |
 | **HK-3** interim page | `/hooks?account=` in `web/` | after S3's dashboard build has the admin client; otherwise it folds into S3c's Hooks tab | the page on the phone and the laptop |
 
 ### 9.2 Tests
@@ -314,11 +331,12 @@ X4 found that the story's hook is a beat, not a caption: frame 0 is a striking i
 - `pick` is deterministic for a seed and follows the weights (a χ² check over 6,000 seeds); an empty rotation returns `None`.
 - Captions: the same pattern is a cache hit; another pattern re-runs captions only; with the flag off the key and `producer_version` are byte-identical to today's (pinned values).
 - Rule 5: one retry with the error, then the highlights title with `fallback = true`; `title_keyword` is checked against the cleaned best line; a variant over `max_words` is invalid.
-- Every new clip item is stamped; the stamp's text equals the title card's text; its weights are the job's rotation's.
+- Every new clip item is stamped; the title card shows `title_words(stamp.text)`, and `ContentItem.title` is the line as written; its weights are the job's rotation's; stats count drawn items only.
 - During a freeze, edits and weight taps are saved but the rotation is the snapshot until release.
 - `SqlHookFreezer` writes on the caller's connection: when the caller's transaction rolls back, no freeze row or event remains; `freeze` and `release` are idempotent; `hooks seed` freezes the accounts of experiments already running.
 - Stats: Wilson intervals, the 10-item floor, the verdict labels, and the superseded and fallback exclusions; `weak()` needs ≥ 10 decided items.
-- Re-render: refused when posted, handed off, in flight or already superseded; the old item leaves the queue with `posting verify` at 0; the new item keeps the slot; cost recorded.
+- Re-render: refused when posted, handed off, in flight or already superseded; a second request while one runs is refused; the old item leaves the queue through `actions.supersede` with reason `superseded:<new id>` and `posting verify` at 0; the new item keeps the slot; a manual title has its own cache key; cost recorded.
+- `HookWeakProvider` registered through `build_deps` lists a weak pattern and `apply` sets the suggested weight; both digest lines are skipped, not fatal, when their reads fail.
 - Routes: actors validated, 503 without the token, the "Store unavailable" path.
 - Cost recorded for every call. DB tests use the `db` fixture and fail, never skip, without Postgres. The LLM is mocked.
 
@@ -348,7 +366,7 @@ Owner attention: 👍/👎 is optional (about 0 minutes); weights are a few taps
 
 ### 10.1 04 (roadmap), HK section (this card edits it at checkpoint B)
 
-The HK list gains: the seed library, the `HOOK_VARIANTS` flag and its one-time window, the freeze snapshot called by S3c, owner-set weights with suggestions, re-render (G21), the interim page, and the three parts HK-1 to HK-3. Exit unchanged.
+The HK list gains: the seed library, the `HOOK_VARIANTS` flag and its one-time window, the freeze snapshot called by S3c, owner-set weights with suggestions, the `hook_weak` needs provider and digest lines, re-render (G21) on S3's route, the interim page, and the three parts HK-1 to HK-3. Exit unchanged.
 
 ### 10.2 08 (this card edits it at checkpoint B)
 
@@ -358,25 +376,29 @@ The HK list gains: the seed library, the `HOOK_VARIANTS` flag and its one-time w
 
 No new ADR: the design stays within ADR-50. The freeze is a snapshot table instead of the outline's `frozen_by_experiment` column, and the variants are written in the drawn pattern (R2); both are readings of ADR-50, not changes to it.
 
-### 10.4 The S2 spec and plan (for card 014/015's owner, via the coordinator)
+### 10.4 The S2 spec and plan (for cards 014 to 016, via the coordinator)
 
-- §5.2's counted decisions exclude items with a `superseded` event.
+- `posting/actions.py` gains `supersede(posting, ref, new_ref, actor, now)`: a reject with reason `superseded:<new id>` on the `rejected` `post_events` row, and `superseded_by` set, in one action (the hooks build adds it; §6).
+- §5.2's counted decisions and §5.5's ladder and demotion counts exclude rejects whose reason is `superseded:<id>`.
+- The digest takes the hooks build's `DigestProvider`s from `runtime.build_deps` (#142); nothing in `dispatch/digest.py` changes.
 - The actor check already allows `system:`; nothing else changes.
 
-### 10.5 The S3 dashboard spec and plan (card 019)
+### 10.5 The S3 dashboard spec and plan (cards 019, 022–027)
 
 - §8.5: "a 'hooks' stage in Results → Costs" becomes "captions (incl. hook variants)" (§2.7).
-- §7.5 Review: the re-render button calls `POST /items/{id}/rerender` (disabled until HK-2) and 👍/👎 calls `PUT /items/{id}/hook-rating`.
+- §7.5 Review: Re-render calls S3's `POST /admin/review/{item}/rerender` (#619), disabled until HK-2; 👍/👎 calls `PUT /admin/items/{id}/hook-rating` (both `admin` only).
 - §7.10: add `/hooks?account=<id>` and `/accounts/<id>?tab=hooks`.
-- §8.7: the landing order includes S3's migration (coordinator, 2026-10-02).
-- S3-1 moves the hooks routes from `web` to `admin` if HK landed first.
+- §8.7: the landing order includes S3's migration (#620).
+- Needs: `HookWeakProvider` (kind `hook_weak`) is registered through `runtime.build_deps(needs_providers=…)` (#147).
+- **S3 plan Task 1's `cli_router` gains the hooks routes the CLI uses:** `GET /admin/accounts/{id}/hooks`, `POST /admin/hooks`, `PUT /admin/hooks/{id}`, `POST /admin/hooks/{id}/approve`, `POST /admin/hooks/{id}/retire`, `POST /admin/hooks/{id}/share`, `PUT /admin/hooks/{id}/weight`, `POST /admin/hooks/seed`, `GET /admin/hooks/{id}/stats`. They move to `admin` only at S3-5b's cut-over (#146). If the hooks build lands after S3-1, it adds them to `cli_router` itself; if before, S3-1's Task 1 moves them in with the rest.
+- The dashboard-only routes (`PUT /admin/items/{id}/hook-rating`, `POST /admin/review/{item}/rerender`) go on `admin` only; if the hooks build lands before S3-1, they sit on `web` behind the bearer token until S3-1 moves them.
 
 ### 10.6 The S3c spec and plan (card 018)
 
-- §2.6 and §5: S3c defines the `HookFreezer` protocol (`freeze(conn, account_id, experiment_id)`, `release(conn, account_id, experiment_id)`), calls it in experiment start, stop and decide inside their own transaction for every account in scope, and wires a no-op in `runtime.build_deps` until the hooks build replaces it with `SqlHookFreezer` (§4.4). Card 018's plan already carries this (coordinator, 2026-10-02).
+- §2.6 and §5: S3c defines the `HookFreezer` protocol (`freeze(conn, account_id, experiment_id: int)`, `release(conn, account_id, experiment_id: int)`), calls it in experiment start, stop and decide inside their own transaction for every account in scope, and wires a no-op in `runtime.build_deps` until the hooks build replaces it with `SqlHookFreezer` (§4.4). Card 018's plan already carries this (coordinator, 2026-10-02).
 - §2.5: the Hooks tab is built on §7.1's routes; `/hooks?account=` redirects to it.
-- §4.1: hook metrics stay on the Hooks tab, not in the experiment metric registry (already proposed by the S3 spec §10.3).
-- An open freeze whose experiment isn't running becomes a digest line ("hooks frozen by a finished experiment").
+- §4.1: hook metrics stay on the Hooks tab, not in the experiment metric registry (already proposed by the S3 spec §10.3). The reject-rate metric excludes rejects with reason `superseded:<id>`.
+- The "open freeze whose experiment isn't running" digest line is the hooks build's (§7.3), not S3c's; S3c only exposes a read of running experiments.
 
 ### 10.7 S6 (card to be written)
 
