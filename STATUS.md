@@ -2,11 +2,11 @@
 
 The one page that says where things stand. The coordinator updates it after every merged PR and every report. Detail lives in the linked files; this page only summarizes, and closed items move out (their record is in `docs/reports/` and the decision log).
 
-Last updated: 2026-10-02 night (cards 017 (PR #37) and 019 (PR #38) merged; S3's build written as cards 022–027 on prefix `s3b/`, log #145; owner ruling: `web` ends public-only at the cut-over, log #146).
+Last updated: 2026-10-03 morning (rollout moved to 2026-10-03, 13:30 New York; posting waiting on two clips; PRs #41 and #42 open; card 018 finishing its review changes).
 
 ## Now
 
-**Production.** The `clipforge` Modal app runs the code of `dea435d` (deployed 2026-10-02 02:10 UTC; restarted from `6e832a7`, docs-only changes, at 03:14 UTC), Dict-only (`STATE_READS=dict`, `DATABASE_URL` not in `clipforge-secrets`). `posting_tick` runs every 5 minutes; deploy blackout in runbook §1. The first clean night is in: `posting_daily` ran at 07:00 UTC on 2026-10-02 (420 keys touched, a 36-key snapshot, rebuild 0), and the 08:00 and 10:30 slots sent. Two clips wait on the owner's taps, so the tick says "waiting" until they're answered.
+**Production.** The `clipforge` Modal app runs the code of `dea435d` (deployed 2026-10-02 02:10 UTC; restarted from `6e832a7`, docs-only changes, at 03:14 UTC), Dict-only (`STATE_READS=dict`, `DATABASE_URL` not in `clipforge-secrets`). `posting_tick` runs every 5 minutes; deploy blackout in runbook §1. The first clean night is in: `posting_daily` ran at 07:00 UTC on 2026-10-02 (420 keys touched, a 36-key snapshot, rebuild 0), and the 08:00 and 10:30 slots sent. Two clips wait on the owner's taps, so the tick says "waiting" until they're answered. On 2026-10-03, `posting_daily` ran at 07:00 UTC (426 keys touched, a 42-key snapshot, rebuild 0), but the tick has said "waiting" since the 2026-10-02 13:00 slot: two clips sent without a tap, so no slot sends until the owner answers them.
 
 **Incident, 2026-10-02 (fixed 03:14 UTC):** `DATABASE_URL` was in the secret before rollout step 1's migration, so every read of `sources` or `jobs` hit an empty database: `GET /posting` answered 500, and `/next` and Telegram taps that send the next clip failed (the Dict stayed primary; nothing was lost). The owner removed the key and redeployed (`docs/ops/deploys.md`). Card 010 now checks the key is absent before step 1.
 
@@ -18,7 +18,7 @@ Last updated: 2026-10-02 night (cards 017 (PR #37) and 019 (PR #38) merged; S3's
 
 **Decided today (card 009):** the dashboard is the studio's control room, inbox-first, for a ~20-minute daily phone check-in. Each account runs on autopilot as far as it has earned: three switches and a review dial, a graduation ladder where promotions are always the owner's tap (ADR-48). A new producer version opens only a 5-item review window (ADR-49). Hooks get a versioned library with rotation (ADR-50). founder.tapes and hombre.en.construccion launch with S2, which is now the next big step after S1's rollout.
 
-**Open PRs:** #39 (dependabot: GitHub Actions major-version bumps). Card 010's live steps (checkpoint B) start after 22:00 New York time.
+**Open PRs:** #41 (card 021, S5 spec; plan in progress) · #42 (card 020, hooks spec; plan in progress). Card 018 (S3c) opens its PR after its review changes. Card 010's live steps (checkpoint B) are set for 2026-10-03 at 13:30 New York time (the 22:00 window on 2026-10-02 was missed).
 
 ## Waiting on the owner (most important first)
 
