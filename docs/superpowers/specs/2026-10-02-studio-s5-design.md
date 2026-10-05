@@ -30,6 +30,7 @@ S5 builds what every generative producer needs, so that S6 (the story producer) 
 | Registry shape | **Data registry with one engine** (§6) |
 | Section 1 changes | A narration failing its guard twice fails the item with an ops alert (no "review"); full cache-key inputs per stage; GPU seconds and `ctx.report` in every new stage; Kokoro only as a model-level fallback per account |
 | Coordinator note | `scaledown_window` per server in the registry, sized from the gap between items plus a margin (60–120 s); idle-tail cost next to cold-start cost |
+| Coordinator review of the written spec (2026-10-03, log #591–#596) | The split is its own card after card 014 is deployed (§7.1); clips' `producer_version` frozen at `clips:4c44b731` (§6.4); the loudness-label fix deferred (§8.2); queued and running bounds from a registry batch cap (§5.2); the bed level relative to the narration (§8.1); crossfades on real frames first, inputs normalized (§8.2); the warm-window assumption measured at S5-4 (§5.2) |
 
 Out of scope: the story producer and its steps (S6), b-roll and RIFE (S6), talking heads (S8, after X2), the Judge (S6), Kokoro serving (only if an account needs it), the bulk LLM router (ADR-32, deferred), database tables (none).
 
@@ -86,7 +87,7 @@ class MusicGen(Protocol):
 
 | Stage | Input | Output | Cache key (ADR-8; never `job_id`, rank or ids) |
 |---|---|---|---|
-| `narrate` | script lines (spoken text and display text per line), `VoiceRef`, language, base seed | `Narration`: wav, per-line start/end, display words with times, guard stats (attempts, WERs, durations) | spoken text of every line, display text, language, `voice.ref_hash`, base seed, the TTS and aligner model revisions, `narrate.STAGE_VERSION` (covers the chunking rules and the guard thresholds) |
+| `narrate` | script lines (spoken text and display text per line), `VoiceRef`, language, base seed | `Narration`: wav, per-line start/end, display words with times, guard stats (attempts, WERs, durations), integrated loudness `lufs` (for the bed level, §8.1) | spoken text of every line, display text, language, `voice.ref_hash`, base seed, the TTS and aligner model revisions, `narrate.STAGE_VERSION` (covers the chunking rules and the guard thresholds) |
 | `stills` | `StillPrompt[]`, `StyleLock`, size, base seed | `StillOut[]` | model id and revision, the style lock (suffix and negative prompt), each prompt, width, height, seed, `stills.STAGE_VERSION` |
 | `music` | `BedPrompt` | `BedOut` | mood, duration, seed, model revision, `music.STAGE_VERSION` |
 
@@ -127,6 +128,8 @@ gpu = "L4"; memory_mib = 16384
 snapshot = "cpu"                     # "none" | "cpu" | "gpu" (§5.4)
 scaledown_window_s = 90              # the gap between items in a batch plus a margin (§5.3)
 max_containers = 1
+max_batch_items = 6                  # S6's planner submits at most this many items at once (§5.2)
+item_s = 300                         # warm upper bound per item; queue_s = max_batch_items × item_s
 ```
 
 Registered in S5: `qwen3-tts-base`, `faster-whisper-turbo` (the Narrator's Volume copy; the transcribe image keeps its baked copy, ADR-11), `qwen-image-2512` (`25468b98e3276ca6700de15c6628e51b7de54a26`, resolved by this card's probe), `qwen-image-2512-lightning` (`a52649c9d0f6e1a248bff13f0df33bb8a2abdb52`, file `Qwen-Image-2512-Lightning-8steps-V1.0-bf16.safetensors`), `ace-step-1.5` (X4's `19671f40`, code tag `v0.1.6`), and `hello` (no weights). Kokoro, Z-Image and the Wan models are registered by the card that first serves them.
@@ -161,7 +164,9 @@ Registered in S5: `qwen3-tts-base`, `faster-whisper-turbo` (the Narrator's Volum
 
 S6 submits an account's day of items together. Without a cap, Modal would start one container per waiting call, each paying the cold start. With `max_containers = 1`, the items queue on one warm container, and the gap between two calls is only the chain's hand-off latency (a CPU step finishing and spawning the next). So `scaledown_window_s` is the hand-off gap plus a margin: **90 s** for the Narrator and stills, 60 s for music (bank jobs only), as the coordinator asked (60–120 s, not a flat 5–10 min). It is a registry setting per server, so S6 can tune it from measured gaps. The cap also keeps S5's servers inside Starter's 10-GPU limit.
 
-A queued call isn't a stalled job: each registry step has `queue_s` (the worst queue it can wait behind its cap), and the sweeper fails it only after `timeout_s + queue_s + 5 min` (§6.4).
+**The warm-window assumption, stated:** with the cap, queued calls run back to back on one container, so the idle gap between two of them is about 0, plus the chain's hand-off (a CPU step finishing and spawning the next) when an item's next GPU call depends on a CPU step in between. The window only has to cover that hand-off. S5's servers checkpoint measures it: the hello run with 4 parts records each call's idle gap on the container (`HelloResult.idle_before_s`), and the owner step records the numbers before S6 relies on them.
+
+**Queued is not stalled** (coordinator's review): the registry enforces a batch cap per server, `max_batch_items` (stills 6, Narrator 6, music 4, hello 4), and S6's planner never submits more than that per server at once. Each server step's `queue_s = max_batch_items × item_s` (`item_s`: the server's warm upper bound per item, a registry value). The engine records which step a job (or part) is waiting for at hand-off (`Job.waiting_for`, or the part's `pending` status), and the sweeper uses two bounds: **queued** (handed off, not started) fails after `queue_s + 5 min` from the hand-off; **running** (the step started: `engine.start` or the part set `running`) fails after `timeout_s + 5 min` from the start, as today.
 
 ### 5.3 Cost per server (rates: L4 $0.80/h, L40S $1.95/h; memory included where it matters)
 
@@ -217,7 +222,7 @@ None of S5's models is gated, so S5 needs **no Hugging Face token** (the card's 
 ### 6.1 Contracts (additive; old Dict records and API clients read as before)
 
 - `JobInput.producer: str = "clips"` and `JobInput.params: dict[str, Any] | None = None`. For `clips`, today's validator applies (exactly one source). For any other producer: no source, `permission` must be `own`, and `params` is validated by the producer's input model in `service.create_job` (`HelloParams` here, `StoryParams` in S6).
-- `Job.producer: str = "clips"`.
+- `Job.producer: str = "clips"`, and `Job.waiting_for: str | None = None` (the step id handed off to and not yet started; set by the engine's hand-off, cleared by `engine.start`; the sweeper's "queued" bound, §5.2).
 - `StageName` gains `narrate`, `stills`, `music`, `hello`.
 - `outputs`, `clip_ids`, `ClipState` and `job:<id>:clip:<part>` keep their names: a fan-out unit is still a "clip" record. The naming debt is noted and goes only with an API change.
 - No migration: `jobs.input` is JSON and already carries the producer; `content_items.producer` exists since S1.
@@ -251,14 +256,14 @@ class Producer:
 - Per producer: one handler per step. **The clip handlers are today's step bodies, moved without edits.**
 - `dispatch(deps, step, job_id, part_id)` reads the job's producer, finds the step and runs it.
 - `resume` walks the producer's steps: the first single or fanout step without an output; otherwise the unfinished parts; otherwise the fan-in.
-- `sweep` finds the job's step from `job.stage` and fails it after `timeout_s + queue_s + STALL_MARGIN_S`.
-- `Spawner.spawn(producer, step, job_id, part_id)`; `modal_app` binds `runner` to a Modal function or a server's `run_step`. `create_job` spawns the producer's first step. `Deps.version` comes from the producer, so clips keep `clips:<today's hash>`.
+- `sweep` uses two bounds (§5.2): a job with `waiting_for` set (or a part still `pending`) fails after `queue_s + STALL_MARGIN_S` from the hand-off; a started step fails after `timeout_s + STALL_MARGIN_S` from its start (found from `job.stage`, as today).
+- Step ids are unique across producers: clips keep their bare names (`ingest` … `package`), every other producer's steps are `<producer>.<step>` (`hello.prepare`). So `Spawner.spawn(step, job_id, part_id)` and `dispatch(deps, step, job_id, part_id)` keep today's signatures (and every chain test keeps its calls); the registry resolves a step id to its producer and `StepDef`. `modal_app` binds each step's `runner` to a Modal function or a server's `run_step` (the plan, 2026-10-03, settled this detail; it was `spawn(producer, step, …)` in the approved section). `create_job` spawns the producer's first step. `Deps.version` comes from the producer, so clips keep `clips:<today's hash>`.
 
 ### 6.4 Proving clips are unchanged
 
 - Today's tests for the steps, resume and the sweeper run unchanged against the engine.
 - A golden test runs a whole clips job with fake stages and compares, before and after the refactor: the Dict keys written, the spawn sequence, `outputs`, and the `metadata.json` fields.
-- A pinned test checks the `producer_version` string; the stage modules and cache keys aren't touched.
+- **`producer_version` stays exactly `clips:4c44b731`** (today's value with the default models, computed 2026-10-03). The facts behind it become per producer: clips hash a frozen list of today's 7 stages (ingest, transcribe, highlights, reframe, captions, render, package) and their versions, never the new `narrate`, `stills` or `music` stages, so adding a stage for another producer never moves clips' version or opens an ADR-49 window. A pinned test asserts the literal `clips:4c44b731` with default settings; the stage modules and cache keys aren't touched.
 
 ### 6.5 The hello producer
 
@@ -272,6 +277,13 @@ class Producer:
 - `src/clipforge/modal_app/`: `__init__.py` (`app`), `resources.py` (Volumes, Dict, secret), `images.py` (the base and whisper images, and the server images from the registry), `pipeline.py` (step functions and the spawner binding), `servers.py`, `crons.py`, `web.py`, `weights.py`, `entrypoints.py` (`doctor`, `gpu_doctor`, `smoke`, `db_doctor`, `weights`).
 - `app.py` stays as a short deploy entry (`from clipforge.modal_app import app` plus the entrypoints), so `modal run src/clipforge/app.py::doctor`, `scripts/deploy.sh`, CI and the docs don't change. The rule "only `app.py` imports modal" becomes "only `app.py` and `modal_app/`", enforced by a test.
 - Function names and settings are identical, so deploying the split changes nothing live.
+- **In a container** `modal deploy` mounts `app.py` alone at `/root/app.py`; it imports `clipforge.modal_app` from the package every image already mounts (`add_local_python_source("clipforge")`), never through a relative path. `_repo_root` moves to `modal_app/images.py` and counts three parents from there (`/` in a container). No image builder imports the app (`run_function` stays unused).
+- **Everything the split touches:**
+  - `tests/test_app.py`: the boundary test (`test_only_app_imports_modal`, line 66) becomes `tests/test_modal_boundary.py`; the container-path tests (lines 72–78: `_repo_root`, `run_function`) read `modal_app/images.py`;
+  - S3's plan Task 2 tests that read `src/clipforge/app.py` for the `admin` function read the module that defines `web`/`admin` (`modal_app/web.py`);
+  - `CLAUDE.md` ("app.py … the only modal importer", the layout), `docs/ARCHITECTURE.md` ("`app.py` is the only Modal module"), the `new-stage` skill (`.claude/skills/new-stage`), the S2/S3 cards' "only `app.py` imports `modal`" lines;
+  - `scripts/deploy.sh` and CI keep `src/clipforge/app.py` as the entry; nothing to change there except comments that call it the only Modal module.
+- **Landing (coordinator's review, #144, #145):** the split conflicts with every S2a and S3 card that edits `app.py`, so it is **its own code card**, landed between two deployed cards: **right after card 014 (S2a) is deployed, and before card 015 or 022 starts**. It moves whatever `app.py` holds at that moment (S2a's `dispatcher` included), verbatim.
 
 ### 7.2 Cost (rule 7)
 - Each server step records `StageCost(stage, gpu_s, gpu_type, usd_estimate)` for its GPU work. `StageCost` gains `cold_start_s: float | None = None`, set on a container's first call, so S7 can see the cold-start share per item.
@@ -298,18 +310,21 @@ class Crossfade(Contract):
     duration_s: float = Field(0.4, gt=0, le=1.0)
 
 VideoSegment.transition_in: Crossfade | None = None   # the same on StillSegment; not allowed on the first segment
-AudioTrack.duck_db: float | None = None               # music only; None = today's sidechain duck
+AudioTrack.duck_db: float | None = None               # music only: extra attenuation while the voice speaks;
+                                                      # None = today's sidechain duck
 
 class ProducedStyle(Contract):                        # a producer's settings (S6 tunes them; no renderer code)
-    duck_db: float = 16.0          # X4: the bed about -15 to -18 dB under the voice
-    crossfade_s: float = 0.4       # X4: the owner's pick in e2e3 (log #474)
-    bed_gain_db: float = 0.0
+    bed_under_voice_db: float = 16.0   # X4 rule 8: the bed's static level, this far under the narration
+    duck_db: float = 6.0               # extra attenuation while a line is spoken (on top of the static level)
+    crossfade_s: float = 0.4           # X4: the owner's pick in e2e3 (log #474)
 ```
 
+X4 wants the bed "about 16 dB under the voice" **before** ducking (coordinator's review), so the level is relative, not an attenuation: the `narrate` stage measures its narration's integrated loudness (`Narration.lufs`), the `music` stage normalizes every bed to -20 LUFS with a 1 s fade in and 2 s fade out (`BedOut.lufs`), and the producer sets the music track's `gain_db = (narration.lufs - bed_under_voice_db) - bed.lufs`. `duck_db` then dips it further under each spoken line. The final two-pass loudness (ADR-47) moves both together.
+
 ### 8.2 Graph (`render_graph.py`)
-- **Crossfade, centered on the cut**, so cuts, narration and captions keep their times. Both neighbours are padded by d/2 (`tpad=stop_duration=…:stop_mode=clone`, `start_mode=clone`), the held frame X4 used for b-roll, then joined with `xfade=transition=fade:duration=d:offset=…`. With no `transition_in` in the Timeline, today's `concat` graph is built unchanged.
-- **`duck_db`:** a deterministic gain envelope instead of the level-dependent compressor: the music drops by `duck_db` over the union of the narration tracks' spans, with 150 ms ramps (`volume=…:enable=…`). The producer places one narration track per line (X4 rule 6), so pauses between lines let the bed come back. With `duck_db=None`, today's `sidechaincompress` runs. Beds are loudness-normalized once by the `music` stage (X4 rule 8), not in the renderer.
-- **S4's deferred minors:** `-pattern_type none` on still inputs (a `%` in a path); short b-roll padded with a cloned last frame up to 0.5 s, beyond that still a `PermanentError`; the loudness-mode label boundary fixed. The 1 ms string rounding is fixed only if the golden clip strings don't move; otherwise it stays deferred.
+- **Crossfade, centered on the cut**, so cuts, narration and captions keep their times. Each neighbour is extended by d/2 into the fade: **with real footage where the media has spare frames** (a video segment's `in_s` can start d/2 earlier, or its media runs d/2 past the out point; a still or Ken Burns segment simply holds or keeps moving), and with cloned frames (`tpad … start_mode/stop_mode=clone`) **only as the fallback** when the media has none (e2e1's freeze complaint). Before `xfade`, every part is normalized (`fps=<tl.fps>`, `settb=AVTB`, `format=yuv420p`, `setsar=1`), because ffmpeg 5.1 rejects mismatched inputs. The parts are joined with `xfade=transition=fade:duration=d:offset=…`. With no `transition_in` in the Timeline, today's `concat` graph is built unchanged.
+- **`duck_db`:** a deterministic gain envelope instead of the level-dependent compressor: the music drops by `duck_db` over the union of the narration tracks' spans, with 150 ms ramps (one `volume=eval=frame` expression). The producer places one narration track per line (X4 rule 6), so pauses between lines let the bed come back. With `duck_db=None`, today's `sidechaincompress` runs. Beds are loudness-normalized once by the `music` stage (X4 rule 8), not in the renderer.
+- **S4's deferred minors:** `-pattern_type none` on still inputs (a `%` in a path); short b-roll padded with a cloned last frame up to 0.5 s, beyond that still a `PermanentError`. **The loudness-mode label boundary stays deferred** (coordinator's review): fixing it would change `RenderedVideo.loudness` for clips under the same key with `STAGE_VERSION` still 4. The 1 ms string rounding is fixed only if the golden clip strings don't move; otherwise it stays deferred.
 - `doctor` gains a filter check that runs **inside the Modal base image** (`xfade`, `tpad`, `sidechaincompress`, `zoompan`, `loudnorm`, `amix normalize`), closing S4's "the filter check doesn't run inside the Modal image".
 
 ### 8.3 Cache key and `render.STAGE_VERSION`
@@ -335,7 +350,8 @@ The render tests for crossfades, padding and the envelope also run in a `debian:
 - `@pytest.mark.gpu`: one real call per server on Modal (run by the owner at the servers' checkpoint).
 
 ### 9.2 Build checkpoints (each deploys alone, after S1's rollout and outside the blackout, only through `scripts/deploy.sh`)
-1. **The `modal_app/` split.** Deploying changes nothing live; `smoke`.
+Every checkpoint is a code card deployed with its owner steps done before the next code card merges (#144), taking its turn with the S2 and S3 cards (#145). S5 has **no Neon migration**. `JobInput.producer`/`params` change the API contract, so S5-2 regenerates `web/openapi.json` (`uv run python scripts/export_openapi.py`) and the client (`npm --prefix web run gen`).
+1. **The `modal_app/` split** (its own card, right after card 014 is deployed and before card 015 or 022 starts, §7.1). Deploying changes nothing live; `smoke`.
 2. **Registry and engine, clips on it.** `smoke`, then one real channel job.
 3. **`media/`, the three stages, the renderer additions.** No live change; bookworm render tests.
 4. **Weight functions, servers and hello.** Owner: `weights --model` for each entry, `--prep` for Qwen-Image, `doctor`, deploy, `uv run clipforge run --producer hello`, the gpu-marked tests.
@@ -368,5 +384,9 @@ For the coordinator (out of this card's scope):
 - **02 §4:** "throughput models use `@modal.batched`" → per-item step methods with capped warm containers (§5.1); snapshots per server by measurement; the Narrator is TTS + aligner in one class. **02 §3:** the story row's `tts → align` is one `narrate` step. **02 §10:** `producers/registry.py` + `pipeline/engine.py`; `app.py` + `modal_app/`.
 - **04 S6 and 06's S6 card:** S6 builds the b-roll server (Wan2.2 A14B, bf16 copies prepared on the Volume, X4) on S5's pattern; story Timelines use `ProducedStyle` and `captions.for_words`; narration goes through the `narrate` stage; Kokoro is served only if an account switches to it; "RIFE" stays optional (X4).
 - **06's S5 card:** owner steps lose the Hugging Face token (§5.5); add the weight downloads and the hello run.
+- **S6 (04, 06, its spec):** the planner submits at most `max_batch_items` items per server at once (§5.2), and story Timelines set the bed level from `bed_under_voice_db` (§8.1).
+- **The S3 plan, Task 2:** its tests that read `src/clipforge/app.py` for the `admin` function read the module that defines it (`modal_app/web.py`) once the split has landed (§7.1).
+- **The S2 and S3 cards, `CLAUDE.md`, `docs/ARCHITECTURE.md`, the `new-stage` skill:** "only `app.py` imports `modal`" → "only `app.py` and `modal_app/`" when the split lands (§7.1).
+- **The coordinator's card list:** the split is a card of its own between card 014's deploy and card 015 or 022 (§7.1).
 - **The S4 spec:** a historical note that S5 closed the deferred minors (§8.2), or the ones it deferred.
 - **CLAUDE.md layout and ARCHITECTURE:** at the build, not now (`modal_app/`, `producers/`, `media/`).

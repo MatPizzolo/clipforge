@@ -1,6 +1,6 @@
 # 05: Proposed ADRs
 
-Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39. Accepted later: ADR-41 (S1, written into `docs/DECISIONS.md` by card 002 on 2026-09-30) and ADR-42 to ADR-46 (2026-09-30), ADR-47 (two-pass loudness, 2026-10-01), ADR-48 to ADR-50 (autopilot, the producer-version window, the hook library; 2026-10-01), and ADR-27 (the dispatcher) and ADR-33 (tracking links only) with card 011's S2 spec (2026-10-02). Accepted ADRs live only in `docs/DECISIONS.md`, which is binding; this file keeps one-line pointers to them, except ADR-43 to ADR-46. The drafts left are ADR-36, 37, 40 and 51 (proposed) and ADR-32 (deferred). The next free number is ADR-52. To accept a draft, copy it into `docs/DECISIONS.md` with `Status: Accepted` and the acceptance date. ADR-24 is already taken by the Dict keep-alive (plan C Task 6).
+Accepted in the 2026-09-29 kickoff review: ADR-25, 26, 28, 29, 30, 31, 34, 35, 38, 39. Accepted later: ADR-41 (S1, written into `docs/DECISIONS.md` by card 002 on 2026-09-30) and ADR-42 to ADR-46 (2026-09-30), ADR-47 (two-pass loudness, 2026-10-01), ADR-48 to ADR-50 (autopilot, the producer-version window, the hook library; 2026-10-01), and ADR-27 (the dispatcher) and ADR-33 (tracking links only) with card 011's S2 spec (2026-10-02). Accepted ADRs live only in `docs/DECISIONS.md`, which is binding; this file keeps one-line pointers to them, except ADR-43 to ADR-46. The drafts left are ADR-36, 37, 40, 51 and 52 (proposed) and ADR-32 (deferred). The next free number is ADR-53. To accept a draft, copy it into `docs/DECISIONS.md` with `Status: Accepted` and the acceptance date. ADR-24 is already taken by the Dict keep-alive (plan C Task 6).
 
 ---
 
@@ -71,3 +71,14 @@ Date: 2026-10-01 · Status: Proposed (split from ADR-33 on 2026-10-01; build in 
 Context: ADR-33's tracking links count clicks; money per video and per account also needs the sales those clicks produced.
 Decision: Import conversions from programs with APIs (ClickBank, Hotmart) on a daily dispatcher task, and from CSV uploads otherwise (Skool, Amazon, TikTok Shop), matching each sale to a link by its sub-id. Store them in a `conversions` table with the program, amount, currency, time and sub-id.
 Consequences: Revenue per video and per account in the dashboard, which is the "scale the winners" loop; the per-program importers are maintained as the programs change.
+
+## ADR-52: Media servers and the producer registry
+Date: 2026-10-03 · Status: Proposed (card 021's S5 spec, `docs/superpowers/specs/2026-10-02-studio-s5-design.md` §10; refines ADR-12 and ADR-30; built in S5)
+Context: ADR-30 runs open media models as `modal.Cls` servers, and ADR-12's step chain is hard-coded for clips. S6 onwards add producers whose GPU steps run on models with cold starts of 20 s to 3 minutes (measured by card 021's probe), at 1–2 items per account per day.
+Decision:
+- Every producer is a list of steps in a Modal-free registry (`producers/registry.py`), run by one engine (`pipeline/engine.py`: guard, hand-off, fan-out, fan-in, resume, sweep). Clips keep their step names, keys and `producer_version`.
+- A GPU step runs inside its media server's class as `run_step`, one item per call. Each server has `max_containers` (default 1), `max_batch_items` and `scaledown_window` in `media/registry.toml`, so a batch of items reuses one warm container; the window is the gap between items plus a margin. The sweeper bounds queued steps by the batch cap and running steps by their timeout.
+- Memory snapshots are chosen per server by measurement: CPU snapshots by default, GPU snapshots (alpha) only where a measurement shows they pay for their creation cost.
+- Derived weights (fused LoRAs, converted precisions) are prepared once on the `clipforge-models` Volume with a manifest that servers check at startup; servers mount the Volume read-only and never download.
+- No `@modal.batched` until there are many small concurrent calls.
+Consequences: a new producer is a step list and handlers; a new model is a registry entry and an adapter. Cold starts are paid once per batch, and the idle tail is bounded by the window. One server per model family means S6's b-roll and S8's talking head reuse the pattern.

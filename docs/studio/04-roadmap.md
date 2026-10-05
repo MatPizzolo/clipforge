@@ -157,10 +157,13 @@ Its card is written after the rollout.
 - **Exit:** every new clip records its hook pattern and version, and the Hooks tab ranks patterns per account.
 
 ## S5: Media servers and producer registry
-- [ ] `media/` protocols plus `registry.toml` with a license-allowlist test. A `clipforge-models` Volume with one-off weight download functions.
-- [ ] `modal.Cls` servers for TTS, aligner, image and music (from X1/X4), using memory snapshots, `@modal.batched` (except TTS: Qwen3-TTS runs unbatched behind the guard until batching is re-tested under it, per X1) and step methods inside the class.
-- [ ] Pipeline registry: `dispatch()` and `resume()` are driven by per-producer step lists. `app.py` splits into a `modal_app/` package (still the only Modal importer).
-- [ ] LLM tracing in Langfuse.
+Design and plan: **card 021** (2026-10-02/03): the spec `docs/superpowers/specs/2026-10-02-studio-s5-design.md` (owner-approved section by section, log #580–#596) and the plan `docs/superpowers/plans/2026-10-03-studio-s5.md`. Built as five code cards after S1's rollout, each deployed before the next code card merges (#144); the first (the `app.py` split) lands right after card 014 (S2a) is deployed and before card 015 or 022 starts. ADR-52 is proposed in 05.
+- [ ] **S5-1:** `app.py` split into a `modal_app/` package (still the only Modal layer, with `app.py` as the deploy entry); nothing changes live.
+- [ ] **S5-2:** pipeline registry: per-producer step lists drive `dispatch`, `resume` and the sweeper through one engine; clips run on it unchanged (`clips:4c44b731` frozen); a `hello` producer.
+- [ ] **S5-3:** `media/` protocols with fakes, `registry.toml` with a license-allowlist test; the `narrate` (TTS + X1's guard + word timings), `stills` and `music` stages; the renderer additions X4 asked for (crossfades, a duck depth, a bed level relative to the voice, captions from narration timings) without changing clip output (`render.STAGE_VERSION` stays 4).
+- [ ] **S5-4:** the `clipforge-models` Volume's weight download and prep functions; `modal.Cls` servers for the Narrator (Qwen3-TTS + faster-whisper, one L4), stills (Qwen-Image-2512 + Lightning, L40S) and music (ACE-Step 1.5, L4), with memory snapshots chosen by measurement, step methods inside the classes, one item per call on a capped warm container (no `@modal.batched`; TTS unbatched behind the guard, per X1); hello runs on an L4.
+- [ ] **S5-5:** LLM tracing in Langfuse (metadata only; on once the keys exist).
+- B-roll (Wan2.2 A14B) moves to S6, built on S5's server pattern (log #580).
 - **Exit:** the clip producer runs through the registry, and a no-op "hello" producer proves the GPU step pattern.
 
 ## S6: Story producer (first AI account live)
