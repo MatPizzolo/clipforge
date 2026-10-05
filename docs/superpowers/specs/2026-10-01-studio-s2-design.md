@@ -6,6 +6,14 @@ Date: 2026-10-01 · Card: [011](../../cards/011-s2-design.md) · Status:
 - Revised again after the coordinator's re-review (2026-10-02: the re-send window, the brake repair, the Dict markers, the retry check). **Approved by the coordinator with these changes in**; the plan follows (checkpoint B).
 - Decision log #440–#459.
 
+> **Amended by ADR-54 (2026-10-05): Telegram is notifications only** (owner ruling; log #149, #150). Where this spec and ADR-54 differ, ADR-54 wins. What changes:
+> - **No Telegram review cards** (§7.1): no approve or reject buttons, no `r:` callbacks, no `review/cards.py`, no `review_messages` table. Decisions happen only on the dashboard's Review page (card 024) through `review/service.py` and the `/admin/review` routes. At S − 2 h Telegram gets one notification, "N items need review → Open" (`review/notify.py`, through `ops.alert`, ADR-45's limits).
+> - **The 09:00 review batch and `REVIEW_BATCH` are removed** (Q3, R1, §4.3, §7.1); the digest no longer sends cards after it (Q4, §7.2).
+> - **The AssistedPublisher fallback is dropped** (Q5, §6.6): the fallback check becomes the final check, and a confirmed final failure settles the row as `final_failed` (was `fallback`), sends a `publish_failed` alert with Open → `/act/publish_failed/<item>:<platform>`, and shows in the failure rows (§7.3). A disconnected platform at hand-off is recorded `failed`, never sent to the phone. `publishing/assisted.py` isn't built.
+> - **Assisted posting is paused** (the owner's `/pause`, 2026-10-05) and is dormant code only: S2a keeps the `assisted` dispatcher task (braked); S2b unregisters it, so an account with Publish off or without a connected profile posts nothing (§1.1, §4.2). S2b moves realtalk to Upload-Post.
+> - **S2b's precondition:** card 024 (S3-3, the Review page) is deployed (build order 010 → 014 → 031 → 004 → 022 → 023 → 024 → 015 → 016).
+> - The rollback `--clear-publisher` leaves the account posting nothing (§9). The plan carries the task-level changes (its own amendment note).
+
 **What S2 is.** S2 is the step that replaces the owner's hand posting with publishing through Upload-Post, reviewed where it pays off. founder.tapes and hombre.en.construccion launch on it (ADR-48, #428). [04's S2 list](../../studio/04-roadmap.md) is the source. Every item in that list maps to a section here (§10).
 
 **What it builds on, without reopening:**
@@ -51,9 +59,9 @@ Date: 2026-10-01 · Card: [011](../../cards/011-s2-design.md) · Status:
 |---|---|---|
 | Q1 | O4, the Upload-Post plan | **Basic ($24, 5 profiles) now; upgrade to Professional when the 6th account is created** (S8). One profile per account, on all four platforms. Monthly until S2 proves out, then yearly |
 | Q2 | Order inside S2 | **Rails first, then the publisher:** S2a (rails, assisted flow unchanged), S2b (Upload-Post for realtalk on Hands-on), S2c (the rest of autopilot, digest, links, the two launches). §1 |
-| Q3 | The review lane before S3's Review page | **A morning batch, then 2 h cards:** at 09:00 one review card per undecided item in the plan's horizon; anything still undecided gets its card 2 h before its slot. A bridge behind `REVIEW_BATCH=on`, an exception to #427 that ends when S3's Review page ships. §7.1 |
-| Q4 | The digest | **One message at 09:00, then the cards.** Anomalies first; lines with nothing to say are left out. §7.2 |
-| Q5 | Accounts with Publish off | **Today's assisted flow, where sending is the review.** The gate still holds failing items. The fallback reuses the same card for the failed platforms only. §6.6 |
+| Q3 | The review lane before S3's Review page | **A morning batch, then 2 h cards:** at 09:00 one review card per undecided item in the plan's horizon; anything still undecided gets its card 2 h before its slot. A bridge behind `REVIEW_BATCH=on`, an exception to #427 that ends when S3's Review page ships. §7.1 · *Superseded by ADR-54: no cards, no batch; one notification and the Review page* |
+| Q4 | The digest | **One message at 09:00, then the cards.** Anomalies first; lines with nothing to say are left out. §7.2 · *ADR-54: no cards follow* |
+| Q5 | Accounts with Publish off | **Today's assisted flow, where sending is the review.** The gate still holds failing items. The fallback reuses the same card for the failed platforms only. §6.6 · *Superseded by ADR-54: assisted posting is paused, dormant code; no fallback card* |
 | Q6 | When an approved item goes to Upload-Post | **30 minutes before its slot,** with `scheduled_date = slot`. A late approval goes at once. §4, §6 |
 | Q7 | Where publishing state lives | **Approach A: on the `posts` rows** (one per item × platform), with the claim as a conditional update. A separate `publications` table (B) and Dict state (C) were rejected. §3 |
 
@@ -61,7 +69,7 @@ Date: 2026-10-01 · Card: [011](../../cards/011-s2-design.md) · Status:
 
 | # | Ruling | Here |
 |---|---|---|
-| R1 | The 09:00 review batch is exempt from ADR-45's 20-an-hour cap: it counts as one delivery, with paced sends (amends #442) | §7.1 |
+| R1 | The 09:00 review batch is exempt from ADR-45's 20-an-hour cap: it counts as one delivery, with paced sends (amends #442). *Superseded by ADR-54: the batch is removed* | §7.1 |
 | R2 | Assisted ✅ taps don't count toward the ladder or the producer-version window: a ✅ means "posted", not "reviewed". Counting starts at S2b | §5.2, §5.5 |
 | R3 | Planning and the digest run in the owner's time zone for every account | §4.2, §7.2 |
 | R4 | ADR-33 is accepted as tracking links only; conversion import becomes draft ADR-51 | §11.2, §11.3 |
@@ -81,11 +89,11 @@ S2 ships as three steps. Each is deployable and usable on its own.
 - The `clipforge autopilot` CLI and its admin API routes.
 
 **S2b: publishing for realtalk.** **Its build starts only after ruling R5's real call** (§9).
-- The `Publisher` protocol, `UploadPostPublisher` and `AssistedPublisher` (§6).
+- The `Publisher` protocol and `UploadPostPublisher` (§6; `AssistedPublisher` dropped by ADR-54).
 - Media links, the webhook and the publish reconcile.
-- The slot plan, the review cards (the 09:00 batch and the 2 h cards), hand-off 30 minutes before the slot, the claim, crash recovery, and the fallback for failed platforms only.
+- The slot plan, the "needs review" notification at S − 2 h (ADR-54), hand-off 30 minutes before the slot, the claim, crash recovery, and the final check (a failure row and an alert, no fallback).
 - `clipforge publisher check`.
-- **Exit:** realtalk publishes through Upload-Post on Hands-on, with every item approved by the owner in Telegram.
+- **Exit:** realtalk publishes through Upload-Post on Hands-on, with every item approved by the owner on the dashboard's Review page (ADR-54; card 024 is deployed first).
 
 **S2c: autopilot and measurement.**
 - The `sample` and `auto` dials, spot checks, the ladder (suggest, then the owner promotes) and automatic demotions (§5).
@@ -96,9 +104,9 @@ S2 ships as three steps. Each is deployable and usable on its own.
 ### 1.1 What "Publish on" means before a profile is connected
 
 ADR-48's presets all have Publish on, and controls never block each other: each says what it waits on.
-- An account whose `accounts.publisher` is empty shows **"Publish: on, waiting for a connected profile"** and runs the assisted flow (§6.6).
+- An account whose `accounts.publisher` is empty shows **"Publish: on, waiting for a connected profile"** and runs the assisted flow (§6.6). *ADR-54: in S2a that flow stays braked; from S2b it is unregistered, so the account posts nothing.*
 - Connecting the profile is an explicit owner step (§9). That step turns publishing on for that account.
-- Publish **off** is an override that keeps the assisted flow even when a profile is connected.
+- Publish **off** is an override that keeps the assisted flow even when a profile is connected. *ADR-54: from S2b, Publish off means the account posts nothing.*
 - Any change to the Publish switch or to `accounts.publisher` rewrites the account's `posting:schedule:<account>` copy (the accounts service, its one writer), because the dispatcher reads the publish path from that copy (§4.1).
 
 ### 1.2 New modules (all Modal-free; `app.py` stays the only Modal importer)
@@ -107,7 +115,6 @@ ADR-48's presets all have Publish on, and controls never block each other: each 
 |---|---|---|
 | `publishing/protocol.py` | the `Publisher` protocol and helpers for its contracts | — |
 | `publishing/upload_post.py` | `UploadPostPublisher` over httpx (no SDK, so one fake transport tests it) | — |
-| `publishing/assisted.py` | `AssistedPublisher`: wraps today's `bot/posting.py` delivery for a platform subset | through `posting/` as today |
 | `publishing/media.py` | signed per-item media links | — |
 | `publishing/state.py` | **the one writer of the `posts` publish columns** and of both Dict publishing keys: every transition of §6.2 | `posts` (publish columns), `post_events`, `publishing:inflight:<ref>`, `publish:last_handoff` |
 | `publishing/handoff.py` | the hand-off sequence (claim, publish, record, brake re-check) | through `state.py` |
@@ -115,7 +122,7 @@ ADR-48's presets all have Publish on, and controls never block each other: each 
 | `publishing/reconcile.py` | crash recovery, retries, status and history polling, unmatched deliveries | through `state.py` |
 | `review/routing.py` | pure routing: gate, sponsored, windows, dial, spot checks | — |
 | `review/service.py` | approve, reject and copy edits, with an actor (the S3 routes call it too) | `content_items` review columns |
-| `review/cards.py` | Telegram review cards and their callbacks (`r:` prefix) | `review_messages` |
+| `review/notify.py` | the "N items need review → Open" notification through `ops.alert` (ADR-54; replaces `review/cards.py`) | — (`ops.py`'s keys) |
 | `policy/gate.py` | the pure gate | — |
 | `accounts/autopilot.py` | presets and history | **`autopilot`, `autopilot_events`** |
 | `accounts/ladder.py` | pure ladder criteria over counted stats | — |
@@ -198,7 +205,7 @@ class PublisherProfile(Contract):
     publisher: PublisherProfile | None = None   # None: not connected; assisted only
 
 PublishState = Literal["pending", "claimed", "scheduled", "retrying", "published",
-                       "failed", "fallback", "cancelled"]
+                       "failed", "final_failed", "cancelled"]   # ADR-54: `fallback` became `final_failed`
 
 class PublishRequest(Contract):
     item_id: str; profile: str; platforms: list[Platform]
@@ -274,7 +281,7 @@ One expand-only migration. Its number is the next after the head on `main`: 0002
 |---|---|---|
 | `accounts` | `publisher jsonb NULL` (`PublisherProfile`) | the accounts service (edit). The webhook changes only the `disconnected` map, by calling that service |
 | `content_items` | `copy jsonb NULL`, `review_lane text NULL`, `review_reasons jsonb NULL`, `review_dial text NULL`, `review_window text NULL`, `gate jsonb NULL`, `approved_at timestamptz NULL`, `approved_by text NULL` | `review/service.py`: the routing stamp at plan time, the approval, and the copy edit. Rejection keeps using the existing `verdict_*` columns through `posting/actions.py` |
-| `posts` | `publisher text NULL` (`upload_post`, `assisted`), `state text NOT NULL DEFAULT 'pending'`, `claimed_at`, `scheduled_for`, `handed_off_at timestamptz NULL`, `request_id text NULL` (the hashed key, §6.2), `upload_job_id text NULL`, `attempts int NOT NULL DEFAULT 0`, `error text NULL`, `copy jsonb NULL` (frozen at hand-off); indexes `(state, scheduled_for)` and `(upload_job_id)` | **`publishing/state.py`**, through forward-only conditional updates (§6.2). The existing `external_id` holds the platform's post id and `url` its link (set with the publish state); `posted_at` keeps its writer, `PostingRepo.set_posted` (§3.1) |
+| `posts` | `publisher text NULL` (`upload_post`; `assisted` unused after ADR-54), `state text NOT NULL DEFAULT 'pending'`, `claimed_at`, `scheduled_for`, `handed_off_at timestamptz NULL`, `request_id text NULL` (the hashed key, §6.2), `upload_job_id text NULL`, `attempts int NOT NULL DEFAULT 0`, `error text NULL`, `copy jsonb NULL` (frozen at hand-off); indexes `(state, scheduled_for)` and `(upload_job_id)` | **`publishing/state.py`**, through forward-only conditional updates (§6.2). The existing `external_id` holds the platform's post id and `url` its link (set with the publish state); `posted_at` keeps its writer, `PostingRepo.set_posted` (§3.1) |
 
 `accounts.review_tier` stays, but nothing reads it after S2: `autopilot.review_dial` is the source (ADR-48). S3c's spec already moves the tier out of its "rules" class.
 
@@ -285,9 +292,7 @@ One expand-only migration. Its number is the next after the head on `main`: 0002
   - Readers treat a missing row as Hands-on (`hands_on(account)`), so an account created by code without the row, or a rollback, can never read as more automatic than Hands-on.
 - `autopilot_events(id identity, account_id, at, actor, field, from_value, to_value, reason)`, append-only: a trigger rejects UPDATE and DELETE, like S3c's `*_versions`.
 - `slot_plans(account_id, slot timestamptz, item_id NULL FK, state, planned_at, updated_at)`, primary key `(account_id, slot)`. **The one writer is `dispatch/plan.py`**: hand-off and the review service ask it to move a slot (`mark_handed_off`, `mark_approved`, `free`), and never write the table themselves.
-- `review_messages(item_id, chat_id, message_id, video_message_id, at, kind)`, with primary key `(chat_id, message_id)`.
-  - Every review card and every fallback card is recorded here, so a decision on any surface redraws all of them.
-  - Today's `sends` table can't hold them: a `sends` row makes the item's derived status `sent`.
+- ~~`review_messages`~~: removed by ADR-54 (no review or fallback cards to record). A sent "needs review" notification is redrawn through `ops.py`'s `alert:msg:<row id>` (#616).
 - `webhook_deliveries(delivery_id PK, event, received_at, payload jsonb, processed_at NULL)`. The replay guard (§6.4). Kept 30 days, pruned by `posting_daily`.
 - `links(slug PK, target_url, account_id FK, item_id NULL, platform NULL, kind, sub_param, created_at, created_by)` and `clicks(id identity, slug FK, at, platform NULL, sub_id, country NULL)`, indexed on `(slug, at)`. No IP address or user agent is stored.
 
@@ -296,7 +301,7 @@ One expand-only migration. Its number is the next after the head on `main`: 0002
 S2 assumes ADR-41's Dual writes stay on until S1 Task 23. S2 is **not** Postgres-only for anything the Dict already holds:
 - **"Posted" goes through the PostingRepo.** When the webhook or reconcile learns that a platform published, `publishing/state.py` records `published` (with `external_id` and `url`), then calls `posting.repo.set_posted(ref, platform, True, at, actor="system:upload-post")`. That is the same Dual write a ✅ tap uses: the primary (Postgres) sets `posted_at` and its event, and the mirror writes the Dict's `post:<ref>:posted:<platform>`. `posting verify` therefore stays at 0 differences while Upload-Post posts.
 - **Two Dict publishing keys, both written only by `publishing/state.py`** (one writer, ADR-14):
-  - **`publishing:inflight:<ref>`, per item.** It is set when a platform of the item is first claimed. It is deleted only when **every** platform the item was claimed on has reached `published`, `fallback` or `cancelled`. A row in `failed` or `retrying` keeps it, because Upload-Post may still publish it until the fallback check settles it. In `dict` mode (the rollback), the assisted pick (`_tick_account` and `/next`) excludes every item that has the key, so an item Upload-Post may still publish can't also go to the phone. Reconcile rewrites a missing one from the rows.
+  - **`publishing:inflight:<ref>`, per item.** It is set when a platform of the item is first claimed. It is deleted only when **every** platform the item was claimed on has reached `published`, `final_failed` (ADR-54; was `fallback`) or `cancelled`. A row in `failed` or `retrying` keeps it, because Upload-Post may still publish it until the final check settles it. In `dict` mode (the rollback), the assisted pick (`_tick_account` and `/next`) excludes every item that has the key, so an item Upload-Post may still publish can't also go to the phone. Reconcile rewrites a missing one from the rows.
   - **`publish:last_handoff`, fleet-wide.** The UTC time of the last hand-off. It is never deleted, only overwritten by each hand-off. Reconcile is due while it is under 26 hours old (§4.3).
   - **`posting_daily`'s keep-alive touch doesn't read either key, and needn't.** The per-item marker lives as long as its item is unsettled: minutes to a few hours, at worst about a day. That's far under the 7-day expiry, and while a marker exists, reconcile runs and rewrites it from the rows. The fleet key is rewritten at every hand-off, and once it's older than 26 hours nothing depends on it: the daily reconcile run covers the rest from the rows.
 - **What stays Postgres-only:** the publish columns, the slot plan, review stamps, autopilot, links and clicks. With `STATE_READS=dict`, the dispatcher runs today's assisted tick only, with the exclusion above; planning, cards and hand-off don't run. The webhook and reconcile keep running while Neon is up, so posts already handed off still reach `posted`.
@@ -310,7 +315,7 @@ S2 assumes ADR-41's Dual writes stay on until S1 Task 23. S2 is **not** Postgres
 1. `ops.flush(now)`: the alert fold, as the old tick did.
 2. Reads **only the Dict**: `brake:*`, `posting:outage`, the `posting:schedule:*` copies (which gain the account's publish path, `upload_post` or `assisted`, and its profile; §1.1, §6.7), `publish:last_handoff` (the time of the last hand-off, §3.1) and the task markers. The schedules come from `Posting.all_schedules()` (`posting/backend.py`): the Dict copies in `postgres` mode, and the env account's `POSTING_*` schedule in `dict` mode with no `DATABASE_URL` (production today). `posting_tick`'s `posting.problem` alert ("Posting is off: …") and its outage guard are kept, unchanged.
 3. Works out what is due from those reads alone. **Postgres is opened only when a task is due**, so Neon can still scale to zero between due times.
-4. Runs each due task within its budget. A slow task (the morning batch of review cards, the digest) is spawned as `dispatch_task(name, key)`, and the tick moves on.
+4. Runs each due task within its budget. A slow task (the digest; ADR-54 removed the morning batch of review cards) is spawned as `dispatch_task(name, key)`, and the tick moves on.
 
 A task is `Task(name, due(now, schedules, markers) -> list[key], run(ctx, key), budget_s)`, registered in `dispatch/tasks.py`. A due key is claimed set-if-absent as `dispatch:<name>:<key>` before it runs, so overlapping ticks run it once. A run that raises releases its claim, so the next tick retries it, and raises an ops alert (kind `dispatch`, subject the task name).
 
@@ -323,19 +328,19 @@ For each account whose schedule copy says `upload_post`:
 | Phase | Due | What it does (through `dispatch/plan.py` for slot changes) |
 |---|---|---|
 | `plan` | daily at 08:50 owner time (key `plan:<date>`, all accounts) | Assigns every slot in the horizon that has no plan yet. Picks with `queue.pick_next` repeatedly, skipping items already planned, held items (`sources.hold_reason(...)`, a function, returns a reason) and items with a Dict in-flight marker. Routes each item (§5.2) and stamps the routing through the review service. Auto-lane items are approved by `system:autopilot`. Writes `slot_plans` (`planned` or `approved`; `empty` if nothing is eligible) |
-| `card` | S − 2 h | If the slot's item is unapproved and has no 2 h card yet: send its review card (outside quiet hours, §7.1). If the slot is `empty`, or its item was rejected: plan a replacement now (a review-lane replacement gets its card at once) |
+| `review_notice` (was `card`, ADR-54) | S − 2 h | If the slot's item is undecided: send one "N items need review → Open" notification for the account (§7.1). If the slot is `empty`, or its item was rejected: plan a replacement now (a review-lane replacement is included in the notification) |
 | `handoff` | S − 30 min | If the item is approved: hand it off with `scheduled_date = S` (§6.2). If not: substitute an approved, unplanned item (there are any only on `sample`/`auto`); otherwise mark the slot `missed` and leave the item in the lane, planned first next time |
 
 - **A late approval,** between S − 30 min and S + 30 min (today's `SLOT_WINDOW`), hands off at once. It still sends `scheduled_date = S` while S is in the future, and no `scheduled_date` once S has passed. After S + 30 min the slot is `missed`, and the approved item leads the next plan.
-- **An account on the assisted path** (Publish off, or no connected profile) runs today's `_tick_account` at S, unchanged: the pause rule (`PAUSE_AFTER`), the outage guard, the #202 slot guard and the claim. It has no plan and no review cards: sending is the review (Q5).
+- **An account on the assisted path** (Publish off, or no connected profile) runs today's `_tick_account` at S, unchanged: the pause rule (`PAUSE_AFTER`), the outage guard, the #202 slot guard and the claim. It has no plan and no review cards: sending is the review (Q5). *ADR-54: this path is paused now and unregistered from S2b; it stays only as dormant code.*
 - **The gate still runs on the assisted path:** with `GATE_ENFORCE` on, an item with violations is held, never sent, and shows in the digest. In S2a the setting is off (the default): violations are only logged and stamped, so the live assisted flow can't change at the deploy. Items imported from the Dict could otherwise be held, for `license_unrecorded` without a source or `missing_credit`. The owner turns it on in S2b, once `clipforge policy dry-run` reports "0 items would be held" (plan Task 8).
 
 ### 4.3 Fleet tasks
 
 | Task | Due | Notes |
 |---|---|---|
-| `digest` | 09:00 owner time (`digest:<date>`) | Spawned. Sends the digest (§7.2), then the review cards for the undecided review-lane items in the plan's horizon (§7.1), paced |
-| `publish_reconcile` | every 15 min while `publish:last_handoff` is under 26 h old; once a day regardless (which covers rows still in flight after that) | Runs crash recovery for rows stuck in `claimed` (§6.3), the retry check and deliberate retries for rows in `retrying` (§6.2), status lookups for rows still `scheduled` 10 min after their slot, the fallback check (§6.6), and the unmatched webhook deliveries (§6.4). The daily run also reads history for the last 2 days, catching deliveries dropped during Upload-Post's 30-minute pauses. It rewrites missing per-item markers from the rows. Its writes go through `state.py` |
+| `digest` | 09:00 owner time (`digest:<date>`) | Spawned. Sends the digest (§7.2), ending with "N items need review → Open" (ADR-54: no cards follow) |
+| `publish_reconcile` | every 15 min while `publish:last_handoff` is under 26 h old; once a day regardless (which covers rows still in flight after that) | Runs crash recovery for rows stuck in `claimed` (§6.3), the retry check and deliberate retries for rows in `retrying` (§6.2), status lookups for rows still `scheduled` 10 min after their slot, the final check (§6.6; was the fallback check, ADR-54), and the unmatched webhook deliveries (§6.4). The daily run also reads history for the last 2 days, catching deliveries dropped during Upload-Post's 30-minute pauses. It rewrites missing per-item markers from the rows. Its writes go through `state.py` |
 | alert fold | every tick | `ops.flush`, moved from the tick |
 | (later) queue filler, analytics pull, program checks, weekly report | daily/weekly | S6, S7 and S3b register their tasks here; no new cron |
 
@@ -458,7 +463,7 @@ pending ─claim─► claimed ─publish accepted─► scheduled ─webhook / 
                    │ └─ retryable error ─► retrying ─retry claim (attempts+1, new key)─► claimed
                    │                          └─ attempts = 3 ─► failed
                    └─ crash recovery: no job and claim too old ─► failed
-   scheduled/failed ─fallback check (cancel ok, or lookup says failed)─► fallback ─ ✅ tap ─► set_posted (Dual)
+   scheduled/failed ─final check (cancel ok, or lookup says failed)─► final_failed ─► publish_failed alert + failure row (ADR-54; was ─► fallback ─ ✅ tap)
    scheduled ─brake─► cancelled ─/go─► pending
 ```
 
@@ -476,7 +481,7 @@ pending ─claim─► claimed ─publish accepted─► scheduled ─webhook / 
    ```
    - The copy is frozen here: `item.copy` or `captions.py`, with tracked links (§7.4).
    - The Dict in-flight marker is written in the same step (§3.1).
-   - Disconnected platforms go straight to the fallback (§6.6).
+   - Disconnected platforms are recorded `failed` (error `disconnected`) and settled by the final check (§6.6; ADR-54, no fallback).
 3. **Commit, then call** `publisher.publish(...)` with the key.
 4. **Record the receipt:** accepted platforms move to `scheduled` (`upload_job_id`, `scheduled_for`, `handed_off_at`). Rejected platforms move to `retrying` (retryable codes) or `failed` (final codes). `state.py` overwrites `publish:last_handoff`.
 5. **Re-check the brake.** If a brake now covers the account, cancel at once (§6.7): `/pause` may have run between steps 1 and 4.
@@ -501,7 +506,7 @@ The new key is minted from the new attempt number, then steps 3–5 run again. A
 - **Retryable:** 429 (the per-day caps), 5xx, timeouts and Upload-Post's `retryable`.
 - **Final:** a per-platform failure Upload-Post reports as final; validation errors (4xx other than 429); `tiktok_privacy_unavailable`; or a row still `scheduled` with no result 60 min after its slot (Upload-Post's own "failed after 1 h inactivity"), confirmed by the fallback check (§6.6).
 
-**The one claim per (item, platform).** Exactly three conditional updates give a row a publisher: the first claim (`publisher IS NULL AND state='pending'`), the retry claim (`publisher='upload_post' AND state='retrying'`) and the fallback claim (§6.6). The assisted path therefore runs only after Upload-Post's confirmed final failure, and the two can never both publish the same (item, platform).
+**The one claim per (item, platform).** Exactly two conditional updates give a row a claim: the first claim (`publisher IS NULL AND state='pending'`) and the retry claim (`publisher='upload_post' AND state='retrying'`). *ADR-54 dropped the third, the fallback claim:* a confirmed final failure only settles the row (`failed`/`scheduled` → `final_failed`), so nothing else ever publishes the same (item, platform).
 
 **The publish call** (`publishing/upload_post.py`): `POST /api/upload`, multipart, `Authorization: Apikey <UPLOAD_POST_API_KEY>`:
 - `user=<profile>`, `video=<media link>`, `platform[]=…`, `async_upload=true`;
@@ -553,6 +558,8 @@ A row still `scheduled` 10 minutes after its slot gets `lookup(job_id=…)`. Its
 
 ### 6.6 Fallback and the assisted path (`publishing/assisted.py`)
 
+> **Amended by ADR-54 (2026-10-05):** `AssistedPublisher` and `publishing/assisted.py` are dropped. The assisted path is paused, then unregistered in S2b (dormant code). The **fallback check below stays as the final check** (in `publishing/reconcile.py`), but its outcome changes: instead of the fallback claim and a card, a confirmed final failure moves the row to `final_failed` (`publisher` unchanged), sends the instant `publish_failed` alert with Open → `/act/publish_failed/<item>:<platform>`, and marks the item unavailable if its video is gone. The owner handles it on the dashboard (reconnect, or a posted correction). Read "fallback" below as "final failure".
+
 `AssistedPublisher` wraps today's `bot/posting._deliver` with a platform subset. It is used in two ways:
 - **Accounts on the assisted path** (Publish off, or no profile; Q5). This is today's flow at the slot, unchanged: the same `p:` callbacks, so old messages keep working. The gate holds violating items. In `dict` mode, items with a Dict in-flight marker are excluded (§3.1).
 - **The fallback.** Before any fallback claim, the **fallback check**:
@@ -601,11 +608,13 @@ A row still `scheduled` 10 minutes after its slot gets `lookup(job_id=…)`. Its
   - A row newer than the key → the key is rewritten to match the row.
   - **A missing key is never restored blindly.** A key can only be missing if it expired (impossible while the dispatcher reads it every tick) or was never written. Then the row is written to the Dict only if the row says paused, and the repair raises an ops alert so the owner sees it.
 
-The brake is one of the two one-tap actions Telegram keeps (#427).
+The brake is the one action Telegram keeps (ADR-54: no one-tap decisions).
 
 ## 7. Telegram, the digest, failure rows and tracking links
 
 ### 7.1 Review cards (`review/cards.py`)
+
+> **Superseded by ADR-54 (2026-10-05):** none of this section is built. There are no review cards, no `r:` callbacks, no 09:00 batch and no `REVIEW_BATCH`. Instead, `review/notify.py` sends one notification per account and slot at S − 2 h (and for a replacement planned inside that window), "N items need review → Open", through `ops.alert` (kind `review_due`, ADR-45's dedupe, quiet hours and cap) with an Open URL button to `/review?account=<id>`. Decisions happen on the Review page (card 024); after one, the notification is redrawn as done through #616's `alert:msg` keys. The text below is kept for the record.
 
 - **The card:** the video, then a text: the account, the slot ("goes out 13:00, America/New_York"), the reasons in plain words ("producer window: 2 of 5", "spot check", each gate violation), and the copy per platform (read-only).
 - **Buttons:** **✅ Approve** · **🗑 Reject**, then the reason row (`RejectReason`, as today). **Open ↗** to `/act/review/<item>` once S3 serves that page; before S3 the card has no Open button.
@@ -630,7 +639,7 @@ One message at 09:00 in the owner's time zone (R3), claimed `digest:<date>`. Lin
    - after S2 a decision counts about 1 minute and an assisted clip about 7;
    - when it's over budget, the line names the accounts whose ladder criteria are met.
 
-   Then "N review cards follow ↓".
+   Then "N review cards follow ↓". *ADR-54: instead, "N items need review → Open" (a link to `/review`); no cards follow, and the arithmetic counts review decisions only.*
 5. **Digest-level rows (S3 §4):**
    - promotions ready, with the command until S3;
    - demotions done;
@@ -647,12 +656,12 @@ Links appear only to pages that exist: `/jobs/<id>` before S3, then 08 §2b and 
 
 | Row | Raised by | Level |
 |---|---|---|
-| `publish_failed` (subject `<item>:<platform>`) | the fallback (§6.6), on a confirmed final failure | instant; **urgent** (through quiet hours) when final failures hit 2 or more accounts within an hour ("publishing broken across accounts", ADR-45) |
+| `publish_failed` (subject `<item>:<platform>`) | the final check (§6.6; ADR-54, no fallback), on a confirmed final failure | instant; **urgent** (through quiet hours) when final failures hit 2 or more accounts within an hour ("publishing broken across accounts", ADR-45) |
 | `publisher_disconnected` (subject `<account>:<platform>`) | the webhook | instant |
 | `strike` (subject `<account>:<platform>`) | `clipforge autopilot strike` (no webhook exists) | instant, with the automatic demotion |
 
 - Each alert goes through `ops.alert` (dedup per kind, subject and hour; quiet hours; the cap) with `path="/act/<kind>/<subject>"` for S3's Open button.
-- **The data is S2's:** `publishing.open_problems()` returns the rows that are failed or in fallback and not posted, the disconnected flags, the recorded strikes and unmatched deliveries. **The "needs me" list is S3's:** `GET /needs` turns them into rows (S3 §8.3).
+- **The data is S2's:** `publishing.open_problems()` returns the rows that are failed or `final_failed` (ADR-54; was fallback) and not posted, the disconnected flags, the recorded strikes and unmatched deliveries. **The "needs me" list is S3's:** `GET /needs` turns them into rows (S3 §8.3).
 
 ### 7.4 Tracking links (`tracking.py`; ADR-33)
 
@@ -688,9 +697,9 @@ Every item has its tests in the same task, written first. DB tests use the local
 | Dispatcher | `due()` from the Dict alone: a tick with nothing due runs against a database stub that fails if touched. Planning at 08:50 owner time for accounts in other time zones, with the horizon to the next plan plus 2.5 h. Each phase at S − 2 h, S − 30 min and S. Planning skips held, planned and in-flight items. Substitution and `missed`. Only `plan.py` writes `slot_plans` (an import check). A failed task releases its claim and alerts. Spawned tasks run once |
 | Brake under a Neon outage | With the database raising `DatabaseUnavailable`: `/pause realtalk-clips-en` and `/pause all` set the Dict key and reply honestly; the dispatcher skips the scope; cancel uses `publisher.scheduled(profile)`; `posting_daily` later repairs `posting_state` through `actions.pause` (`system:daily`). Newer wins both ways: a `/go` written to the Dict during the outage beats an older paused row, and a missing key is never restored blindly. `/go` writes `on=false` (never deletes) and moves `cancelled` rows to `pending` |
 | Webhook | A valid delivery. **The same delivery replayed twice** (200, one event, one state change). **Two concurrent copies** (the row lock: one processes, one sees `processed_at`). A crash before the commit (reprocessed next time). A bad signature, a stale timestamp, a missing secret (503). An unknown job id (stored unprocessed, then matched by reconcile). The disconnect and connect events |
-| Fallback | Cancel succeeds → fallback. Cancel fails, lookup `failed` → fallback. Cancel fails, lookup `published` → published, no card. Cancel fails, lookup pending → no fallback, re-checked, alert after 3 |
+| Final check (ADR-54; was Fallback) | Cancel succeeds → `final_failed` + alert. Cancel fails, lookup `failed` → `final_failed` + alert. Cancel fails, lookup `published` → published. Cancel fails, lookup pending → re-checked, alert after 3. Never a Telegram card |
 | Media links | Signature and expiry. The `media:` prefix (a zip-link signature is refused, and the reverse). A path escaping `/jobs`. Range requests |
-| Cards and digest | Golden texts. `r:` callback parsing (and `p:` unchanged). Redraw of every card on approve and reject from either surface. "Already decided" answers. The batch flag. **Paced sends** (no more than 1 message a second; a Telegram 429 waits and continues). The batch is not counted against the hourly cap. The digest leaves out empty lines and shows the attention arithmetic |
+| Notification and digest (ADR-54; was Cards and digest) | Golden texts. The "N items need review → Open" notification: a URL button only, none for decided items, redrawn as done after a dashboard decision. "Already decided" answers from the review service. The digest leaves out empty lines, shows the attention arithmetic and ends with the review line |
 | Tracking links | The redirect with its sub-id. A failed click write still redirects. An unknown slug. `?p=` validation. Copy wrapping for bio and affiliate links, while campaign links stay verbatim |
 | Migration | Up and down. An empty autogenerate diff. The `actor` backfill from `data.actor`. The seed rows. `EXPECTED_HEAD` moved |
 | Cost | Hand-off and webhook record nothing per post. `Prices` gains the Upload-Post plan as a fixed subscription (shown on S3's Costs, never against caps) |
@@ -703,7 +712,7 @@ Every item has its tests in the same task, written first. DB tests use the local
 
 **Secrets:** `UPLOAD_POST_API_KEY` and `UPLOAD_POST_WEBHOOK_SECRET` (the `whsec_…` value), in `clipforge-secrets` and `.env`. Both are optional: without them, publishing is off with the reason in `/status` (like `Settings.posting_problem`), and the webhook answers 503.
 
-**New settings:** `GATE_ENFORCE` (`on`/`off`, default `off`; on from S2b, after the dry run), `REVIEW_BATCH` (`on`/`off`, default `on`), `MEDIA_LINK_TTL_S` (default 86400), `RECOVERY_WINDOW_S` (default 0 = no re-send; 600 after R5 confirms key retention) and `UPLOAD_POST_PROFILE_LIMIT` (default 5). Account create warns when the profiles in use would exceed `UPLOAD_POST_PROFILE_LIMIT` (O4: upgrade at the 6th).
+**New settings:** `GATE_ENFORCE` (`on`/`off`, default `off`; on from S2b, after the dry run), `MEDIA_LINK_TTL_S` (default 86400), `RECOVERY_WINDOW_S` (default 0 = no re-send; 600 after R5 confirms key retention) and `UPLOAD_POST_PROFILE_LIMIT` (default 5). Account create warns when the profiles in use would exceed `UPLOAD_POST_PROFILE_LIMIT` (O4: upgrade at the 6th).
 
 **Cost:**
 - **Upload-Post Basic** is $24/month, a fixed subscription.
@@ -727,14 +736,14 @@ Nothing else changes for the owner.
 
 The results go in the S2 build's report.
 - If the 10-minute repeat returns the same job, `RECOVERY_WINDOW_S` becomes 600.
-- If not, it stays 0 (no re-send) and crash recovery relies on the lookup and the fallback check (§6.3).
+- If not, it stays 0 (no re-send) and crash recovery relies on the lookup and the final check (§6.3, §6.6).
 - If the third check fails (the upload is not visible within seconds), recovery's "no job" answer can't be trusted early. The 2-minute threshold for a row stuck in `claimed` (§6.3) is raised to the measured delay before S2b is built.
 
 **S2b:**
 1. Buy Upload-Post Basic (monthly). Create the profile `realtalk-clips-en`. Connect TikTok (set to public posting), Instagram (Professional, linked to the Facebook Page), YouTube and Facebook. Note the Facebook Page id.
 2. Register the webhook URL `<API_URL>/webhooks/upload-post` for `upload_completed` and the three account events. Put `UPLOAD_POST_API_KEY` and `UPLOAD_POST_WEBHOOK_SECRET` in `clipforge-secrets` and `.env`. Deploy.
 3. `clipforge account edit realtalk-clips-en --publisher-profile realtalk-clips-en --facebook-page-id <id>`, then `clipforge publisher check realtalk-clips-en`: read-only; it checks the profile, the connections, TikTok's allowed privacy levels and the webhook's reachability.
-4. The next morning: approve one item in the 09:00 batch. Watch it post at its slot, then check `clipforge status`, the item's `posts` rows, its `post_events`, and that `posting verify` still reports 0.
+4. Approve one item on the dashboard's Review page (card 024; ADR-54). Watch it post at its slot, then check `clipforge status`, the item's `posts` rows, its `post_events`, and that `posting verify` still reports 0.
 5. Run a day on Hands-on. Test the brake with one item scheduled (`/pause realtalk-clips-en` cancels it; `/go` brings it back).
 
 **S2c:**
@@ -752,8 +761,7 @@ The results go in the S2 build's report.
 **Rollback:**
 - **One account, S2b or S2c:** `clipforge account edit <id> --clear-publisher`. It:
   - cancels the account's scheduled Upload-Post jobs (as the brake does, §6.7);
-  - leaves in-flight items excluded from the assisted pick until reconcile resolves them (§3.1);
-  - rewrites the schedule copy, so the account is back on the assisted path at the next slot.
+  - rewrites the schedule copy, so the account posts nothing until it is connected again (ADR-54: there is no assisted path to fall back to).
 - **S2a:** a revert deploy only. 0002 is expand-only, so the S1 code runs on it. Readers treat a missing autopilot row as Hands-on. `STATE_READS` doesn't change; ADR-41's own rollback stays separate.
 
 ## 10. Coverage of 04's S2 list
@@ -766,7 +774,7 @@ The results go in the S2 build's report.
 | Review tiers; Telegram cards only for items due within 2 h; copy fixes only in the dashboard | §5.2, §5.3, §7.1 (with Q3's morning-batch bridge) |
 | Notification policy, the 09:00 digest, quiet hours, deduped alerts | §7.2, §7.3 (`ops.py` reused) |
 | The brake survives a Neon outage and cancels scheduled posts | §6.7 |
-| One claim per (item, platform); the fallback only after the final failure | §6.2, §6.3, §6.6 |
+| One claim per (item, platform); an alert and a failure row after the final failure (ADR-54) | §6.2, §6.3, §6.6 |
 | Policy gate v1 | §5.1 |
 | Tracking links | §7.4 |
 | Autopilot (table, history, dial, Publish switch, presets, ladder, demotions, spot-check floor) | §5.4, §5.5, §5.2, §3 |
@@ -778,6 +786,8 @@ The results go in the S2 build's report.
 | Migrations: the landing-order rule; the deferred items in the first migration | §3 |
 
 ## 11. Proposed changes to other documents (for the coordinator)
+
+> These proposals date from 2026-10-01 and 2026-10-02. **ADR-54 (2026-10-05) supersedes the Telegram parts below** (review cards, the morning batch, `REVIEW_BATCH`, the fallback's ✅ taps); 04, 06, 08 and the runbook now say so.
 
 ### 11.1 ADR-27, acceptance text (into `docs/DECISIONS.md`; 05 keeps a pointer)
 
@@ -807,7 +817,7 @@ The results go in the S2 build's report.
 
 - Split the list into **S2a** (migration with the deferred items, the dispatcher, the brake, autopilot on Hands-on, the gate and routing; assisted flow unchanged), **S2b** (the publisher, media links, the webhook, reconcile and crash recovery, the slot plan, review cards and hand-off, the fallback; realtalk on Upload-Post) and **S2c** (the dial, spot checks, the ladder and demotions, the digest, failure rows, tracking links; founder.tapes and hombre launch, one permitted source each). Each sub-step is one PR or more, deployable alone.
 - Note under S2b: its build starts after one real Upload-Post call confirms key retention and Basic's rate limit (R5).
-- Note the morning-batch bridge (`REVIEW_BATCH`, exempt from the hourly cap, R1) under the "Telegram review cards only for items due within 2 h" item.
+- Note the morning-batch bridge (`REVIEW_BATCH`, exempt from the hourly cap, R1) under the "Telegram review cards only for items due within 2 h" item. *Superseded by ADR-54: no batch, no cards.*
 - Strikes: entered by hand (CLI in S2, S3's form later); Upload-Post documents no strike event.
 - S7: conversion import is draft ADR-51.
 - The exit is unchanged.

@@ -1,20 +1,20 @@
 # Card 016: S2c — the ladder, the digest, failure rows, tracking links; founder.tapes and hombre launch
 
-Status: proposed
+Status: proposed · Updated 2026-10-05 (ADR-54): Telegram is notifications only; the digest ends with "N items need review → Open" and sends no cards; no assisted fallback
 Stream: S2 (S2c) · Branch: `s2c/ladder-launch` · Worktree: `../clipForge-s2c` (created with `scripts/worktree.sh s2c/ladder-launch`)
 Decision-log range: #530–#549 (append only, in this range)
 Model: mid-tier (implementing a written plan)
-Depends on: card 015 merged and deployed, with realtalk a day on Hands-on through Upload-Post and `posting verify` at 0. Owner steps before the launch: O3 (the handles, warmed up per runbook §6), one permitted source each for founder.tapes and hombre.en.construccion (with its permission record), and two more Upload-Post profiles (3 of Basic's 5)
+Depends on: card 024 (the Review page) deployed (ADR-54; before card 015), and card 015 merged and deployed, with realtalk a day on Hands-on through Upload-Post and `posting verify` at 0. Owner steps before the launch: O3 (the handles, warmed up per runbook §6), one permitted source each for founder.tapes and hombre.en.construccion (with its permission record), and two more Upload-Post profiles (3 of Basic's 5)
 Cost cap: $3 of Modal/API spend (smoke runs, and clipping one episode per new source with Haiku). Upload-Post stays on the owner's Basic subscription
 
 ## Context
-Cards 014 (S2a) and 015 (S2b) are deployed: the dispatcher, the brake, autopilot on Hands-on, the gate (on, after the dry run), and realtalk.clipsdaily publishing through Upload-Post with review cards and the 09:00 batch. **This card builds S2c, plan Tasks 21–26**, and supports the launch of founder.tapes and hombre.en.construccion. Read card 015's report first, especially R5's results and any deviation.
+Cards 014 (S2a) and 015 (S2b) are deployed: the dispatcher, the brake, autopilot on Hands-on, the gate (on, after the dry run), and realtalk.clipsdaily publishing through Upload-Post, reviewed on the dashboard's Review page (ADR-54: no review cards, no batch). **This card builds S2c, plan Tasks 21–26**, and supports the launch of founder.tapes and hombre.en.construccion. Read card 015's report first, especially R5's results and any deviation.
 
 Decisions that bind this card:
 - **Promotions are the owner's tap** (ADR-48): until S3 it is `clipforge autopilot promote <account>` (actor `cli:<user>`, a reason generated from the ladder's criteria); a ready promotion is a digest line, never a Telegram button (#449). Demotions are automatic (`system:demotion`).
 - **Strikes are entered by hand** (`clipforge autopilot strike`): Upload-Post documents no strike event (#450).
-- **No assisted-card tap counts** toward the ladder, the spot checks or the producer window (R2, R6, #454); only review-service decisions from S2b on.
-- **The digest** is one message at 09:00 in the owner's time zone, then the review cards; anomalies first; lines with nothing to say are left out (#443, #455; spec §7.2).
+- **No assisted-card tap counts** toward the ladder, the spot checks or the producer window (R2, R6, #454); only review-service decisions from S2b on, made on the dashboard (ADR-54).
+- **The digest** is one message at 09:00 in the owner's time zone, ending with "N items need review → Open" (no cards follow, ADR-54); anomalies first; lines with nothing to say are left out (#443, #455; spec §7.2). Plan Task 23 now registers the `digest` task itself (Task 20 is removed).
 - **Tracking links (ADR-33, accepted 2026-10-02):** `GET /go/<slug>` logs a click (never the IP or user agent) and redirects with a sub-id; bio and affiliate links are wrapped at hand-off; campaign `required_links` stay verbatim (#452, #456). Conversion import is draft ADR-51, for S7: not here.
 - **The two new accounts start Hands-on** and launch on S2's flow (ADR-48, #135). They are created by the owner (`clipforge account create`), never by the session.
 - **S2c adds no migration.**
@@ -26,7 +26,7 @@ Other sessions: possibly S3 (the dashboard) and the hooks card. S3's `GET /needs
 2. `docs/reports/014-s2a-*.md` and `docs/reports/015-s2b-*.md`
 3. The S2 plan: Global Constraints, Part S2c (Tasks 21–26, the owner launch steps and the rollback after Task 26), and the coverage tables at the end
 4. The S2 spec: §5.2, §5.4, §5.5 (the ladder and demotions), §7.2 (the digest), §7.3 (failure rows), §7.4 (tracking links), §9 (S2c and the exit)
-5. `docs/DECISIONS.md`: ADR-33, ADR-44, ADR-45, ADR-48, ADR-49
+5. `docs/DECISIONS.md`: ADR-33, ADR-44, ADR-45, ADR-48, ADR-49, ADR-54
 6. Log rows #440–#461, #138–#140, and the S2a and S2b rows (#480–#529)
 7. `docs/studio/09-account-registry.md` (the two accounts), runbook §2, §2a and §6
 
@@ -39,8 +39,8 @@ Other sessions: possibly S3 (the dashboard) and the hooks card. S3's `GET /needs
 Each task follows the plan: failing tests first, then the implementation, then its checks, then "check and record".
 1. **Task 21:** the ladder, promotions, strikes and automatic demotions (`accounts/ladder.py`, pure over counted stats; `promote`, `record_strike`, `check_demotion` in `accounts/autopilot.py`; `review/service.py` calls `check_demotion` on a spot-check reject; `clipforge autopilot promote|strike`; the admin promote and ladder routes).
 2. **Task 22:** the `sample` and `auto` dials end to end (auto-lane approval and the spot-check state per account in `dispatch/plan.py`; the floor of 1 in 10 and 3 a week).
-3. **Task 23** (amended 2026-10-02, log #142: `gather` takes a tuple of `DigestProvider`s from `runtime.build_deps`, none in S2, a failing provider skipped, so S3c-3 adds its line without editing `dispatch/digest.py`): the 09:00 digest message (`build_digest`, `send_digest`; the `digest` task sends the digest, then `send_batch`), including the attention arithmetic and the promote command line.
-4. **Task 24:** failure rows and alerts (`publishing/problems.py`, `open_problems()`, `alert_problem` used by the assisted fallback, the webhook and autopilot; "publishing broken across accounts" breaks through quiet hours).
+3. **Task 23** (amended 2026-10-02, log #142: `gather` takes a tuple of `DigestProvider`s from `runtime.build_deps`, none in S2, a failing provider skipped, so S3c-3 adds its line without editing `dispatch/digest.py`): the 09:00 digest message (`build_digest`, `send_digest`; the `digest` task, registered here, sends the digest and no batch, ADR-54), including the attention arithmetic (review decisions only) and the promote command line.
+4. **Task 24:** failure rows and alerts (`publishing/problems.py`, `open_problems()` over `failed` and `final_failed` rows, `alert_problem` used by reconcile's final check, the webhook and autopilot (no assisted fallback, ADR-54); "publishing broken across accounts" breaks through quiet hours).
 5. **Task 25:** tracking links (`tracking.py`, `db/tracking.py`, `GET /go/{slug}`, the admin link routes, `clipforge link add|list`, `link_for` passed to `copy_for` at hand-off).
 6. **Task 26:** launch support and the docs: account create warns over `UPLOAD_POST_PROFILE_LIMIT`; `docs/ARCHITECTURE.md`, `.env.example` and `CLAUDE.md` (Commands and Layout) updated; tick S2 items in `docs/studio/04-roadmap.md` and `ROADMAP.md` (the S2 line itself only after the exit below is met).
 7. **Checkpoint S2c** (plan Task 26 step 3): `web/openapi.json` regenerated if routes changed; run `pr-reviewer`, `security-reviewer` (`/go`, click logging, no personal data) and `docs-auditor`; `scripts/check.sh` green; the report; stop.
@@ -71,7 +71,7 @@ Each task follows the plan: failing tests first, then the implementation, then i
   6. Check the exit (Done when) over the next days and paste the outputs back to the session for B.
 - At B: commit, push, squash-merge.
 - **Rollback:**
-  - A new account: `uv run clipforge account edit <id> --clear-publisher` (assisted from the next slot), or `/pause <id>`.
+  - A new account: `uv run clipforge account edit <id> --clear-publisher` (it then posts nothing; no assisted fallback, ADR-54), or `/pause <id>`.
   - A promotion: `uv run clipforge autopilot preset <id> hands_on --reason "<why>"`.
   - A tracking link: remove it from the bio. `/go` keeps redirecting, so links already posted never break.
   - The whole step: a revert on `main`, then `scripts/deploy.sh --dry-run` and `scripts/deploy.sh --reason "revert S2c"`. S2c adds no migration.
