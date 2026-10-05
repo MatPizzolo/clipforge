@@ -4,7 +4,7 @@ Every step **you** do, in order, with the exact command. Sessions write code; yo
 
 Last updated: 2026-10-02. Status: ✅ done · ⏳ now · ⬜ later.
 
-Commands run from the project root (`~/code/clipForge`) unless they start with `cd web`.
+Commands run from the project root (`~/code/clipforge/main`; worktrees sit beside it as `~/code/clipforge/clipForge-<stream>`, layout A, 2026-10-02) unless they start with `cd web`.
 
 ## 0. Where secrets and settings go
 
@@ -121,6 +121,7 @@ From the 2026-09-30 pause on, work runs as **cards → worktree branches → pul
 - Sessions don't commit. The owner commits at checkpoints, pushes, opens a PR, and merges when CI is green (`docs/templates/checkpoint.md`).
 - Deploys: only with the owner's OK, from `main`, outside the blackout (§1). From card 001 on, only through `scripts/deploy.sh`.
 - The coordinator knows what's running before it reports or hands out a prompt: `ListAgents` (sessions named `clipforge-<stream>-xx`, busy or idle), `git worktree list` with each worktree's `git status --short`, `ps -eo pid,lstart,args | grep '[c]laude'` (shows `claude Run card …` and running Modal probes), and `gh pr list`. If it edits a card after that card's session has branched, it sends the change to the session with `SendMessage` and says so; the card file reaches `main` through a coord PR (2026-10-02).
+- **Deploy before the next code merge** (log #144): every deploy ships all of `main`, so a code card is deployed, with its owner steps done, before the next code card merges. Before a deploy, check that `docs/ops/deploys.md`'s last row matches `git log` (no merged code waiting), and that `db_doctor` shows the expected migration head. Docs-only merges are exempt.
 - Memory holds preferences and pointers only. Facts that change live in `STATUS.md` and the docs; the coordinator reviews memory at each pause.
 
 ### 3.2 How a card runs
@@ -143,7 +144,7 @@ scripts/worktree.sh --remove s1/finish   # after its PR is merged (refuses other
 By hand, if the script can't be used:
 
 ```
-cd ~/code/clipForge && git fetch origin
+cd ~/code/clipforge/main && git fetch origin
 git worktree add ../clipForge-x0 -b x0/tooling origin/main
 cp .env ../clipForge-x0/ && (cd ../clipForge-x0 && uv sync)
 # a web worktree also needs: cp web/.env.local ../clipForge-web/web/ && (cd ../clipForge-web/web && npm ci)
@@ -341,7 +342,7 @@ Order: the baseline now → pause every session → the pause commit and tag →
 
 **1. Gate the CI deploy job before the first push** (decision log #109). `ci.yml` deploys on every push to `main`, and the Actions secrets don't exist yet, so the first push would go red. S1 owns `ci.yml` (§3); this one-line edit is agreed with it:
 ```
-cd ~/code/clipForge
+cd ~/code/clipforge/main
 python3 - <<'PY2'
 import pathlib
 p = pathlib.Path(".github/workflows/ci.yml"); t = p.read_text()
@@ -356,7 +357,7 @@ grep -n "DEPLOY_ENABLED" .github/workflows/ci.yml
 
 **2. Create the repo and the baseline commit:**
 ```
-cd ~/code/clipForge
+cd ~/code/clipforge/main
 rm -rf scratch                                   # optional: X1's throwaway files (ignored anyway)
 gh --version && gh auth status                   # if needed: gh auth login (GitHub.com, HTTPS, browser)
 git init -b main
@@ -392,7 +393,7 @@ Send the coordinator the output of `git status`, `git log --oneline -1`, `git ls
 
 **5. At the pause** (after every session has reported and the coordinator's check is clean). First regenerate the dashboard's API contract, which S1's new routes made stale:
 ```
-cd ~/code/clipForge
+cd ~/code/clipforge/main
 uv run python scripts/export_openapi.py
 cd web && npm run gen && npm run gen:check && npm test && cd ..
 uv run python scripts/export_openapi.py --check          # must say "up to date"
@@ -414,7 +415,23 @@ shred -u /tmp/clipforge-secrets.env
 ```
 No redeploy is needed: the deployed app doesn't use the database yet.
 
-**Protect `main`** (after card 001 is merged, so the checks exist): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check` and `scope` to pass (not `web`: it runs only when `web/`, `src/` or the contract changes, and a required check that never runs blocks the merge), block force pushes. On a free personal account, protection on a private repo may need GitHub Pro; without it, keep the PR flow by convention and CI still runs on every PR.
+**Protect `main`** (after card 017 is merged: `check` then reports on every PR, docs-only ones included): GitHub → the repo → Settings → Branches (or Rules → Rulesets) → a rule for `main`: require a pull request, require the status checks `check` and `scope` to pass (not `web`: it runs only when `web/`, `src/` or the contract changes, and a required check that never runs blocks the merge; see the comment at the top of `web.yml`), block force pushes. Or from the terminal:
+```
+gh api -X PUT repos/MatPizzolo/clipforge/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": {"strict": false, "contexts": ["check", "scope"]},
+  "enforce_admins": false,
+  "required_pull_request_reviews": {"required_approving_review_count": 0},
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+JSON
+gh repo edit --delete-branch-on-merge      # merged branches go away on their own
+```
+On a free personal account, protection on a private repo may need GitHub Pro (the call answers 403 "Upgrade to GitHub Pro"); without it, keep the PR flow by convention and CI still runs on every PR.
+
+**CI runs once per commit** (card 017): `ci.yml` runs on pull requests and on pushes to `main` only, so a branch gets CI once its PR is open. A PR that changes only docs (`docs/`, Markdown files outside `prompts/`, `.gitignore`) runs only the docs tests in `check` (under a minute); anything else runs the whole gate. Every action is pinned to a commit SHA, and dependabot opens one grouped PR a week to update them (branch `dependabot/github_actions/…`, allowed to change only `.github/workflows/`): merge it when CI is green.
 
 **Still left, and when:**
 - The Actions secrets `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` and `DATABASE_URL_UNPOOLED`, and the repository variable `DEPLOY_ENABLED=true`. `ci.yml` runs `alembic upgrade head` before deploying and skips web- and docs-only pushes (S1 Task 21b, log #212), but that isn't everything `DEPLOY_ENABLED` needs. Before you set it, all of these must be in place:

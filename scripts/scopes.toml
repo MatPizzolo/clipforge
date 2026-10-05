@@ -63,6 +63,8 @@ allow = [
     "web/tests/unit/summaries.test.ts",
 ]
 
+# Card 018 (S3c plan) used the doc paths; cards 035–038 (the S3c build, log #148) add the code
+# scope, like S3's s3b/: run one at a time in one worktree (../clipForge-s3c), sharing #264–#299.
 [prefix."s3c/"]
 stream = "s3c"
 log = [250, 299]
@@ -73,6 +75,18 @@ allow = [
     "docs/studio/05-proposed-adrs.md",
     "docs/studio/06-session-prompts.md",
     "docs/studio/08-dashboard-and-operations.md",
+    "src/**",
+    "tests/**",
+    "alembic/**",
+    "alembic.ini",
+    ".env.example",
+    # the dashboard (S3c-1b's and S3c-3's pages, handlers, mocks, Vitest, Playwright)
+    "web/**",
+    "docs/ARCHITECTURE.md",
+    "docs/ops/secrets.md",
+    # ticks only after the owner confirms the deploy
+    "ROADMAP.md",
+    "CLAUDE.md",
 ]
 
 [prefix."s3a/"]
@@ -88,6 +102,9 @@ allow = [
     "CLAUDE.md",
 ]
 
+# Spikes (x*/): every spike prefix also gets `scratch/<stream>/**` for its probe code. scratch/ is
+# gitignored, so the scope check never sees it; the allow line is for the edit guard
+# (.claude/hooks/scope_guard.py), which would otherwise deny the probe files (card 017).
 [prefix."x2/"]
 stream = "x2"
 log = [320, 339]
@@ -95,6 +112,7 @@ allow = [
     "docs/studio/03-tools-and-models.md",
     "docs/studio/04-roadmap.md",
     "docs/studio/spikes/**",
+    "scratch/x2/**",
 ]
 
 [prefix."s4/"]
@@ -170,6 +188,7 @@ allow = [
     "docs/studio/03-tools-and-models.md",
     "docs/studio/04-roadmap.md",
     "docs/studio/spikes/**",
+    "scratch/x4/**",
 ]
 
 # Cards 014–016 (the S2 build, log #140): one prefix per plan checkpoint, sharing one code scope.
@@ -260,7 +279,38 @@ allow = [
     "docs/studio/08-dashboard-and-operations.md",
 ]
 
-# Card 020 (HK hook library, spec and plan; ADR-50): documents only; the build card widens this.
+# Cards 022–027 (the S3 dashboard v1 build, log #145): one card per plan checkpoint, S3-1 to S3-5b,
+# run one at a time in one worktree (../clipForge-s3b), sharing this prefix and log range in
+# sequence. `s3/` (#420–#439) and `s3p/` keep the design and the plan.
+[prefix."s3b/"]
+stream = "s3b"
+log = [630, 679]
+allow = [
+    "src/**",
+    "tests/**",
+    "alembic/**",
+    "alembic.ini",
+    ".env.example",
+    "pyproject.toml",
+    "uv.lock",
+    # the dashboard (pages, route handlers, upstream.ts, the generated client, mocks, Vitest, Playwright)
+    "web/**",
+    # plan Task 1: the OpenAPI export switches to the `admin` surface
+    "scripts/export_openapi.py",
+    "docs/ARCHITECTURE.md",
+    "docs/ops/secrets.md",
+    "docs/superpowers/plans/*s3-dashboard*",
+    # ticks only after the owner confirms the deploy
+    "docs/studio/04-roadmap.md",
+    "ROADMAP.md",
+    # §5b (Vercel and proxy tokens) in every card; card 027 also §2's Telegram commands (plan Task 22)
+    "docs/studio/11-owner-runbook.md",
+    "CLAUDE.md",
+]
+
+# Card 020 (HK hook library, spec and plan; ADR-50) used the doc paths; cards 028–030 (the HK
+# build, log #148) add the code scope: run one at a time in one worktree (../clipForge-hk),
+# sharing #563–#579.
 [prefix."hk/"]
 stream = "hk"
 log = [550, 579]
@@ -270,12 +320,30 @@ allow = [
     "docs/studio/04-roadmap.md",
     "docs/studio/05-proposed-adrs.md",
     "docs/studio/08-dashboard-and-operations.md",
+    "src/**",
+    "tests/**",
+    "alembic/**",
+    "alembic.ini",
+    ".env.example",
+    # HK-2 (plan Task 8): the new keywords_v3 and its metadata.json entry; released files never change
+    "prompts/keywords_v3.md",
+    "prompts/metadata.json",
+    # the API contract and the generated client, regenerated with the hooks routes
+    "web/openapi.json",
+    "web/lib/api/**",
+    # HK-3 (plan Task 12, card 030 only): the interim /hooks page, its handlers, unit and e2e tests
+    "web/**",
+    "docs/ARCHITECTURE.md",
+    "docs/ops/secrets.md",
+    # ticks only after the owner confirms the deploy
+    "ROADMAP.md",
+    "CLAUDE.md",
 ]
 
 # Card 021 (S5 media servers and producer registry, spec and plan; ADR-30): documents only,
-# plus measurement probes in scratch/s5d/ (ignored once card 017 lands). Named `s5d/`, not `s5/`:
-# tests/scripts/test_check_scope.py appends a fake `s5/` prefix (card 017 renames it). The build
-# cards get their own prefixes (s5a/, …).
+# plus measurement probes in scratch/s5d/ (gitignored). Named `s5d/`, not `s5/`, because a test
+# used a fake `s5/` prefix until card 017 renamed it; the build cards get their own prefixes
+# (s5a/, …).
 [prefix."s5d/"]
 stream = "s5d"
 log = [580, 609]
@@ -287,3 +355,44 @@ allow = [
     "docs/studio/05-proposed-adrs.md",
     "scratch/s5d/**",
 ]
+
+# Cards 031–034 (the S5 build, log #148): one card per plan part, S5-1 to S5-4, run one at a time
+# in one worktree (../clipForge-s5), sharing this range in sequence. `s5d/` keeps the design. The
+# earlier `s5/` collision in tests/scripts/test_check_scope.py is gone (card 017's `zz-test/`).
+[prefix."s5/"]
+stream = "s5"
+log = [680, 719]
+allow = [
+    "src/**",
+    "tests/**",
+    "pyproject.toml",
+    "uv.lock",
+    # S5-1 (plan Task 1): the deploy scripts' "only app.py imports modal" comments
+    "scripts/deploy.sh",
+    "scripts/deploy.py",
+    # S5-1: the new-stage skill's Modal rule ("app.py and modal_app/")
+    ".claude/skills/new-stage/**",
+    ".env.example",
+    # S5-2 (plan Task 5): the API contract and the generated client, if POST /jobs's schema changes
+    "web/openapi.json",
+    "web/lib/api/**",
+    "docs/ARCHITECTURE.md",
+    # S5-4 (plan Task 15): the runbook's "Media weights" section; docs/ops/ for deploy notes
+    "docs/ops/**",
+    "docs/studio/11-owner-runbook.md",
+    "docs/superpowers/plans/*studio-s5*",
+    "docs/studio/03-tools-and-models.md",
+    # ticks only after the owner confirms the deploy
+    "docs/studio/04-roadmap.md",
+    "ROADMAP.md",
+    "CLAUDE.md",
+    # probe code (gitignored); every probe app is stopped before the session ends
+    "scratch/s5/**",
+]
+
+# Dependabot (card 017, .github/dependabot.yml): GitHub Actions version bumps only. The empty log
+# range [0, -1] contains no number, so it may never add a decision-log row.
+[prefix."dependabot/"]
+stream = "dependabot"
+log = [0, -1]
+allow = [".github/workflows/**"]

@@ -1,6 +1,6 @@
 # Card 017: X0 — CI and repo hygiene
 
-Status: proposed
+Status: done 2026-10-02 (PR #37)
 Stream: X0 (tooling) · Branch: `x0/ci-speed` · Worktree: `../clipForge-x0` (created with `scripts/worktree.sh x0/ci-speed`)
 Decision-log range: #380–#399 (append only; #380–#395 are taken, so #396–#399 are free: re-read the log, and use at most one row per lasting rule)
 Model: mid-tier (workflow edits and a measured investigation)

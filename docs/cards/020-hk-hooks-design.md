@@ -1,6 +1,6 @@
 # Card 020: HK — the hook library, spec and plan
 
-Status: proposed
+Status: done 2026-10-05 (report: docs/reports/020-hk-2026-10-02.md; PR #42)
 Stream: HK · Branch: `hk/design` · Worktree: `../clipForge-hk` (created with `scripts/worktree.sh hk/design`)
 Decision-log range: #550–#579 (append only, in this range; new prefix, log #141)
 Model: most capable (design and plan, no code)

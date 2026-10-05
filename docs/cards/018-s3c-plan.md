@@ -1,6 +1,6 @@
 # Card 018: S3c — account workspaces, spec revision and implementation plan
 
-Status: proposed
+Status: done 2026-10-05 (report: docs/reports/018-s3c-2026-10-02.md; PR #44)
 Stream: S3c · Branch: `s3c/plan` · Worktree: `../clipForge-s3c` (created with `scripts/worktree.sh s3c/plan`)
 Decision-log range: #250–#299 (append only; #250–#253 are taken, so #254–#299 are free: re-read the log)
 Model: most capable (spec revision and plan, no code)

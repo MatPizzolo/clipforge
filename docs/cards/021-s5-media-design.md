@@ -1,6 +1,6 @@
 # Card 021: S5 — media servers and producer registry, spec and plan
 
-Status: proposed
+Status: done 2026-10-05 (report: docs/reports/021-s5d-2026-10-05.md; PR #41)
 Stream: S5 · Branch: `s5d/design` · Worktree: `../clipForge-s5d` (created with `scripts/worktree.sh s5d/design`)
 Decision-log range: #580–#609 (append only, in this range; new prefix `s5d/`, log #141)
 Model: most capable (design and plan, no code)

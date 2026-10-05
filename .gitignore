@@ -25,6 +25,7 @@ videos/*
 # Added before the first commit (2026-09-30)
 .env.*
 !.env.example
+# spike probe code (card 017): scratch/<stream>/, allowed per spike prefix in scripts/scopes.toml
 scratch/
 *.log
 .DS_Store
