@@ -1,6 +1,6 @@
 # Card 023: S3 (S3-2) — "needs me", Home, `/act` and the link contract
 
-Status: proposed
+Status: proposed · Updated 2026-10-05 (ADR-54): Telegram is notifications only, so this card's Open buttons are how every "needs me" row reaches the phone; it runs before S2b (card 015)
 Stream: S3 (S3-2) · Branch: `s3b/needs` · Worktree: `../clipForge-s3b` (created with `scripts/worktree.sh s3b/needs`)
 Decision-log range: #630–#679 (append only; shared in sequence by cards 022–027: re-read the log and take the next free number after card 022's rows)
 Model: mid-tier (implementing a written plan); most capable for the router's claim-first action and the alert redraw
@@ -13,7 +13,8 @@ Card 022 deployed S3-1: the `admin` endpoint (proxy auth plus `ADMIN_API_TOKEN`,
 Rules that bind this card:
 - **"Needs me" is derived on read** by one provider per kind (`needs/providers.py`, a registry). The router owns no state except `needs_log`, and **an action claims its row before the owning service runs**, releasing it if the service refuses (#623). A GET never writes `needs_log`.
 - **Providers and landing order** (spec §11.1): register only the providers whose sources are on `main`. S1 and S2a give `job_failed`, `held_clips`, `permission_expired`, `outage` and `runway_low`; `review_due`/`review_batch` need S2b's review service (card 015), `publish_failed`/`publisher_disconnected`/`strike` need S2c's `open_problems` and `promotion_ready` needs S2c's ladder (card 016). **Never import a module that isn't on `main`**: a provider for an S2 card that hasn't landed is named in the report as that card's follow-up.
-- The same rule for Task 10's optional edits: `review/cards.py` (Open ↗ to `/act/review_due/<item>`), `publishing/problems.alert_problem` and `dispatch/digest.py`'s `EXISTING_PAGES` change only if they are on `main`.
+- The same rule for Task 10's optional edits: `publishing/problems.alert_problem` and `dispatch/digest.py`'s `EXISTING_PAGES` change only if they are on `main`. There is no `review/cards.py` any more (ADR-54); card 015's `review/notify.py` sends the review notification through `ops.alert` with this card's Open button.
+- **"Needs me" notifications (ADR-54, log #149):** every instant row type is pushed to Telegram as one notification with a URL button Open ↗ → `/act/<kind>/<id>` (or `/review?account=<id>` for "N items need review"), never with decision buttons. Acting on the dashboard redraws it as "✅ Done by …" (#616). Under ADR-54's build order this card lands before S2b, so `review_due` and the S2 failure providers are named in the report as cards 015's and 016's follow-ups.
 - `accounts/ladder.py`'s runway input moves to `accounts/runway.py` only if the ladder is on `main` (S2c).
 - The failure alert gains **[Resume]**, and typed `/resume <id>` goes through the needs router with `surface="telegram"` when the database is wired (#623), so `/act` shows "Done by telegram:… at …".
 
@@ -22,7 +23,7 @@ Rules that bind this card:
 2. Card 022's report
 3. The S3 plan: Global Constraints, Review Focus (items 1, 2, 4, 5 are pinned in Tasks 8 and 11), Part S3-2 (Tasks 6–11, owner steps, rollback)
 4. The S3 dashboard spec §11.1 (the needs mapping, providers and landing order), §11.7 (polling, alert redraw), §11.8 (`needs_log`), §7 (pages, §7.10 the link contract, §7.11 the rows), §2.7 (minutes per row), §3.3 (runway); mockups `docs/design/dashboard/home.html` and `act.html`, `DESIGN.md`
-5. `docs/DECISIONS.md`: ADR-14, ADR-44, ADR-45
+5. `docs/DECISIONS.md`: ADR-14, ADR-44, ADR-45, ADR-54
 6. Log rows #612, #616, #620–#623, #144–#146
 7. The code it changes: `src/clipforge/ops.py`, `bot/messages.py`, `bot/webhook.py`, `bot/posting.py`, `posting/daily.py`, `service.py`, `sources.py`, `api/admin/`, `web/app/(app)/page.tsx`, `web/lib/`, `web/components/nav.ts`
 
@@ -37,7 +38,7 @@ Each task follows the plan: failing tests first, then the implementation, then i
 2. **Task 7, runway:** `accounts/runway.py` (§3.3: unclipped imported episodes included) and the `runway_low` provider; the ladder's input only if S2c is on `main`.
 3. **Task 8, the needs routes and the router:** `needs/router.py` (`list_rows`, `detail` with `open`/`done`/`gone`, the claim-first `act`, `snooze` for digest rows), `api/admin/needs.py` with `subject:path`. Pinning tests: `test_second_action_returns_already_done`, `test_detail_of_vanished_row_is_gone_not_500`, `test_outage_row_first_when_flag_set`, `test_subject_with_colon_round_trips`, and the two-connection concurrency test.
 4. **Task 9, fleet scoreboard and slots:** `fleet.py` and `GET /admin/fleet/scoreboard`, `GET /admin/slots` (a day for Home, up to 14 days for Calendar); `waiting_approval` from `slot_plans` only when S2b is on `main`.
-5. **Task 10, Open buttons and the alert redraw:** `OpsAlerts.alert(..., row_id=)`, `alert:msg:<row id>` (one writer, `ops.py`), `mark_done` (best-effort, never raises), the fold path; the failure alert's [Resume] callback and typed `/resume` through the router; the row-kind callers pass `row_id`; the optional S2 edits only if merged.
+5. **Task 10, Open buttons and the alert redraw:** `OpsAlerts.alert(..., row_id=)`, `alert:msg:<row id>` (one writer, `ops.py`), `mark_done` (best-effort, never raises), the fold path; typed `/resume` through the router (the failure alert carries only Open → `/act/job_failed/<id>`, no [Resume] button: ADR-54, owner 2026-10-05); the row-kind callers pass `row_id`; the optional S2 edits only if merged.
 6. **Task 11, Home, `/act` and the link-contract test:** the pages and route handlers, `web/lib/links.ts` with `links.json` (`gen:links`, checked by `gen:check`), `NEEDS_POLL_MS = 15_000` (nothing while hidden), §6's nav (pages not built yet left out), Playwright `home`, `act` (including "act shows not found for an unknown id") and `links` at phone and desktop sizes, and `tests/test_link_contract.py`. `web/openapi.json` and the client regenerated with every route change.
 7. **Checkpoint S3-2** (plan Task 11 step 5): the full `scripts/check.sh` and `scripts/check.sh --e2e`; `docs/ARCHITECTURE.md` (the needs API, `alert:msg:*`) and `CLAUDE.md` (Layout: `needs/`, `fleet.py`); `pr-reviewer`; fix what it finds; the report, listing the providers registered and those left for the S2 cards' follow-ups; stop.
 

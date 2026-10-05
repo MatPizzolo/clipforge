@@ -1,10 +1,10 @@
 # Card 024: S3 (S3-3) — Review (Queue and Review lane), move to the front, Calendar
 
-Status: proposed
+Status: proposed · Updated 2026-10-05 (ADR-54): this card now runs **before** S2b and **gates it**: card 015 starts only after this card is deployed, because review decisions happen only on this page; `REVIEW_BATCH` no longer exists
 Stream: S3 (S3-3) · Branch: `s3b/review` · Worktree: `../clipForge-s3b` (created with `scripts/worktree.sh s3b/review`)
 Decision-log range: #630–#679 (append only; shared in sequence by cards 022–027: re-read the log and take the next free number after card 023's rows)
 Model: mid-tier (implementing a written plan); most capable for the pin's interplay with `pick_next`, the Dual repo and `posting verify`
-Depends on: card 023 (S3-2) **deployed** with its owner steps done. Per log #144, no other code card is on `main` undeployed when this one merges. The Review lane shows rows only once card 015 (S2b) is **deployed** with its owner steps done; without it the lane ships with its "The review lane arrives with publishing (S2b)" empty state and no batch approve route. Re-render stays disabled until the hooks build. Online use needs card 004
+Depends on: card 023 (S3-2) **deployed** with its owner steps done. Per log #144, no other code card is on `main` undeployed when this one merges. The Review lane shows rows only once card 015 (S2b) is **deployed** with its owner steps done; under ADR-54's order (024 before 015) the lane ships with its "The review lane arrives with publishing (S2b)" empty state and no batch approve route, and card 015 adds `POST /admin/review/batch` with its review service. Re-render stays disabled until the hooks build. Online use needs card 004
 Cost cap: $2 of Modal/API spend (fast tests and the local Postgres). The owner's deploy is not session spend
 
 ## Context
@@ -16,14 +16,14 @@ Rules that bind this card:
 - **Review lane** calls S2's `/admin/review` routes (reused, never re-implemented) and, **only if S2b's review service is on `main`**, S3's `POST /admin/review/batch`. **Re-render** is a disabled button titled "arrives with the hooks build" (#619).
 - **Calendar has no drag-to-reschedule** (log #146, Open table): the page says "Rescheduling comes later; pause an account or edit its slots with `clipforge account edit`". The writers of a later card would be `dispatch/plan.py` (one slot) and the accounts service (an account's schedule).
 - **A pin or approve while the brake or the outage flag is on** is recorded and sends nothing (Review Focus 4, pinned by `test_pin_while_braked_records_and_sends_nothing`).
-- **`REVIEW_BATCH`** (S2b's 09:00 batch) stays on. Its 7-day clock starts at this deploy if card 004 is done and S2b is deployed; turning it off is an owner step in card 027 (#617).
+- **`REVIEW_BATCH` is gone** (ADR-54, log #150): there is no 09:00 Telegram batch to turn off. This page is the only place review decisions are made; Telegram only sends "N items need review → Open" linking here, so card 015 (S2b) waits for this deploy.
 
 ## Read first
 1. `CLAUDE.md`, `STATUS.md`
 2. Card 023's report, and card 015's if it has merged
 3. The S3 plan: Global Constraints, Review Focus (item 4), Part S3-3 (Tasks 12–15, owner steps, rollback)
-4. The S3 dashboard spec §11.4 (Review before and after S2b), §11.1 (the routes S2 owns), §11.9 (`REVIEW_BATCH`), §11.11; §7 (the Review and Calendar pages); mockup `docs/design/dashboard/review.html`
-5. `docs/DECISIONS.md`: ADR-14, ADR-23, ADR-41, ADR-44
+4. The S3 dashboard spec §11.4 (Review before and after S2b), §11.1 (the routes S2 owns), §11.9 (the bridges; `REVIEW_BATCH` removed by ADR-54), §11.11; §7 (the Review and Calendar pages); mockup `docs/design/dashboard/review.html`
+5. `docs/DECISIONS.md`: ADR-14, ADR-23, ADR-41, ADR-44, ADR-54
 6. Log rows #613, #617, #619, #621, #623, #144–#146
 7. The code it changes: `posting/repo.py`, `posting/queue.py`, `posting/actions.py`, `posting/migrate.py`, `db/posting.py`, `api/admin/`, `web/components/nav.ts`, `web/lib/links.ts`, `web/lib/mocks.ts`
 
@@ -58,10 +58,10 @@ Stop for the owner at the checkpoint below.
   0. **Pre-deploy check (#623):** no other code card is on `main` undeployed (`docs/ops/deploys.md` against `git log`), and `uv run modal run src/clipforge/app.py::db_doctor` shows S3's head.
   1. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "S3-3: review and calendar"`. There is no migration.
   2. `uv run clipforge posting verify`: still 0 differences (pins are excluded).
-  3. Online (after card 004; redeploy the dashboard from `main`): Review → Queue, move one clip to the front, and check that the next slot sends it. Calendar shows the week.
-  4. Note the date: `REVIEW_BATCH=off` comes after 7 days of Review online with no problems (card 027's first owner step; only if S2b is deployed).
+  3. Online (card 004 is done before this card under ADR-54's order; redeploy the dashboard from `main`): Review → Queue, move one clip to the front, and check that it shows first (posting stays paused until S2b, so no slot sends it). Calendar shows the week.
+  4. Tell the coordinator: card 015 (S2b) can start (ADR-54).
   5. Commit the `docs/ops/deploys.md` line and tell the coordinator the deploy is done.
 - **Rollback:** a revert deploy (`git revert` of the merge, `scripts/deploy.sh --dry-run`, `scripts/deploy.sh --reason "revert S3-3"`). `queue_pin` values stay, and the old `pick_next` ignores them. In Vercel, promote the previous dashboard deployment.
 
 ## Hand-off
-Write `docs/reports/024-s3b-<YYYY-MM-DD>.md` from `docs/templates/handoff-report.md` at the checkpoint, with each task's status, whether the batch approve route shipped (S2b on `main` or not), the reviewers' findings and the owner steps. Don't commit: the owner does. The next card is 025 (S3-4), after this deploy.
+Write `docs/reports/024-s3b-<YYYY-MM-DD>.md` from `docs/templates/handoff-report.md` at the checkpoint, with each task's status, whether the batch approve route shipped (S2b on `main` or not), the reviewers' findings and the owner steps. Don't commit: the owner does. The next card is 015 (S2b), after this deploy (ADR-54); 025 (S3-4) follows one deploy at a time.

@@ -174,7 +174,7 @@ Decision: Videos go in `videos/<channel>/`. `videos/channels.toml` gives each ch
 Consequences: Credit and permission are set once per channel. A video moved into a channel folder counts as new and is submitted again; this is cheap because the transcript and highlights are cached by source hash, and posting skips overlapping moments.
 
 ## ADR-23: Phone-first posting assistant with the queue on Modal
-Date: 2026-09-28 · Status: Accepted
+Date: 2026-09-28 · Status: Accepted; updated by ADR-54 (2026-10-05: the assisted flow is retired as the default and paused, dormant code until removed)
 Context: Clips go to one brand account on TikTok, Instagram Reels and YouTube Shorts, posted by hand from the phone apps (ADR-3), 5–7 a day. The owner wants a queue that scales to any number of videos and channels and always knows what was posted where. A local day-folder queue was designed first and dropped: it needed the laptop at posting time and couldn't know what was actually posted. We also chose not to test on TikTok first and promote winners: a new account's first-day views are mostly noise.
 Decision: When a channel job (ADR-22) finishes, `package_step` queues its clips in the job Dict (`post:<job>:<clip>`), skipping moments that overlap a non-rejected clip of the same video (IoU > 0.5). State is split into one-writer keys: sends, per-platform confirmations, a verdict (skipped or rejected with a reason) and unavailable. The status is derived, never stored. A cron sends the next clip at each slot (plan C): the best score with a fresh-episode bonus, never the same video or channel twice in a row while another is eligible. The owner taps ✅ per platform, ⏭ Skip (back after 24 h) or 🗑 Reject. `GET /posting`, `/status` and `clipforge status` show per-channel progress. Enqueue never fails a job; `POST /posting/rebuild` re-queues finished channel jobs idempotently. Spec: docs/superpowers/specs/2026-09-28-posting-assistant-design.md.
 Consequences: The laptop is needed only to add videos. Reads scan all `post:*` keys (`KV.items()`), which is fine for thousands of clips; move to an index or SQLite if it grows past that. Reject reasons feed the Phase 5 ranker. API publishing (step B) would replace the ✅ taps and gets its own ADR.
@@ -208,7 +208,7 @@ Decision: One `dispatcher` function runs every 5 minutes, replacing `posting_tic
 Consequences: Adding a periodic task needs no new cron. One slow task can't delay the others beyond its budget. The per-slot phases (plan at 08:50 owner time, review card at S − 2 h, hand-off at S − 30 min) wake Neon about 13 times a day per account. Spec: docs/superpowers/specs/2026-10-01-studio-s2-design.md §4.
 
 ## ADR-28: Publishing through Upload-Post behind a Publisher protocol
-Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S2; updates ADR-3 and ADR-23's "API publishing gets its own ADR")
+Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S2; updates ADR-3 and ADR-23's "API publishing gets its own ADR"); updated by ADR-54 (2026-10-05: `AssistedPublisher` dropped, `UploadPostPublisher` is the one implementation)
 Context: TikTok's own API allows only private posts until an app audit passes. Doing that audit and Meta's app review ourselves is slow. At ~25 accounts × 4 platforms, Upload-Post costs about $50–147/mo. Alternatives: Zernio (~$318/mo), Ayrshare (~$599/mo), self-hosted Postiz (we'd need our own audits).
 Decision:
 - A `Publisher` protocol with two implementations: `UploadPostPublisher` (primary) and `AssistedPublisher` (the Telegram manual flow from ADR-23).
@@ -218,7 +218,7 @@ Decision:
 Consequences: A vendor dependency that can be swapped. Official YouTube and Instagram publishers can be added later behind the same protocol.
 
 ## ADR-29: Tiered review with an always-on policy gate
-Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S2); the tier becomes the Review dial of ADR-48's autopilot model, and ADR-49 sets the producer-version window (2026-10-01)
+Date: 2026-09-29 · Status: Accepted (2026-09-29, kickoff review; built in S2); the tier becomes the Review dial of ADR-48's autopilot model, and ADR-49 sets the producer-version window (2026-10-01); updated by ADR-54 (2026-10-05: review happens on the dashboard only)
 Context: At 20+ accounts, approving every post by hand is 100+ taps a day. Platforms punish undisclosed AI, mass-produced content and false claims.
 Decision:
 - Each account has a review tier: `review` (every item), `sample` (auto-post, ~10% spot checks, daily digest) or `auto`.
@@ -318,7 +318,7 @@ Decision: `producer_version = "<producer>:" + sha256(sorted STAGE_VERSIONs, prom
 Consequences: Review restarts only when the output logic changes. S1's current code stamps `settings.git_sha or "unknown"` (#85) and must be changed (a card after the 2026-09-30 pause).
 
 ## ADR-44: One home per task — Telegram pushes, the dashboard runs
-Date: 2026-09-30 · Status: Accepted (2026-09-30; refines ADR-23, ADR-29, ADR-38)
+Date: 2026-09-30 · Status: Accepted (2026-09-30; refines ADR-23, ADR-29, ADR-38); updated by ADR-54 (2026-10-05: Telegram keeps alerts, the digest and the brake, with no one-tap decisions)
 Context: One owner, 20+ accounts, two surfaces. Tasks done in both drift apart and double-notify.
 Decision:
 - Every task has one home, listed in docs/studio/08 §2. Telegram: time-bound single decisions (assisted posting, review cards for items due soon), alerts that need action, `/pause` and `/go`, one daily digest. Everything that needs context, comparison, editing, bulk actions, history, experiments or money: the dashboard.
@@ -348,7 +348,7 @@ Decision: Every render measures first (pass 1: the audio graph only, `loudnorm` 
 Consequences: Mixed Timelines get one constant gain that keeps the ducking intact. Clips change by 0.1–0.3 LU (not audible) and cost about 2 s more CPU each. True peak after the AAC encode stays -0.9 to -1.3 dBTP, as today; if a platform ever flags clipping, TP=-2.0 is the knob.
 
 ## ADR-48: Autopilot per account
-Date: 2026-10-01 · Status: Accepted (2026-10-01, the owner's review of card 009's spec, docs/superpowers/specs/2026-10-01-studio-s3-dashboard-design.md; refines ADR-29; log #421, #422, #425, #428, #437)
+Date: 2026-10-01 · Status: Accepted (2026-10-01, the owner's review of card 009's spec, docs/superpowers/specs/2026-10-01-studio-s3-dashboard-design.md; refines ADR-29; log #421, #422, #425, #428, #437); updated by ADR-54 (2026-10-05: review happens on the dashboard only)
 Context: ADR-29 gives each account a review tier. The owner wants each account to run as automatically as it has earned, across production, review, publishing and scaling, within a daily attention budget of about 20 minutes and spend limits, with the owner stepping in only where judgment pays off.
 Decision:
 - Each account has three switches (Produce, Publish, Scale) and the Review dial (ADR-29's `review`, `sample`, `auto`), set together by presets Hands-on, Supervised and Autopilot; any one can be overridden. Controls never block each other; each shows what it waits on.
@@ -370,3 +370,15 @@ Date: 2026-10-01 · Status: Accepted (2026-10-01, the owner's review of card 009
 Context: hooks are the lever the owner wants to improve most. Rotating hook patterns per item and ranking them by results is continuous, while ADR-42's setup experiments change one account version at a time and block other setup edits while they run.
 Decision: each account has a hook library (patterns shareable to its blueprint) in its own tables, outside the versioned setup. Patterns are immutable versions; an edit writes v+1; every item stamps `hook_pattern_id@version` and the rotation weights in force. Producers write 2–3 variants per item from approved patterns and ship the best-ranked one. While the account runs a setup experiment, its rotation weights are frozen. Hook rotation is never an S3c experiment.
 Consequences: an item's setup is `(account_id, account_version)` plus its hook stamp, so ADR-42's traceability holds. About $0.0025–0.0035 of Haiku per item. A separate hooks card builds it after S1's rollout and before S6.
+
+## ADR-54: Telegram is notifications only
+Date: 2026-10-05 · Status: Accepted (2026-10-05, owner ruling; log #149, #150; updates ADR-23, ADR-28 and ADR-44, and where ADR-29's and ADR-48's review happens)
+Context: Assisted posting (ADR-23) stalled for days: every clip needed the owner's taps at the slot, and since the 2026-10-02 13:00 slot two unanswered clips have paused every send (STATUS, 2026-10-03 to 2026-10-05). ADR-48 budgets about 20 minutes of owner attention a day, and hand-posting one clip to four platforms costs about 7 of them. S2's plan kept Telegram as a second decision surface (review cards with approve and reject, a 09:00 review batch behind `REVIEW_BATCH`, and the `AssistedPublisher` fallback card), which keeps the owner tapping in two places. The owner's direction: Telegram only tells, the dashboard decides, and Upload-Post posts.
+Decision:
+- **Telegram is notifications only:** alerts (ops alerts, failures, and every "needs me" row as one notification with an Open link to `/act/<kind>/<id>`), the 09:00 digest, status replies (`/status`), and the brake (`/pause`, `/go`, `/pause all`). There are no clip cards with per-platform buttons, no review approve or reject buttons, and no manual-posting fallback.
+- **Assisted posting is paused now** (the owner sends `/pause`). realtalk posts nothing until S2b publishes it through Upload-Post. The 27 queued clips wait intact.
+- **Review decisions happen only on the dashboard** (the Review page, card 024). Telegram sends one notification, "N items need review → Open".
+- **If Upload-Post fails,** Telegram sends an alert only (reconnect, or open the failure row), never a manual post card. The `AssistedPublisher` fallback is dropped from S2: a final failure stays `failed` and shows as a `publish_failed` row in the needs list.
+- **Publishing waits for the Review page.** Build order: card 010 (rollout) → 014 (S2a) → 031 (S5-1 split) → 004 (dashboard online; the owner's Vercel steps) → 022 (S3-1 `admin`) → 023 (S3-2 needs, Home, `/act`) → 024 (S3-3 Review and Calendar) → 015 (S2b, Upload-Post) → 016 (S2c) → the rest, one deploy at a time (#144). S5-2 onward and the hooks and S3c cards slot in by their own dependencies.
+- **Updates:** ADR-23 (the phone-first assisted flow is retired as the default and paused; it stays only as dormant code, for accounts with Publish off, until it is removed); ADR-28 (one publisher implementation, `UploadPostPublisher`; `AssistedPublisher` is dropped); ADR-44 (Telegram keeps alerts, the digest and the brake; it has no one-tap decisions). ADR-29 and ADR-48 are unchanged except where review happens: on the dashboard only.
+Consequences: realtalk is paused until S2b, and S2b waits for card 024 deployed, so posting resumes later than planned but without owner taps. The posting-assistant code stays dormant, then is turned off per account when Upload-Post goes live for it. The review windows (ADR-49's producer window, the format window, sponsored items) are worked on the dashboard's Review page. Telegram sends far fewer messages: no batch, no cards, and the dashboard redraws an alert as done after its row is acted on (#616). The S2 spec and plan carry dated amendments (log #150).
