@@ -184,14 +184,18 @@ git worktree remove ../clipForge-x0     # after its branch is merged
 ### 4b. During the build
 Approve each checkpoint the S1 session reports. A checkpoint is a commit on the card's branch, reviewed in its PR (§3.2).
 
-### 4c. Rollout ⬜ (run as card 010; each deploy only with your OK; the session runs these with you)
+### 4c. Rollout ✅ steps 1–7 done 2026-10-05 (card 010; notes from the run are inline below; step 8 is a later card) (run as card 010; each deploy only with your OK; the session runs these with you)
 1. Migrate the database:
    ```
-   uv run alembic upgrade head
+   uv run --env-file .env alembic upgrade head
    ```
+   It prints nothing on success (log #223); `db_doctor` or `deploy.sh --dry-run` then shows the head.
 2. Deploy. The Dict stays the primary, and Postgres gets a copy of every write:
    ```
    scripts/deploy.sh --reason "S1 rollout 4c.2: dual write"
+   ```
+   Deploy from `~/code/clipforge/main`: its `.env` needs `DEPLOY_DB_CHECK=on` and `DATABASE_URL_UNPOOLED` for the migration-head check.
+   ```
    ```
    Put `DATABASE_URL` (the pooled string) back in `clipforge-secrets` first (dashboard edit, #107): without it the app stays Dict-only.
 
@@ -209,7 +213,7 @@ Approve each checkpoint the S1 session reports. A checkpoint is a commit on the 
    ```
 4. Import the channel into sources, then fill in its permission record:
    ```
-   uv run clipforge source import-toml --account realtalk-clips-en --dry-run
+   uv run clipforge source import-toml --account realtalk-clips-en --dry-run   # from a worktree add --folder ~/code/clipforge/main/videos
    uv run clipforge source import-toml --account realtalk-clips-en
    uv run clipforge source show billy-garton
    uv run clipforge source edit billy-garton --granted-at <YYYY-MM-DD> --granted-by "<name>" --evidence-url <link> --monetization yes --translation <yes|no>
@@ -231,7 +235,7 @@ Approve each checkpoint the S1 session reports. A checkpoint is a commit on the 
    uv run modal run src/clipforge/app.py::db_doctor
    ```
    `db_doctor` must print `ok: True` and `schedule_drift: []`. If it names an account, run any `uv run clipforge account edit` on it, or `posting_daily` again, then check again. Don't go on to step 7 until it's empty.
-7. Switch reads to Postgres: set `STATE_READS=postgres` in `clipforge-secrets` and `.env`, then:
+7. Switch reads to Postgres: set `STATE_READS=postgres` in `clipforge-secrets` and `.env` (type it carefully: `deploy.sh` checks only `.env`, and a typo in the secret, as on 2026-10-05, crashes every container until fixed; check `uv run modal app logs clipforge` right after the deploy), then:
    ```
    scripts/deploy.sh --reason "S1 rollout 4c.7: reads from Postgres" --rollout-step 4c.7
    ```

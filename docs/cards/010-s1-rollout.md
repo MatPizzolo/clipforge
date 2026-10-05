@@ -1,6 +1,6 @@
 # Card 010: S1 — the rollout (Task 22), run with the owner
 
-Status: checkpoint A merged 2026-10-02 (PR #31); checkpoint B (live) next
+Status: checkpoint B done 2026-10-05 (S1 live on Postgres; report docs/reports/010-s1-2026-10-05.md); checkpoint C next
 Stream: S1 · Branch: `s1/rollout` · Worktree: `../clipForge-s1` (created with `scripts/worktree.sh s1/rollout`)
 Decision-log range: #200–#249 (append only; #200–#218 are taken, re-read the log)
 Model: most capable (a production change, done live with the owner)

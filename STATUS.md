@@ -2,11 +2,11 @@
 
 The one page that says where things stand. The coordinator updates it after every merged PR and every report. Detail lives in the linked files; this page only summarizes, and closed items move out (their record is in `docs/reports/` and the decision log).
 
-Last updated: 2026-10-05 (ADR-54 accepted: Telegram is notifications only, assisted posting paused, publishing waits for the Review page; cards 018, 020 and 021 merged; build cards 028–038 written; the rollout is set for 2026-10-05 16:30 New York).
+Last updated: 2026-10-05 night (S1 live on Postgres: card 010 checkpoint B done, `STATE_READS=postgres`, verify 30/30 at 0 differences; posting paused per ADR-54; card 039 written for the rollout's follow-ups).
 
 ## Now
 
-**Production.** The `clipforge` Modal app runs the code of `dea435d` (deployed 2026-10-02 02:10 UTC; restarted from `6e832a7`, docs-only changes, at 03:14 UTC), Dict-only (`STATE_READS=dict`, `DATABASE_URL` not in `clipforge-secrets`). `posting_tick` runs every 5 minutes; deploy blackout in runbook §1. The first clean night is in: `posting_daily` ran at 07:00 UTC on 2026-10-02 (420 keys touched, a 36-key snapshot, rebuild 0), and the 08:00 and 10:30 slots sent. Two clips wait on the owner's taps, so the tick says "waiting" until they're answered. On 2026-10-03, `posting_daily` ran at 07:00 UTC (426 keys touched, a 42-key snapshot, rebuild 0), but the tick has said "waiting" since the 2026-10-02 13:00 slot: two clips sent without a tap, so no slot sends until the owner answers them. **On 2026-10-05 posting is paused by the owner on purpose (ADR-54):** Telegram is notifications only, the two waiting clips need no answer, and realtalk posts nothing until S2b (card 015) publishes through Upload-Post, after the dashboard's Review page (card 024) is deployed. The 27 queued clips wait intact. Card 010's rollout (checkpoint B) is set for 2026-10-05 at 16:30 New York time; its checks read `clipforge status`, `posting verify`, `db_doctor` and `/status` instead of a slot send.
+**Production.** The `clipforge` Modal app runs `399196c` (deployed 2026-10-05: 21:10 UTC by hand during a GitHub Actions outage, log #224; 21:45 and 21:50 UTC for rollout step 7). **S1 is live:** Neon (us-east-2) holds accounts, sources, the queue and job records, reads come from Postgres (`STATE_READS=postgres`), and every write is still mirrored to the Dict until S1 Task 23 (after 7 clean daily verifies). One account, `realtalk-clips-en`; one source, `billy-garton`, with its permission facts not recorded (owner's decision, #225). **Posting is paused** (ADR-54): realtalk posts nothing until S2b publishes through Upload-Post, after the dashboard's Review page (card 024). `posting_daily` runs at 07:00 UTC; ops alerts are live. Known: `clipforge status` is slow (about 11 s on Postgres; card 039).
 
 **Incident, 2026-10-02 (fixed 03:14 UTC):** `DATABASE_URL` was in the secret before rollout step 1's migration, so every read of `sources` or `jobs` hit an empty database: `GET /posting` answered 500, and `/next` and Telegram taps that send the next clip failed (the Dict stayed primary; nothing was lost). The owner removed the key and redeployed (`docs/ops/deploys.md`). Card 010 now checks the key is absent before step 1.
 
@@ -18,10 +18,12 @@ Last updated: 2026-10-05 (ADR-54 accepted: Telegram is notifications only, assis
 
 **Decided today (card 009):** the dashboard is the studio's control room, inbox-first, for a ~20-minute daily phone check-in. Each account runs on autopilot as far as it has earned: three switches and a review dial, a graduation ladder where promotions are always the owner's tap (ADR-48). A new producer version opens only a 5-item review window (ADR-49). Hooks get a versioned library with rotation (ADR-50). founder.tapes and hombre.en.construccion launch with S2, which is now the next big step after S1's rollout.
 
-**Open PRs:** none. Card 010's live steps (checkpoint B) are set for 2026-10-05 at 16:30 New York time.
+**Open PRs:** none. Card 010's checkpoint B is waiting for the owner's commit on `s1/rollout`, then checkpoint C (Neon measurements, ticks, notes).
 
 ## Waiting on the owner (most important first)
 
+1. **Billy Garton Jr.'s permission basis** (log #225): the source says `creator_agreement` but no facts are recorded; you credit him in descriptions. Before S2b publishes automatically, either get a one-line written OK from him (then `clipforge source edit billy-garton …`) or record the real basis. Nothing is held meanwhile.
+1. **Commit card 010's checkpoint B**, then let the session finish checkpoint C.
 1. ✅ Neon moved (2026-10-02): a new empty project in AWS us-east-2 (Ohio, about 10–12 ms from Modal's us-east); both `.env` files hold its pooled and direct strings, checked (connects, 0 tables). The São Paulo project is deleted.
 1. ✅ O5 collected (2026-10-01). You type the facts into `clipforge source edit` at rollout step 4; they live only in the database.
 2. ✅ Cards 002 + 006 + tzdata deployed (2026-10-02 02:10 UTC). Check tomorrow's first `posting_daily:` log line (07:00 UTC).
@@ -40,6 +42,7 @@ Last updated: 2026-10-05 (ADR-54 accepted: Telegram is notifications only, assis
 | Card | What | Can start | Runs alongside |
 |---|---|---|---|
 | [010](docs/cards/010-s1-rollout.md) | S1 rollout (Task 22) with the owner: two small fixes, then runbook §4c step by step, then evidence | **ready**: clean night and slot sends on 2026-10-02 (O5 ✅); start checkpoint A now, the live steps outside a blackout | — |
+| [039](docs/cards/039-s1-followups.md) | S1 follow-ups from the rollout: a bad `STATE_READS` turns posting off instead of crashing; `GET /posting` under 3 s; CLI retry; Telegram callbacks answered first | after card 010 is done (C merged); merges and deploys **before** 014 (#144) | — |
 | [014](docs/cards/014-s2a-dispatch-gate.md) | S2a: rails (migration 0002, the dispatcher, the brake, autopilot on Hands-on, the gate log-only, routing; plan Tasks 1–8) | after card 010 is fully done: step 7 (`STATE_READS=postgres`) verified, `posting verify` at 0, `db_doctor` schedule copies, Neon head `0001` | hooks, S3 (one migration at a time) |
 | [031](docs/cards/031-s5-split.md) | S5-1: `app.py` split into `modal_app/`, nothing live changes (S5 plan Task 1) | right after 014 is deployed, **before 022 or 015 starts** (#591) | — (022 and 015 wait for its deploy) |
 | [004](docs/cards/004-s3a-deploy.md) | S3a local login and Vercel deploy | after the owner's Vercel steps; **now gates publishing** (ADR-54: the Review page must be online before S2b) | 014, 031 |
