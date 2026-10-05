@@ -483,7 +483,7 @@ A metric registry: name, unit, direction (higher is better or not), availability
 - A pause, a source hold or a posting outage during a **day-based** window extends it by the days nothing was sent. The banner says so.
 - **Autopilot changes aren't blocked** (they aren't setup, §1.3). They show as markers (§2.7). A demotion or a dial change mid-run is visible next to the result, not hidden in it.
 - **Hook rotation weights freeze** while the account runs an experiment (ADR-50), so both sides rotate hooks the same way. The hooks card (card 020) owns the weights and the freeze; S3c **pushes** the change:
-  - S3c defines one protocol, `HookFreezer`, with `freeze(conn, account_id, experiment_id)` and `release(conn, account_id, experiment_id)`, and the hooks build implements it. `POST /admin/experiments/{id}/start` calls `freeze` for each chosen account; `stop` and `decide` call `release`.
+  - One protocol, `HookFreezer`, with `freeze(conn, account_id, experiment_id)` and `release(conn, account_id, experiment_id)`, lives in `src/clipforge/hooks/freezer.py` with `NoHookFreezer`. Whichever of S3c-3 and the hooks build (HK-1) lands first creates the file, with identical content, and the other imports it. The hooks build implements the protocol. `POST /admin/experiments/{id}/start` calls `freeze` for each chosen account; `stop` and `decide` call `release`.
   - Until the hooks build deploys, `runtime.build_deps` passes a no-op freezer. If the hooks build deploys after S3c-3, it freezes the experiments already running at its deploy.
   - Each call runs inside the same transaction that flips `experiment_accounts.running`, so the freeze and the running flag can't disagree.
   - Both are no-ops for an account with no hook weights.
@@ -653,7 +653,7 @@ Local Postgres, as in S1. Previews are build-only, so the checks run locally and
 
 - **Other cards that read S3c:**
   - **S2** enforces §3.5's "a format change sends the first 10 items to `review`" through its `FormatWindowSource`; S3c-2 provides `SetupRepo.format_window` and wires it in `runtime.build_deps` (§3.5). S2c's digest takes S3c-3's `experiments.digest_line` as a provider.
-  - **The hooks build** implements S3c's `HookFreezer` (`freeze`/`release`, given the transaction's connection), which S3c-3's start, stop and decide call (§4.4).
+  - **The hooks build** implements the `HookFreezer` protocol in `src/clipforge/hooks/freezer.py` (`freeze`/`release`, given the transaction's connection; the file is created by S3c-3 or HK-1, whichever lands first), which S3c-3's start, stop and decide call (§4.4).
   - **S3's needs router** takes S3c-3's `experiment_decision` provider from `runtime.build_deps` (log #147).
   - **S6 and later producers** read `EffectiveSetup` from their first version, so S3c-2's contract should come **before S6** (a soft dependency).
 - **Graph:** `S1 → S3c`, `S3 → S3c` (admin endpoint), `S2a → S3c` (migration order, format window), `HK -.-> S3c` (migration order only), `S3c -.-> S6` (soft), `S7 → S3c` (engagement metrics).
@@ -699,5 +699,5 @@ Local Postgres, as in S1. Previews are build-only, so the checks run locally and
 **For the coordinator to fold in (outside S3c's files):**
 - **04's dependency graph and the paragraph under it:** add `S2 --> S3c` (S2a's migration lands first, and S3c-2 wires S2's routing call site), and say S3c starts after S1's rollout, S2a's migration and S3's `admin` endpoint.
 - **04's S2 section:** nothing more to change (the coordinator amended S2's plan and cards 014 and 016 for the injected sources, log #142).
-- **04's HK section:** say that S3c-3's experiment start, stop and decide call the `HookFreezer` protocol S3c defines (`freeze`/`release`, given the transaction's connection; §4.4), and that migrations land S2a's 0002 first, then whichever of the hooks, S3 and S3c migrations lands next, one at a time, each numbered at landing.
+- **04's HK section:** say that S3c-3's experiment start, stop and decide call the `HookFreezer` protocol in `src/clipforge/hooks/freezer.py` (`freeze`/`release`, given the transaction's connection; §4.4), and that migrations land S2a's 0002 first, then whichever of the hooks, S3 and S3c migrations lands next, one at a time, each numbered at landing.
 - **No new ADR.** ADR-42's status line already says it is refined by ADR-48 and ADR-50, and nothing here changes a decision. The language ruling (Q1) is a log row, not an ADR, because it changes no contract.

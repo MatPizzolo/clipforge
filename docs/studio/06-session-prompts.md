@@ -323,7 +323,7 @@ Done 2026-09-29 (deployed and live; runbook §1). Only the 7-day background chec
   5. **S3c-3:**
      - experiments (draft, running, needs a decision derived on read, done, stopped) and the experiment page `/experiments/<id>`, the only place to keep or revert, with autopilot markers;
      - the re-cut estimate in the preview (`config.Prices`, source hours from `jobs`);
-     - one running per account (partial unique index), the edit block during a run, and the hooks freeze through S3c's `HookFreezer` protocol (`freeze` at start, `release` at stop and decide, in the same transaction; `NoHookFreezer` until the hooks build);
+     - one running per account (partial unique index), the edit block during a run, and the hooks freeze through the `HookFreezer` protocol in `src/clipforge/hooks/freezer.py` (created by S3c-3 or HK-1, whichever lands first; the scope includes it; `freeze` at start, `release` at stop and decide, in the same transaction; `NoHookFreezer` until the hooks build);
      - the metric registry (metrics available now), and before/during with the Wilson verdict and the 10-item floor;
      - the Experiments nav item, the `experiment_decision` row (registered in `needs_providers`), and `experiments.digest_line` registered as a digest provider in `runtime.build_deps` (no S2 module is edited);
      - learnings in the playbook.

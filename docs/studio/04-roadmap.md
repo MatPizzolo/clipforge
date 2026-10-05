@@ -148,7 +148,7 @@ Spec: [docs/superpowers/specs/2026-09-30-studio-s3-workspaces-design.md](../supe
   - `SETUP_SOURCE=db` after `verify` reports 0 differences.
 - [ ] **S3c-3, experiments and results** (after S3c-2 and S2c (card 016) are deployed):
   - the experiment flow and page (the only place to keep or revert), with the re-cut estimate and autopilot markers;
-  - one running experiment per account, and the hooks weight freeze through S3c's `HookFreezer` protocol (a no-op until the hooks build deploys);
+  - one running experiment per account, and the hooks weight freeze through the `HookFreezer` protocol in `src/clipforge/hooks/freezer.py` (shared with HK-1; a no-op until the hooks build deploys);
   - results with the metrics available now (posted, skipped, rejected and reasons, cost, holds) and the "too few items" warning;
   - the Experiments nav item, the `experiment_decision` "needs me" row (an S3 needs provider), and `experiments.digest_line` as a digest provider (wired in `runtime.build_deps`);
   - learnings in the category playbook.
