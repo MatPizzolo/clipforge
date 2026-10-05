@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import date, datetime
 from math import ceil
 from pathlib import Path
@@ -26,6 +27,7 @@ from clipforge.models import (
     PostingOverview,
     PostingState,
     PostStatus,
+    Source,
     StageCost,
     StageName,
 )
@@ -176,9 +178,9 @@ def job_summaries(deps: Deps) -> list[JobSummary]:
             if not is_db_error(exc):
                 raise
             log.warning("reading the jobs table failed, using the Dict: %s", redact(exc))
-    for job_id in deps.store.list_job_ids():
+    for job_id, raw in deps.store.job_records():
         try:
-            live = summary_of(deps.store.get(job_id))
+            live = summary_of(Job.model_validate_json(raw))
         except Exception as exc:
             log.warning("skipping unreadable job %s: %s", job_id, redact(exc), exc_info=True)
             continue
@@ -265,21 +267,26 @@ def _episode_counts(statuses: dict[str, JobStatus]) -> dict[str, int]:
 
 
 def _account_view(
-    posting: Posting, account: Account, summaries: list[JobSummary], now: datetime
+    posting: Posting,
+    account: Account,
+    summaries: list[JobSummary],
+    source: Callable[[str], Source | None],
+    now: datetime,
 ) -> AccountPosting:
-    """One account's channels and queue. A source belongs to its account, else to account #1."""
+    """One account's channels and queue. A source belongs to its account, else to account #1.
+    `source` is the overview's lookup, read once per request."""
     records = posting.repo.records(account.id)
     names: dict[str, str] = {}
     episodes: dict[str, dict[str, JobStatus]] = {}
     for s in summaries:
         if s.source_id is None:
             continue
-        source = posting.source(s.source_id)
-        owner = source.account_id if source else posting.default_account_id
+        found = source(s.source_id)
+        owner = found.account_id if found else posting.default_account_id
         if owner != account.id:
             continue
-        if source:
-            names[s.source_id] = source.credit_name
+        if found:
+            names[s.source_id] = found.credit_name
         else:
             names[s.source_id] = s.input.channel.name if s.input.channel else s.source_id
         label = s.source_label or s.job_id
@@ -295,7 +302,7 @@ def _account_view(
         by_status = counts.setdefault(sid, {})
         by_status[state] = by_status.get(state, 0) + 1
         if state in (PostStatus.QUEUED, PostStatus.SKIPPED):
-            if hold_reason(posting.source(sid), record.platforms, now) is not None:
+            if hold_reason(source(sid), record.platforms, now) is not None:
                 past += 1
             else:
                 waiting += 1
@@ -337,7 +344,8 @@ def posting_overview(deps: Deps, settings: Settings, now: datetime) -> PostingOv
         else sorted(posting.accounts(), key=lambda a: a.id)
     )
     summaries = job_summaries(deps)
-    views = [_account_view(posting, a, summaries, now) for a in accounts]
+    source = posting.source_lookup()
+    views = [_account_view(posting, a, summaries, source, now) for a in accounts]
     top = next((v for v in views if v.account_id == posting.default_account_id), None)
     problem = posting.problem or (
         settings.posting_problem if settings.state_reads == "dict" else None

@@ -92,6 +92,9 @@ class ApiError(RuntimeError):
         self.detail = detail
 
 
+TIMEOUT_S = 60.0  # per request; reads get one retry on a read timeout (card 039)
+
+
 class ApiClient:
     def __init__(self, http: httpx.Client, token: str, actor: str | None = None) -> None:
         self._http = http
@@ -104,7 +107,14 @@ class ApiClient:
         headers = dict(self._headers)
         if json_body is not None:
             headers["Content-Type"] = "application/json"
-        response = self._http.request(method, path, headers=headers, content=json_body)
+        try:
+            response = self._http.request(method, path, headers=headers, content=json_body)
+        except httpx.ReadTimeout:
+            if method != "GET":  # a write may have happened: never sent twice
+                raise
+            # a cold API or a slow overview (card 039): one more try, then the network error
+            print("slow response, retrying", file=sys.stderr)
+            response = self._http.request(method, path, headers=headers, content=json_body)
         if response.status_code >= 400:
             try:
                 detail = response.json().get("detail", response.text)
@@ -409,7 +419,7 @@ def main(
     if settings.api_token is None or (http is None and settings.api_url is None):
         print("set API_URL and API_TOKEN in .env (see .env.example)", file=sys.stderr)
         return 2
-    http = http or httpx.Client(base_url=str(settings.api_url), timeout=30.0)
+    http = http or httpx.Client(base_url=str(settings.api_url), timeout=TIMEOUT_S)
     client = ApiClient(http, settings.api_token.get_secret_value())
     try:
         if args.command == "run":

@@ -171,10 +171,10 @@ def test_toggle_and_undo_update_the_buttons(posting: Bot) -> None:
     ctx, sender = posting
     ref, message_id = _sent(ctx)
     handle_update(callback(1, f"p:tt:{ref}", message_id=message_id), ctx)
-    assert sender.answers[-1] == ("cb1", "TikTok ✓")
+    assert sender.answers[-1] == ("cb1", "")  # answered first; the buttons show the state
     assert sender.keyboards[message_id][0][0] == ("TikTok ✓", f"p:tt:{ref}")  # type: ignore[index]
     handle_update(callback(2, f"p:tt:{ref}", message_id=message_id), ctx)
-    assert sender.answers[-1] == ("cb2", "TikTok undone")
+    assert sender.answers[-1] == ("cb2", "")
     assert sender.keyboards[message_id] == fresh_keyboard(ref, list(LEGACY_PLATFORMS))
     for n, action in enumerate(["tt", "ig", "yt"], start=3):
         handle_update(callback(n, f"p:{action}:{ref}", message_id=message_id), ctx)
@@ -206,7 +206,8 @@ def test_reject_then_reason(posting: Bot) -> None:
 def test_tap_on_unknown_clip_answers_gone(posting: Bot) -> None:
     ctx, sender = posting
     handle_update(callback(1, "p:tt:20260101-bbbbbbbb-0001:clip_01"), ctx)
-    assert sender.answers == [("cb1", messages.GONE)]
+    assert sender.answers == [("cb1", "")]
+    assert sender.messages[-1][1] == messages.GONE  # told in the chat: a query answers once
 
 
 def test_taps_outside_the_posting_chat_or_from_strangers_do_nothing(posting: Bot) -> None:

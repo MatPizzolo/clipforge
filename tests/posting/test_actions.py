@@ -111,7 +111,8 @@ def test_a_database_error_answers_store_unavailable_and_changes_nothing(
     posting = _posting(ctx)
     posting.repo.toggle_posted = _db_down  # type: ignore[method-assign]
     handle_update(callback(1, f"p:tt:{REF}", message_id=mid), ctx)
-    assert _sender(ctx).answers[-1] == ("cb1", messages.STORE_UNAVAILABLE)
+    assert _sender(ctx).answers[-1] == ("cb1", "")
+    assert _sender(ctx).messages[-1][1] == messages.STORE_UNAVAILABLE
     record = posting.repo.get(REF)
     assert record is not None and record.posted == {}
     assert [kind for kind, _ in _events(db)] == ["sent"]

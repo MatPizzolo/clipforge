@@ -455,67 +455,70 @@ def handle_callback(
     ctx: BotContext, callback_id: str, data: str | None, chat_id: int | None,
     message_id: int | None, now: datetime, user_id: int | None = None,
 ) -> None:  # fmt: skip
-    """One button tap (spec §8). Always answers the tap; edits the buttons to the new state.
-    The writes go through `posting/actions.py` with the actor `telegram:<user id>` (the posting
-    chat is the owner's private chat, so its id is the user id when none is given)."""
+    """One button tap (spec §8). Answers the tap first, before any database or Volume read, so
+    those can't push the answer past Telegram's wait ("query is too old", card 039); then edits the
+    buttons to the new state, which is how a tap shows it worked. A failure is told in the chat:
+    a query is answered once. The writes go through `posting/actions.py` with the actor
+    `telegram:<user id>` (the posting chat is the owner's private chat, so its id is the user
+    id when none is given)."""
     from clipforge.posting import actions  # actions builds on this module
 
-    def answer(text: str) -> None:
-        # The state is written before the answer and the update is already claimed, so a failed
-        # answer ("query is too old" after a cold start) must not stop the rest of the tap.
+    try:
+        ctx.sender.answer_callback(callback_id, "")
+    except Exception:  # the update is already claimed: a failed answer never stops the tap
+        log.warning("posting: answering tap %s failed", callback_id, exc_info=True)
+
+    def tell(text: str) -> None:
+        # only into an allowed user's private chat (the posting chat is one), never elsewhere
+        if chat_id is None or chat_id not in ctx.settings.telegram_allowed_user_ids:
+            return
         try:
-            ctx.sender.answer_callback(callback_id, text)
+            ctx.sender.send_message(chat_id, text, message_id)
         except Exception:
-            log.warning("posting: answering tap %s failed", callback_id, exc_info=True)
+            log.warning("posting: telling the chat about tap %s failed", callback_id,
+                        exc_info=True)  # fmt: skip
 
     posting = posting_of(ctx.deps)
     parsed = parse_callback(data)
     if parsed is None or chat_id is None or message_id is None:
-        answer("")
         return
     try:
         record = posting.repo.get(parsed.ref)
         account = posting.account(record.item.account_id) if record is not None else None
     except Exception as exc:
         log.warning("posting: reading %s failed: %s", parsed.ref, redact(exc))
-        answer(messages.STORE_UNAVAILABLE if is_db_error(exc) else messages.SAVE_FAILED)
+        tell(messages.STORE_UNAVAILABLE if is_db_error(exc) else messages.SAVE_FAILED)
         return
     if record is None:
-        answer(messages.GONE)
+        tell(messages.GONE)
         return
     if account is None or account.posting.chat_id != chat_id:
-        answer("")
         return
     links = item_row(ctx.settings.dashboard_url, record.item)
     current = keyboard(record, links)
     if data not in {d for row in current for _, d in row}:  # a stale button: change nothing
-        answer("")
         actions.redraw_all(ctx, parsed.ref, also=[message_id])
         return
     actor = actions.telegram_actor(user_id if user_id is not None else chat_id)
-    note, then_next = "", False
+    then_next = False
     try:
         if parsed.action in PLATFORM_ACTIONS:
             platform = PLATFORM_ACTIONS[parsed.action]
-            on = actions.set_posted(posting, parsed.ref, platform, None, actor, now)
-            note = f"{LABELS[platform]} ✓" if on else f"{LABELS[platform]} undone"
+            actions.set_posted(posting, parsed.ref, platform, None, actor, now)
         elif parsed.action == "skip":
             actions.skip(posting, parsed.ref, actor, now)
-            note, then_next = "Skipped", True
+            then_next = True
         elif parsed.action == "rej":
             actions.reject(posting, parsed.ref, actor, now)
-            note = "Rejected. Why? (optional)"
         elif parsed.action == "why" and parsed.reason is not None:
             actions.set_reason(posting, parsed.ref, parsed.reason, actor)
-            note = "Thanks"
     except actions.ActionFailed as exc:
-        answer(str(exc))
+        tell(str(exc))
         return
     except Exception as exc:
         log.warning("posting: saving a tap on %s failed: %s", parsed.ref, redact(exc))
-        answer(messages.SAVE_FAILED)
+        tell(messages.SAVE_FAILED)
         return
-    answer(note)
     if parsed.action != "noop":
         actions.redraw_all(ctx, parsed.ref, also=[message_id])
     if then_next:

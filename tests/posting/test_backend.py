@@ -26,6 +26,14 @@ def test_postgres_mode_without_database(tmp_path: Path) -> None:
         posting.repo.records("realtalk-clips-en")
 
 
+def test_a_bad_state_reads_reads_the_dict_and_reports_the_problem(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path, posting_chat_id=ALLOWED_USER, state_reads="postgress")
+    posting = build_posting(settings, MemoryKV(), None)
+    assert isinstance(posting.repo, DictPostingRepo)
+    assert posting.problem is not None and posting.problem.startswith("STATE_READS must be")
+    assert posting.posting_accounts() == []  # nothing sends
+
+
 def test_modes_with_database(tmp_path: Path, db: Database) -> None:
     seed(
         db,
@@ -40,3 +48,6 @@ def test_modes_with_database(tmp_path: Path, db: Database) -> None:
     assert isinstance(pg.repo, DualPostingRepo) and isinstance(pg.repo.primary, SqlPostingRepo)
     assert [a.id for a in pg.posting_accounts()] == ["founder-tapes-en", "realtalk-clips-en"]
     assert pg.requires_source is True
+    bad = build_posting(make_settings(tmp_path, state_reads="postgress"), MemoryKV(), db)
+    assert isinstance(bad.repo, DualPostingRepo) and isinstance(bad.repo.primary, DictPostingRepo)
+    assert bad.problem is not None and bad.problem.startswith("STATE_READS must be")

@@ -323,6 +323,50 @@ def test_answer_failure_on_an_ignored_tap_does_not_raise(ctx: BotContext) -> Non
     handle_callback(ctx, "cb2", "p:skip:20260928-aaaaaaaa-0001:clip_09", ALLOWED_USER, 102, at(9))
 
 
+def test_a_tap_is_answered_before_any_read(ctx: BotContext) -> None:
+    # card 039: a cold start must not outlast Telegram's wait for the answer
+    assert send_next(ctx, at(9)) == ""
+    sender = _sender(ctx)
+    [first] = [r for r in _store(ctx).records(ACCOUNT) if r.sends]
+    posting = ctx.deps.posting
+    assert posting is not None
+    answered_at_read: list[int] = []
+    real_get = posting.repo.get
+
+    def get(ref: str) -> object:
+        answered_at_read.append(len(sender.answers))
+        return real_get(ref)
+
+    posting.repo.get = get  # type: ignore[method-assign]
+    handle_callback(ctx, "cb1", f"p:tt:{first.item.id}", ALLOWED_USER, 102, at(9, 5))
+    assert answered_at_read and answered_at_read[0] == 1
+    assert sender.answers == [("cb1", "")]
+
+
+def test_message_not_modified_is_a_silent_success(
+    ctx: BotContext, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # card 039: a redraw to the state already shown is not an error
+    from clipforge.posting import actions
+
+    assert send_next(ctx, at(9)) == ""
+    sender = _sender(ctx)
+    [first] = [r for r in _store(ctx).records(ACCOUNT) if r.sends]
+
+    def unchanged(chat_id: int, message_id: int, buttons: object) -> None:
+        raise RuntimeError("Message is not modified: specified new message content and reply "
+                           "markup are exactly the same")  # fmt: skip
+
+    with monkeypatch.context() as patch, caplog.at_level("WARNING"):
+        patch.setattr(sender, "edit_buttons", unchanged)
+        actions.redraw_all(ctx, first.item.id)
+    assert "editing message" not in caplog.text
+    sender.fail_on = {"edit_buttons"}  # any other failure is still logged
+    with caplog.at_level("WARNING"):
+        actions.redraw_all(ctx, first.item.id)
+    assert "editing message" in caplog.text
+
+
 def test_each_account_sends_at_its_own_slot(tmp_path: Path, db: Database) -> None:
     ctx = two_account_ctx(tmp_path, db)
     at_8_ny = datetime(2026, 9, 29, 8, 1, tzinfo=ZoneInfo("America/New_York"))
@@ -457,7 +501,8 @@ def test_save_failure_is_answered_not_raised(
     repo.toggle_posted = lambda *a: (_ for _ in ()).throw(RuntimeError("down"))  # type: ignore[method-assign]
     with caplog.at_level("WARNING"):
         handle_callback(ctx, "cb", f"p:tt:{REF}", ALLOWED_USER, 100, T0)
-    assert ctx.sender.answers[-1] == ("cb", messages.SAVE_FAILED)  # type: ignore[attr-defined]
+    assert ctx.sender.answers[-1] == ("cb", "")  # type: ignore[attr-defined]
+    assert ctx.sender.messages[-1] == (ALLOWED_USER, messages.SAVE_FAILED, 100)  # type: ignore[attr-defined]
     assert "down" in caplog.text
 
 
@@ -543,6 +588,20 @@ def test_tick_alerts_when_postgres_mode_has_no_database(tmp_path: Path) -> None:
     alerts = _with_ops(ctx)
     assert tick(ctx, at(12)).startswith("off: DATABASE_URL")
     assert alerts.messages[-1][1] == "⚠️ Posting is off: DATABASE_URL is not configured"
+
+
+def test_a_bad_state_reads_turns_the_tick_off_with_an_alert(tmp_path: Path) -> None:
+    # card 039: a typo in STATE_READS stops posting, never the app
+    harness = Harness.build(tmp_path)
+    settings = make_settings(tmp_path, state_reads="postgress", posting_chat_id=ALLOWED_USER)
+    harness.deps.posting = build_posting(settings, harness.store.kv, None)
+    ctx = BotContext(settings, FakeSender(), harness.deps)
+    alerts = _with_ops(ctx)
+    assert tick(ctx, at(8)).startswith("off: STATE_READS must be dict or postgres")
+    assert _sender(ctx).videos == []
+    assert alerts.messages[-1][1] == (
+        "⚠️ Posting is off: STATE_READS must be dict or postgres, got 'postgress'"
+    )
 
 
 def test_the_tick_sends_nothing_during_an_outage_and_go_clears_it(ctx: BotContext) -> None:
