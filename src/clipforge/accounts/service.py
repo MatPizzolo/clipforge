@@ -10,17 +10,24 @@ from typing import Literal
 from pydantic import Field, ValidationError
 
 from clipforge.accounts.blueprints import BlueprintError, load_blueprint
+from clipforge.actors import ACTOR
 from clipforge.config import Settings
 from clipforge.db.accounts import AccountExists, AccountsRepo
+from clipforge.db.autopilot import AutopilotRepo
 from clipforge.models import (
     ACCOUNT_ID,
     HANDLE,
     LEGACY_PLATFORMS,
     Account,
+    Autopilot,
     Contract,
     Platform,
     PlatformProfile,
     PostingSchedule,
+    PublisherProfile,
+    PublishPath,
+    ScheduleCopy,
+    hands_on,
 )  # fmt: skip
 from clipforge.pipeline.deps import KV
 from clipforge.schedule import normalize_hashtags, normalize_slots, schedule_problem
@@ -31,6 +38,9 @@ log = logging.getLogger(__name__)
 # copy and only touches Postgres when a slot is due, so Neon can scale to zero between slots.
 # One writer (ADR-14): this module, on create, edit and the daily sync.
 SCHEDULE_PREFIX = "posting:schedule:"
+# Next to each copy, the account's publish path (S2 spec §1.1; same writer). Missing: assisted.
+PUBLISH_PREFIX = "posting:publish:"
+PROFILE = r"[A-Za-z0-9._-]{1,64}"  # an Upload-Post profile username
 
 
 class AccountError(ValueError):
@@ -53,6 +63,10 @@ class AccountEdit(Contract):
     timezone: str | None = None
     hashtags: list[str] | None = None
     review_tier: Literal["review", "sample", "auto"] | None = None
+    # S2: the Upload-Post profile (connecting it is the owner's step that turns publishing on)
+    publisher_profile: str | None = Field(None, pattern=f"^{PROFILE}$")
+    facebook_page_id: str | None = Field(None, pattern=r"^[0-9]{1,32}$")
+    clear_publisher: bool = False
 
 
 def env_schedule(settings: Settings) -> PostingSchedule:
@@ -88,49 +102,102 @@ def _checked(schedule: PostingSchedule, settings: Settings) -> PostingSchedule:
     return schedule
 
 
-def publish_schedule(kv: KV, account: Account) -> None:
+def publish_path(account: Account, autopilot: Autopilot) -> PublishPath:
+    """Upload-Post only with Publish on and a connected profile (S2 spec §1.1)."""
+    if autopilot.publish and account.publisher is not None:
+        return PublishPath(publish_via="upload_post", profile=account.publisher.profile)
+    return PublishPath()
+
+
+def write_schedule_copy(kv: KV, account: Account, autopilot: Autopilot | None = None) -> None:
+    """The account's schedule copy and its publish path (the one writer of both keys).
+    `autopilot` None: the account's Hands-on default."""
     kv.put(f"{SCHEDULE_PREFIX}{account.id}", account.posting.model_dump_json())
+    path = publish_path(account, autopilot or hands_on(account))
+    kv.put(f"{PUBLISH_PREFIX}{account.id}", path.model_dump_json())
 
 
-def read_schedules(kv: KV) -> dict[str, PostingSchedule]:
-    """Every account's schedule copy; an invalid one is logged and left out."""
-    schedules: dict[str, PostingSchedule] = {}
+def publish_schedule(kv: KV, account: Account) -> None:
+    """S1's name for `write_schedule_copy` with the account's Hands-on default."""
+    write_schedule_copy(kv, account)
+
+
+def _publish_path(kv: KV, account_id: str) -> PublishPath:
+    raw = kv.get(f"{PUBLISH_PREFIX}{account_id}")
+    if raw is None:
+        return PublishPath()
+    try:
+        return PublishPath.model_validate_json(raw)
+    except ValidationError:
+        log.warning("ignoring an invalid publish path for %s", account_id)
+        return PublishPath()
+
+
+def read_schedules(kv: KV) -> dict[str, ScheduleCopy]:
+    """Every account's schedule copy with its publish path (a missing or invalid path reads as
+    assisted); an invalid copy is logged and left out."""
+    schedules: dict[str, ScheduleCopy] = {}
     for key in kv.keys():  # noqa: SIM118 (a KV, not a dict)
         if not key.startswith(SCHEDULE_PREFIX):
             continue
         raw = kv.get(key)  # a get per key also counts as Dict activity (ADR-24)
         if raw is None:
             continue
+        account_id = key[len(SCHEDULE_PREFIX) :]
         try:
-            schedules[key[len(SCHEDULE_PREFIX) :]] = PostingSchedule.model_validate_json(raw)
+            schedule = PostingSchedule.model_validate_json(raw)
         except ValidationError:
             log.warning("ignoring an invalid schedule copy %s", key)
+            continue
+        schedules[account_id] = ScheduleCopy.of(schedule, _publish_path(kv, account_id))
     return schedules
+
+
+def _autopilots(repo: AccountsRepo) -> dict[str, Autopilot]:
+    return AutopilotRepo(repo.db).all()
 
 
 def sync_schedules(repo: AccountsRepo, kv: KV) -> int:
     """Rewrite every account's copy from the database, and drop copies of deleted accounts."""
     accounts = repo.list()
+    autopilots = _autopilots(repo)
     for account in accounts:
-        publish_schedule(kv, account)
+        write_schedule_copy(kv, account, autopilots.get(account.id))
     known = {a.id for a in accounts}
-    for account_id in set(read_schedules(kv)) - known:
-        kv.delete(f"{SCHEDULE_PREFIX}{account_id}")
+    for key in kv.keys():  # noqa: SIM118 (a KV, not a dict)
+        for prefix in (SCHEDULE_PREFIX, PUBLISH_PREFIX):
+            if key.startswith(prefix) and key[len(prefix) :] not in known:
+                kv.delete(key)
     return len(accounts)
 
 
 def schedule_drift(repo: AccountsRepo, kv: KV) -> list[str]:
-    """Accounts with a posting chat whose Dict copy is missing or differs from the database
-    (read-only; `db_doctor` reports it before rollout step 4c.7, `sync_schedules` fixes it)."""
+    """Accounts with a posting chat whose Dict copy is missing or differs from the database, or
+    whose publish path (as read) is wrong (read-only; `db_doctor` reports it, `sync_schedules`
+    fixes it)."""
     copies = read_schedules(kv)
-    return [a.id for a in repo.list()
-            if a.posting.chat_id is not None and copies.get(a.id) != a.posting]  # fmt: skip
+    autopilots = _autopilots(repo)
+    drift = []
+    for a in repo.list():
+        if a.posting.chat_id is None:
+            continue
+        path = publish_path(a, autopilots.get(a.id) or hands_on(a))
+        copy = copies.get(a.id)
+        current = copy is not None and copy.schedule() == a.posting
+        same_path = copy is not None and (copy.publish_via, copy.profile) == (
+            path.publish_via, path.profile)  # fmt: skip
+        # a missing publish key reads as assisted, so it is drift only when that's wrong
+        if not (current and same_path):
+            drift.append(a.id)
+    return drift
 
 
 def create_account(
     repo: AccountsRepo, settings: Settings, req: AccountCreate, now: datetime,
-    kv: KV | None = None,
+    kv: KV | None = None, actor: str | None = None,
 ) -> Account:  # fmt: skip
+    """Creates the account Hands-on (its autopilot row and seed event in the same transaction,
+    S2 spec §3), recorded as `actor` when it is one, else `system:accounts`."""
     try:
         blueprint = load_blueprint(settings.blueprints_dir, req.blueprint)
     except BlueprintError as exc:
@@ -147,11 +214,15 @@ def create_account(
             blueprint_version=blueprint.version, kind=blueprint.category, language=req.language,
             niche=blueprint.niche, platforms=platforms, posting=_checked(posting, settings),
         )  # fmt: skip
-        repo.create(account, now)
+        seed = hands_on(account)
+        who = actor if actor is not None and ACTOR.fullmatch(actor) else "system:accounts"
+        repo.create(account, now, autopilot=seed.model_copy(update={"updated_by": who,
+                                                                     "updated_at": now}),
+                    actor=who)  # fmt: skip
     except (ValidationError, AccountExists) as exc:
         raise AccountError(str(exc)) from None
     if kv is not None:
-        publish_schedule(kv, account)
+        write_schedule_copy(kv, account, seed)
     return account
 
 
@@ -188,10 +259,41 @@ def edit_account(
     posting = _checked(posting.model_copy(update=changes), settings)
     updated = account.model_copy(update={
         "platforms": platforms, "posting": posting,
-        "review_tier": edit.review_tier or account.review_tier})  # fmt: skip
+        "review_tier": edit.review_tier or account.review_tier,
+        "publisher": _publisher(account, edit)})  # fmt: skip
     repo.update(updated, now)
+    if updated.publisher is not None and account.publisher is None:
+        _warn_profile_limit(repo, settings)
     if kv is not None:
         # after the database: a failed copy write is an error the caller sees, and repeating
         # the edit (or the daily sync) rewrites it
-        publish_schedule(kv, updated)
+        write_schedule_copy(kv, updated, AutopilotRepo(repo.db).get(account_id))
     return updated
+
+
+def _publisher(account: Account, edit: AccountEdit) -> PublisherProfile | None:
+    """`--clear-publisher` disconnects (the cancel of scheduled posts arrives in S2b);
+    `--publisher-profile` connects or renames; `--facebook-page-id` alone needs a profile."""
+    current = account.publisher
+    if edit.clear_publisher:
+        if edit.publisher_profile is not None or edit.facebook_page_id is not None:
+            raise AccountError("clear_publisher can't be combined with a profile or page id")
+        return None
+    if edit.publisher_profile is not None:
+        page = edit.facebook_page_id or (current.facebook_page_id if current else None)
+        disconnected = current.disconnected if current else {}
+        return PublisherProfile(profile=edit.publisher_profile, facebook_page_id=page,
+                                disconnected=disconnected)  # fmt: skip
+    if edit.facebook_page_id is not None:
+        if current is None:
+            raise AccountError("facebook_page_id needs a publisher profile first")
+        return current.model_copy(update={"facebook_page_id": edit.facebook_page_id})
+    return current
+
+
+def _warn_profile_limit(repo: AccountsRepo, settings: Settings) -> None:
+    """O4: Basic covers 5 profiles; upgrade at the 6th (log #440)."""
+    used = sum(a.publisher is not None for a in repo.list())
+    if used > settings.upload_post_profile_limit:
+        log.warning("Upload-Post profiles in use: %d, over UPLOAD_POST_PROFILE_LIMIT=%d; "
+                    "upgrade the plan", used, settings.upload_post_profile_limit)  # fmt: skip

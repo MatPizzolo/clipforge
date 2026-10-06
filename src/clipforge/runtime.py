@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from clipforge.bot.notifier import TelegramNotifier
 from clipforge.bot.telegram import TelegramClient, TelegramSender
@@ -34,6 +34,9 @@ from clipforge.pipeline.steps import Deps, Step
 from clipforge.posting.backend import build_posting
 from clipforge.posting.repo import DualPostingRepo
 from clipforge.stages.runner import producer_version
+
+if TYPE_CHECKING:
+    from clipforge.dispatch.tasks import DispatchCtx
 
 
 class DictKV:
@@ -168,3 +171,21 @@ def build_deps(
         build=settings.git_sha or None,
         ops=ops,
     )
+
+
+def build_dispatch_ctx(
+    settings: Settings,
+    deps: Deps,
+    sender: TelegramSender | None,
+    spawn: Callable[[str, str], None],
+    db: Callable[[], Database | None],
+) -> DispatchCtx:
+    """The dispatcher's context (ADR-27): the same `Posting` and ops alerts `posting_tick` used
+    (built by `build_deps`), so with no DATABASE_URL the env account posts exactly as before."""
+    from clipforge.bot.context import BotContext
+    from clipforge.dispatch.tasks import DispatchCtx
+    from clipforge.posting.backend import posting_of
+
+    bot = BotContext(settings, sender, deps) if sender is not None else None
+    return DispatchCtx(settings=settings, kv=deps.store.kv, posting=posting_of(deps), bot=bot,
+                       spawn=spawn, ops=deps.ops, db=db)  # fmt: skip

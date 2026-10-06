@@ -8,7 +8,7 @@ import pytest
 
 from clipforge.accounts.service import env_account
 from clipforge.bot import messages
-from clipforge.bot.posting import fresh_keyboard, tick
+from clipforge.bot.posting import fresh_keyboard
 from clipforge.bot.webhook import MAX_UPLOAD_BYTES, BotContext, handle_update
 from clipforge.jobs import utcnow
 from clipforge.models import LEGACY_PLATFORMS, Platform, PostStatus, RejectReason, TelegramTarget
@@ -18,6 +18,7 @@ from clipforge.posting.queue import status
 from clipforge.posting.repo import DictPostingRepo
 from clipforge.posting.slots import next_slot
 from tests.bot.fakes import ALLOWED_USER, CHAT, FakeSender, callback, make_settings, update, video
+from tests.bot.helpers import tick
 from tests.dbhelpers import make_account
 from tests.pipeline.harness import Harness
 from tests.posting.builders import ACCOUNT, run_channel_job
@@ -238,7 +239,8 @@ def test_status_pause_go_commands(posting: Bot) -> None:
     # at a slot: the tick computes the slot before it reads the pause (card 002 A3)
     slot = next_slot(env_account(ctx.settings).posting, utcnow())
     assert slot is not None
-    assert tick(ctx, slot + timedelta(minutes=1)) == f"{ACCOUNT}: paused"
+    # the dispatcher skips a braked account before reading anything (S2 §6.7)
+    assert tick(ctx, slot + timedelta(minutes=1)) == f"{ACCOUNT}: braked"
     handle_update(update(3, text="/go", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.RESUMED
     assert not DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
@@ -281,8 +283,12 @@ def test_pause_without_an_account_pauses_every_posting_account(posting: Bot) -> 
     handle_update(update(1, text="/pause", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.PAUSED
     assert DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
+    # /pause with no account is the fleet brake (S2 §6.7): /go <account> doesn't lift it
     handle_update(update(2, text=f"/go {ACCOUNT}", user_id=ALLOWED_USER), ctx)
-    assert sender.messages[-1][1] == f"{ACCOUNT}: {messages.RESUMED}"
+    assert sender.messages[-1][1] == f"{ACCOUNT}: {messages.STILL_BRAKED}"
+    assert DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
+    handle_update(update(3, text="/go all", user_id=ALLOWED_USER), ctx)
+    assert sender.messages[-1][1] == messages.RESUMED
     assert not DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
 
 

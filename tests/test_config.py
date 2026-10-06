@@ -160,7 +160,7 @@ def test_empty_posting_chat_id_means_off(tmp_path: Path) -> None:
 
 def test_database_and_state_settings(tmp_path: Path) -> None:
     settings = Settings(
-        _env_file=None,  # type: ignore[call-arg]
+        _env_file=None,
         jobs_root=tmp_path,
         database_url="postgresql://u:s3cr3tpw@host.neon.tech/db?sslmode=require",
         state_reads="postgres",
@@ -170,7 +170,7 @@ def test_database_and_state_settings(tmp_path: Path) -> None:
     assert "s3cr3tpw" not in repr(settings)
     assert settings.posting_account_id == "realtalk-clips-en"
     assert (settings.blueprints_dir / "realtalk-clips.toml").name == "realtalk-clips.toml"
-    defaults = Settings(_env_file=None, jobs_root=tmp_path)  # type: ignore[call-arg]
+    defaults = Settings(_env_file=None, jobs_root=tmp_path)
     assert defaults.state_reads == "dict" and defaults.database_url is None
 
 
@@ -212,7 +212,7 @@ def test_a_mangled_state_reads_is_not_echoed(
 
 def test_dashboard_url_is_optional_and_never_breaks_settings(tmp_path: Path) -> None:
     def url(value: str | None) -> str | None:
-        return Settings(_env_file=None, jobs_root=tmp_path,  # type: ignore[call-arg]
+        return Settings(_env_file=None, jobs_root=tmp_path,
                         dashboard_url=value).dashboard_url  # fmt: skip
 
     assert url(None) is None and url("") is None
@@ -223,3 +223,21 @@ def test_dashboard_url_is_optional_and_never_breaks_settings(tmp_path: Path) -> 
     assert url("http://dash.example") is None
     assert url("http://localhost:3000") == "http://localhost:3000"
     assert url("http://127.0.0.1:3000/") == "http://127.0.0.1:3000"
+
+
+def test_s2_settings_defaults() -> None:
+    s = Settings(_env_file=None)
+    assert s.recovery_window_s == 0  # no re-send until R5 (spec §6.3)
+    assert s.media_link_ttl_s == 86400  # no review_batch: removed by ADR-54
+    assert s.upload_post_profile_limit == 5
+    assert s.gate_enforce is False  # log-only until S2b (Task 8's dry-run)
+    assert s.upload_post_url == "https://api.upload-post.com"
+    assert s.upload_post_api_key is None and s.upload_post_webhook_secret is None
+    assert not hasattr(s, "review_batch")
+
+
+def test_owner_zone_falls_back_to_posting_timezone() -> None:
+    assert (
+        Settings(_env_file=None, posting_timezone="Europe/Madrid").owner_zone() == "Europe/Madrid"
+    )
+    assert Settings(_env_file=None, owner_timezone="UTC").owner_zone() == "UTC"

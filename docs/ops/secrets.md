@@ -22,6 +22,9 @@ Where each key lives. Values are typed by the owner only; sessions never read or
 | `NEON_BRANCH` | | ✅ | | | | written by `neon link` |
 | `STATE_READS` | add now (`dict`), flip at 4c.7 | ✅ **required**, identical to the secret | | | | `scripts/deploy.sh` refuses when it's missing from `.env`, and when it isn't `dict` without `--rollout-step 4c.7`. Change both places together |
 | `DEPLOY_DB_CHECK` | | optional (`on`/`off`, default `off`; `on` from rollout step 2) | | | | read only by `scripts/deploy.sh` from `.env`: when `on`, it refuses to deploy while the database is behind the code's newest migration (card 008, #391). Not secret |
+| `UPLOAD_POST_API_KEY`, `UPLOAD_POST_WEBHOOK_SECRET` | S2b (card 015), with the dashboard edit that adds only these keys | ✅ (S2b) | | | | Upload-Post's API key and webhook secret (`whsec_…`); both optional: without them publishing is off and the webhook answers 503 (S2 spec §8). Not needed for S2a |
+| `GATE_ENFORCE` | optional (`false` until S2b's dry run is at 0) | optional | | | | the policy gate holds items only when `true`; S2a leaves it unset (log-only, #461). Not secret |
+| `UPLOAD_POST_URL`, `MEDIA_LINK_TTL_S`, `RECOVERY_WINDOW_S`, `UPLOAD_POST_PROFILE_LIMIT` | optional | optional | | | | S2 defaults (`https://api.upload-post.com`, 86400, 0, 5) in `.env.example`; set only to change them. Not secret |
 | `YOUTUBE_PROXY_URL` | | ✅ | | | | unused (ADR-17 deferred); its password was pasted in chat once: rotate or delete it |
 | `AUTH_SECRET` | | | ✅ | preview, production (different values) | | Auth.js |
 | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | | | ✅ (the local OAuth app) | production (the production OAuth app) | | |

@@ -13,15 +13,14 @@ from sqlalchemy.exc import OperationalError
 
 from clipforge.bot import messages
 from clipforge.bot.context import BotContext
-from clipforge.bot.posting import tick
 from clipforge.bot.webhook import handle_update
 from clipforge.db.engine import Database
 from clipforge.db.tables import post_events
 from clipforge.models import Platform
-from clipforge.posting import actions
+from clipforge.posting import actions, brake
 from clipforge.posting.backend import Posting
 from tests.bot.fakes import ALLOWED_USER, FakeSender, callback, make_settings, update
-from tests.bot.helpers import two_account_ctx
+from tests.bot.helpers import tick, two_account_ctx
 from tests.posting.builders import JOB, T0
 
 REF = f"{JOB}:clip_01"  # realtalk's clip in two_account_ctx
@@ -125,17 +124,22 @@ def test_pause_and_next_answer_per_account_when_the_store_fails(
     posting = _posting(ctx)
     real = posting.repo.set_paused
 
-    def flaky(account_id: str, on: bool, at: datetime, actor: str | None = None) -> None:
+    def flaky(
+        account_id: str, on: bool, at: datetime, actor: str | None = None,
+        reason: str | None = None,
+    ) -> None:  # fmt: skip
         if account_id == "realtalk-clips-en":
             _db_down()
-        real(account_id, on, at, actor)
+        real(account_id, on, at, actor, reason)
 
     posting.repo.set_paused = flaky  # type: ignore[method-assign]
     handle_update(update(1, text="/pause", user_id=ALLOWED_USER), ctx)
     reply = _sender(ctx).messages[-1][1]
+    # the brake key was written first, so realtalk is braked even though its row failed (S2 §6.7)
     assert reply == (f"founder-tapes-en: {messages.PAUSED}\n"
-                     f"realtalk-clips-en: {messages.STORE_UNAVAILABLE}")  # fmt: skip
+                     f"realtalk-clips-en: {messages.PAUSED}{messages.BRAKE_ONLY}")  # fmt: skip
     assert posting.repo.paused("founder-tapes-en") and not posting.repo.paused("realtalk-clips-en")
+    assert brake.braked(ctx.deps.store.kv, "realtalk-clips-en")
 
     posting.repo.records = _db_down  # type: ignore[method-assign]
     handle_update(update(2, text="/next realtalk-clips-en", user_id=ALLOWED_USER), ctx)
@@ -148,3 +152,32 @@ def test_links_ride_on_clip_messages_only_with_a_dashboard(tmp_path: Path, db: D
     mid = _sent(ctx)
     buttons = _sender(ctx).keyboards[mid]
     assert buttons is not None and not any("://" in d for row in buttons for _, d in row)
+
+
+def test_a_skip_stamped_before_its_send_still_answers_it(tmp_path: Path, db: Database) -> None:
+    # card 017 item 9 / log #143: a container whose clock is 2 s behind the sender's must not
+    # leave the clip `sent` (it would count toward the pause rule forever)
+    from datetime import timedelta
+
+    from clipforge.models import PostStatus
+    from clipforge.posting.queue import status
+
+    ctx = two_account_ctx(tmp_path, db)
+    _sent(ctx)
+    record = _posting(ctx).repo.get(REF)
+    assert record is not None
+    actions.skip(_posting(ctx), REF, "telegram:42", record.sends[-1].at - timedelta(seconds=2))
+    after = _posting(ctx).repo.get(REF)
+    assert after is not None and status(after) is PostStatus.SKIPPED
+
+
+@pytest.mark.parametrize("actor", ["system:autopilot", "system:upload-post", "system:daily",
+                                   "system:migration", "system:demotion"])  # fmt: skip
+def test_system_actors_accepted(actor: str) -> None:
+    assert actions._checked(actor) == actor
+
+
+@pytest.mark.parametrize("actor", ["system:", "system:Bad", "sys:x", "system:x-", "system:-x"])
+def test_bad_system_actors_refused(actor: str) -> None:
+    with pytest.raises(ValueError):
+        actions._checked(actor)

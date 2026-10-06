@@ -13,7 +13,7 @@ PAUSE_AFTER = 2  # unanswered sends before the slots pause
 SAME_MOMENT_IOU = 0.5
 
 
-def _video(item: ContentItem) -> str:
+def video(item: ContentItem) -> str:
     return item.clip.source_hash if item.clip else item.id
 
 
@@ -71,7 +71,7 @@ def pick_next(records: list[PostRecord], now: datetime) -> PostRecord | None:
     last = max(sent, key=lambda r: r.sends[-1].at).item if sent else None
     pool = [r for r in records if eligible(r, now)]
     if last is not None:
-        other_video = [r for r in pool if _video(r.item) != _video(last)]
+        other_video = [r for r in pool if video(r.item) != video(last)]
         other_both = [r for r in other_video if r.item.source_id != last.source_id]
         pool = other_both or other_video or pool
     if not pool:
@@ -79,7 +79,8 @@ def pick_next(records: list[PostRecord], now: datetime) -> PostRecord | None:
     return min(pool, key=lambda r: (-_priority(r.item, now), *_order(r.item)))
 
 
-def _iou(item_a: ContentItem, item_b: ContentItem) -> float:
+def iou(item_a: ContentItem, item_b: ContentItem) -> float:
+    """How much two clips of the same video overlap (intersection over union of their ranges)."""
     a, b = item_a.clip, item_b.clip
     if a is None or b is None:
         return 0.0
@@ -94,8 +95,8 @@ def overlaps(item: ContentItem, records: list[PostRecord]) -> bool:
     and unavailable clips don't count, so a re-cut can bring their moment back (spec §10)."""
     return any(
         r.item.id != item.id
-        and _video(r.item) == _video(item)
+        and video(r.item) == video(item)
         and status(r) not in (PostStatus.REJECTED, PostStatus.UNAVAILABLE)
-        and _iou(r.item, item) > SAME_MOMENT_IOU
+        and iou(r.item, item) > SAME_MOMENT_IOU
         for r in records
     )
