@@ -8,7 +8,7 @@ Every decision the owner has made about ClipForge and the studio, in date order,
 
 Status: `current`, `superseded` (by entry N), `open` (waiting for the owner).
 
-Last updated: 2026-10-05.
+Last updated: 2026-10-06.
 
 ## Platform and architecture
 
@@ -369,6 +369,8 @@ Last updated: 2026-10-05.
 | 300 | 2026-10-05 | `web/` dependency audit before production (card 004): `overrides` pins `js-yaml` to 4.3.2 (three high advisories under `@hey-api/openapi-ts`), and `shadcn` moves to devDependencies (the app only imports its CSS, compiled at build). `npm audit` still lists 8 high findings, all the one `braces` advisory (no fixed release) reached only through build tools (shadcn CLI, eslint-config-next) that glob the repo's own files; `npm audit --omit=dev` is 0, so nothing reaches the deployed app. Recheck when `braces` ships a fix | current | card 004; web/README.md (Dependencies) |
 | 301 | 2026-10-05 | The dashboard's production domain is `https://clipforge-web-brown.vercel.app` (Vercel's assigned name; `clipforge-web.vercel.app` was taken), and the production GitHub OAuth app's callback is `https://clipforge-web-brown.vercel.app/api/auth/callback/github`. A custom domain later means a new callback in that OAuth app. A local `next start` needs `AUTH_TRUST_HOST=true` on the command line only (Auth.js trusts the host by itself under `next dev` and on Vercel); it's never set in `.env.local` or on Vercel | current | card 004; web/README.md |
 | 302 | 2026-10-06 | `web/package-lock.json` is written with CI's npm (setup-node's Node 24 npm, 11.19.0 on 2026-10-06; `npx -y npm@<version> install`), never the laptop's: npm 11.6.2 pruned the optional `@emnapi/core` and `@emnapi/runtime` entries and CI's `npm ci` failed on the PR. Card 004's lock was rebuilt from main's with 11.19.0, plus `audit fix` for the new `source-map-js` advisory (1.2.1 → 1.2.2, under postcss; it reached the production tree) | current | card 004; web/README.md (Dependencies) |
+| 153 | 2026-10-06 | O7 closed (owner, the proposed ruling): models with permissive weights pretrained on non-commercial data (e.g. `chinese-wav2vec2-base` in InfiniteTalk and EchoMimic Flash) are "needs owner review". X2 prefers LongCat 1.5 (Whisper features, unaffected); a wav2vec-based model is chosen only if it is clearly better in X2's blind rating, and then the owner decides with that evidence. Card 005 is unblocked | current | card 005; STATUS |
+| 154 | 2026-10-06 | Owner ruling (amends ADR-41's "at least 7 days of clean verifies" and the S1 plan's Task 23 precondition): S1 Task 23 (card 040) merges after **2** consecutive days of `posting_daily: verify` at 0 differences and 0 mirror failures in postgres mode, with no rollback, and after card 014's PR 2 is deployed with its clean day (that watch relies on the Dual writes). The other deletion conditions stay (repo tagged before the deploy, final `db-<date>.json`). `scripts/deploy.py`'s `STATE_READS` fix moves from the planned X0 card into card 040 (`scripts/deploy.py` added to `s1/`'s scope); until card 040 deploys, every deploy still passes `--rollout-step 4c.7` | current | card 040; ADR-41; S1 plan Task 23 |
 
 ## Open
 
@@ -376,5 +378,4 @@ Last updated: 2026-10-05.
 |---|---|---|---|
 | O3 | Final handles for founder.tapes and hombre.en.construccion | S2c, card 016 (founder.tapes and hombre.en.construccion are created just before it, #135, #140) | Check availability on TikTok, Instagram, YouTube and Facebook; record them in 09 |
 | O6 | Series formats for the three clip blueprints (S1 wrote drafts marked `# draft: owner edits`) | before S2's auto-posting | Rewrite after a week of posting shows which pillars work |
-| O7 | Models whose weights are permissive but were pretrained on non-commercial data, e.g. `chinese-wav2vec2-base` (MIT weights, WenetSpeech pretraining) in InfiniteTalk and EchoMimic Flash | before X2 resumes | Treat as "needs owner review": prefer LongCat 1.5 (Whisper, unaffected) unless a wav2vec-based model is clearly better in the X2 blind rating, and then decide with that evidence |
 | O8 | Calendar drag-to-reschedule (08 §2): moving one slot (writer `dispatch/plan.py`, S2's `slot_plans`) or an account's schedule (writer the accounts service); not in S3 (#146, S3 dashboard spec §11.11) | after card 015 (S2b) is deployed, or with S7 | A small follow-up card after S2b is deployed; until then pause the account from Calendar or edit its slots with `clipforge account edit` |

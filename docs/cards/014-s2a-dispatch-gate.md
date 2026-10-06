@@ -1,6 +1,6 @@
 # Card 014: S2a — rails: migration 0002, the dispatcher, the brake, autopilot, the gate and routing
 
-Status: proposed · Updated 2026-10-05 (ADR-54; read the S2 plan's amendment note): Task 1 drops `Settings.review_batch`; Task 2's 0002 has no `review_messages` table and its `posts.state` value `fallback` is `final_failed`; the assisted flow is built unchanged but stays paused by the owner's `/pause`, so the one-day watch compares paused ticks, not sends
+Status: sent 2026-10-05; PR 1 (migration 0002, data layer) deployed 2026-10-06 02:27 UTC (PR #51); PR 2 (dispatcher, brake, autopilot, gate, routing) in review (PR #52) · Updated 2026-10-05 (ADR-54; read the S2 plan's amendment note): Task 1 drops `Settings.review_batch`; Task 2's 0002 has no `review_messages` table and its `posts.state` value `fallback` is `final_failed`; the assisted flow is built unchanged but stays paused by the owner's `/pause`, so the one-day watch compares paused ticks, not sends
 Stream: S2 (S2a) · Branch: `s2a/dispatch-gate` · Worktree: `../clipForge-s2a` (created with `scripts/worktree.sh s2a/dispatch-gate`)
 Decision-log range: #480–#499 (append only, in this range)
 Model: mid-tier (implementing a written plan); most capable for the migration and the dispatcher's cut-over from `posting_tick`

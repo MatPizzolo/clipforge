@@ -50,6 +50,8 @@ allow = [
     "docs/DECISIONS.md",
     "CLAUDE.md",
     "docs/superpowers/**/*s1*",
+    # card 040 (Task 23): deploy.py drops its STATE_READS check with the Dict store (log #154)
+    "scripts/deploy.py",
     # card 010: the rollout ticks S1 and records Neon measurements
     "docs/studio/03-tools-and-models.md",
     "docs/studio/04-roadmap.md",
