@@ -18,7 +18,7 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [002](002-s1-finish.md) | S1 finish (stop before the rollout) | done 2026-10-01 (PR #5) | 001 merged |
 | [003](003-s3c-revision.md) | S3c design revision | done 2026-09-30 (PR #6) | 001 merged |
 | [004](004-s3a-deploy.md) | S3a local login and Vercel deploy | done 2026-10-06 (PR #50; https://clipforge-web-brown.vercel.app) | 001 merged, the owner's Vercel steps, merge after 002 |
-| [005](005-x2-resume.md) | X2 talking-head spike, resume | proposed | 001 merged, O7 ruled |
+| [005](005-x2-resume.md) | X2 talking-head spike, resume | sent 2026-10-06 | 001 merged, O7 ruled |
 | [006](006-s4-timeline.md) | S4 Timeline renderer | done 2026-10-01 (PR #13) | 002 merged |
 | [007](007-cleanup-docs.md) | Docs: audit and refresh every Markdown file to match main; propose removing unused files | done 2026-10-01 (PR #11) | 002 merged |
 | [008](008-x0-followups.md) | X0: `deploy.py` checks the migration head, CI deploys tagged, Stop hook on main/coord | done 2026-10-01 (PR #14) | 002 merged |
@@ -27,7 +27,7 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [011](011-s2-design.md) | S2: publishing and autopilot, design and plan (no code) | done 2026-10-02 (PR #27) | — |
 | [012](012-x4-visuals-music.md) | X4: stills, b-roll and music beds: licenses, cost, quality, one end-to-end Timeline | done 2026-10-02 (PR #28, #33) | — |
 | [013](013-x0-small-fixes.md) | X0: scope check aware of merges in progress | done 2026-10-02 (PR #26) | — |
-| [014](014-s2a-dispatch-gate.md) | S2a: rails: migration 0002, the dispatcher, the brake, autopilot on Hands-on, the gate (log-only) and routing (plan Tasks 1–8) | sent 2026-10-05; PR 1 (0002, data layer) deployed 2026-10-06 (PR #51); PR 2 (dispatcher, gate) in review (PR #52) | 010 done (step 7 verified, verify 0, schedule copies, Neon head 0001) |
+| [014](014-s2a-dispatch-gate.md) | S2a: rails: migration 0002, the dispatcher, the brake, autopilot on Hands-on, the gate (log-only) and routing (plan Tasks 1–8) | sent 2026-10-05; PR 1 (0002, data layer) deployed 2026-10-06 (PR #51); PR 2 (dispatcher, gate) deployed 2026-10-06 (PR #52); done after one clean day | 010 done (step 7 verified, verify 0, schedule copies, Neon head 0001) |
 | [015](015-s2b-publishing.md) | S2b: Upload-Post publishing for realtalk on Hands-on: R5's real call first, then publish state, webhook, reconcile, the review notification, hand-off (plan Tasks 9–19; ADR-54) | proposed | 014 and 031 deployed + one clean day; **024 deployed** (ADR-54); Basic bought; R5 read by the owner |
 | [016](016-s2c-ladder-launch.md) | S2c: the ladder, the digest, failure rows, tracking links; founder.tapes and hombre launch (plan Tasks 21–26) | proposed | 024 and 015 deployed + a day on Hands-on; O3; one permitted source each; two more profiles |
 | [017](017-x0-ci-speed.md) | X0: one CI run per commit, docs-only fast path, caches and timeouts, xdist measured, the flaky service test, PR template, dependabot, `scratch/` | done 2026-10-02 (PR #37) | — |
@@ -41,7 +41,7 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [025](025-s3b-produce.md) | S3-4: Produce with batches and estimates, the Jobs tab, Resume, Sources (plan Tasks 16–18) | proposed | 024 deployed |
 | [026](026-s3b-results.md) | S3-5: Results → Costs, Compare, the account read view (plan Tasks 19–21) | proposed | 025 deployed; strikes and Promote need 016 deployed |
 | [027](027-s3b-cutover.md) | S3-5b: `/clip`, `/status <id>` and typed `/resume` retired; the CLI on `admin`, `web` public-only (#146) (plan Tasks 22–23; `REVIEW_BATCH` removed by ADR-54) | proposed | 026 deployed, then each 7-day window |
-| [028](028-hk-library.md) | HK-1: the hook library: migration (numbered at landing), seeds, rotation on jobs, control stamps, `/admin` hooks routes and `clipforge hooks` (plan Tasks 1–6) | proposed | 010 done; 014 deployed |
+| [028](028-hk-library.md) | HK-1: the hook library: migration (numbered at landing), seeds, rotation on jobs, control stamps, `/admin` hooks routes and `clipforge hooks` (plan Tasks 1–6) | sent 2026-10-06; PR 1 merged (PR #54), PR 2 next | 010 done; 014 deployed |
 | [029](029-hk-variants.md) | HK-2: `keywords_v3` hook variants behind `HOOK_VARIANTS`, ranking, ratings, re-render (plan Tasks 7–11); the flag flip is a separate owner redeploy (ADR-49 window) | proposed | 028 deployed; fallbacks where 015, 016, 022, 023, 024 aren't |
 | [030](030-hk-page.md) | HK-3: the interim `/hooks?account=` page (plan Task 12) | proposed | 029 and 022 deployed; skipped if S3c's Hooks tab ships first |
 | [031](031-s5-split.md) | S5-1: `app.py` split into `modal_app/`, nothing live changes (plan Task 1) | proposed | 014 deployed; before 015 or 022 starts (#591) |
@@ -53,4 +53,4 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [037](037-s3c-wiring.md) | S3c-2: the clip producer reads the setup; `SETUP_SOURCE=db` is a separate owner redeploy (plan Tasks 11–16) | proposed | 036 deployed (014 for `FormatWindowSource`) |
 | [038](038-s3c-experiments.md) | S3c-3: experiments and results, the digest line, the needs row, the hooks freeze (plan Tasks 17–21) | proposed | 037 and 016 deployed |
 | [039](039-s1-followups.md) | S1: follow-ups from the rollout (bad STATE_READS, slow posting overview, CLI retry, callback answers) | done 2026-10-05 | 010 done |
-| [040](040-s1-task23.md) | S1 Task 23: retire the Dict posting store, `STATE_READS`, the `POSTING_*` settings and the keep-alive; `scripts/deploy.py` drops its `STATE_READS` check | proposed | PR #52 merged (build on it); merge after 2 clean `posting_daily` verifies and 014's PR 2 deployed with its clean day (#154) |
+| [040](040-s1-task23.md) | S1 Task 23: retire the Dict posting store, `STATE_READS`, the `POSTING_*` settings and the keep-alive; `scripts/deploy.py` drops its `STATE_READS` check | sent 2026-10-06 | PR #52 merged (build on it); merge after 2 clean `posting_daily` verifies and 014's PR 2 deployed with its clean day (#154) |
