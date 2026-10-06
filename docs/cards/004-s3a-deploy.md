@@ -1,6 +1,6 @@
 # Card 004: S3a — local login and the Vercel deploy (Tasks 12–13)
 
-Status: proposed (only after the owner's Vercel steps, runbook §5b)
+Status: done 2026-10-06 (PR #50, report docs/reports/004-s3a-2026-10-05.md; live at https://clipforge-web-brown.vercel.app; `npm audit` high findings 12 → 8, production tree 0, log #300)
 Stream: S3a · Branch: `s3a/deploy` · Worktree: `../clipForge-web`
 Decision-log range: #300–#319
 Model: mid-tier

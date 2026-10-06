@@ -271,10 +271,10 @@ cd web && npm run gen:check    # generated schemas match openapi.json
 uv run python scripts/export_openapi.py --check
 ```
 
-### 5b. Accounts and keys ⬜ (owner: at the end, after the other sessions; S3a is parked at checkpoint G until then)
+### 5b. Accounts and keys ✅ done 2026-10-06 (card 004: production at https://clipforge-web-brown.vercel.app)
 1. **Vercel Pro:** confirm the plan in the Vercel dashboard. Hobby is non-commercial only.
 2. **GitHub OAuth apps** (GitHub → Settings → Developer settings → OAuth Apps → New):
-   - production: callback `https://clipforge-web.vercel.app/api/auth/callback/github`, or your custom domain;
+   - production: callback `https://clipforge-web-brown.vercel.app/api/auth/callback/github` (Vercel's assigned name; `clipforge-web.vercel.app` was taken, log #301), or your custom domain;
    - local (optional): callback `http://localhost:3000/api/auth/callback/github`. Its id and secret go in `web/.env.local` as `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET`, with `OWNER_EMAIL` and `AUTH_SECRET`.
 3. **Vercel env.** Run in `web/`; each command prompts for its value. Get secrets from `npx auth secret`, and use a different value for preview and production:
    ```
@@ -288,7 +288,7 @@ uv run python scripts/export_openapi.py --check
    vercel env add OWNER_EMAIL production
    vercel env ls                  # names only; check nothing is missing
    ```
-   `MOCK_API=1` is already set for previews. Never add `MOCK_API` or `AUTH_DISABLED` to production. A preview proves only the build and the redirect to `/login` (log #83): GitHub login works on localhost and on the production domain only. Deep links keep their target through login (log #99).
+   `MOCK_API=1` for previews is **not** set automatically: add it with `vercel env add MOCK_API preview ""` (value `1`) before the next preview. `vercel link --yes` pulls the project's Development env into `web/.env.local`: check that file afterwards and remove anything it added that you didn't set (card 004 found `VERCEL_OIDC_TOKEN`). Never add `MOCK_API` or `AUTH_DISABLED` to production. A preview proves only the build and the redirect to `/login` (log #83): GitHub login works on localhost and on the production domain only. Deep links keep their target through login (log #99).
 4. Tell the S3a session it's done. It deploys a preview (mock data), and production only after your OK:
    ```
    cd web && vercel deploy            # preview
@@ -304,12 +304,14 @@ The build is three cards: 014 (S2a, rails), 015 (S2b, Upload-Post for realtalk) 
 1. Create the TikTok, Instagram (a Professional account linked to a Facebook Page), YouTube and Facebook accounts for founder.tapes and hombre.en.construccion, with the handles from O3. Use them normally for 3–5 days; no fake engagement. Record the handles in `docs/studio/09-account-registry.md`.
 2. Get source permissions for them: one permitted source each (a creator agreement), or a Whop account only if a campaign source is planned.
 
-**S2a (card 014), after card 010's rollout** (`STATE_READS=postgres` verified, `posting verify` at 0, `db_doctor` showing a schedule copy for every account, Neon's head at `0001`):
-1. `scripts/deploy.sh --dry-run`, then `scripts/deploy.sh --reason "S2a: dispatcher replaces posting_tick"`, outside the posting slots. CI runs migration 0002 before the deploy.
-2. `uv run modal run src/clipforge/app.py::db_doctor`: the head is `0002`.
-3. For one day: the `dispatcher:` log lines show the same results as the previous day's `posting_tick:` lines (with posting paused per ADR-54, both say paused and send nothing), and `uv run clipforge posting verify` reports 0 differences.
-4. In Telegram: `/pause realtalk-clips-en`, `/go realtalk-clips-en`, `/pause all`, `/go all`. Then `uv run clipforge autopilot show realtalk-clips-en`: Hands-on, "Publish: on, waiting for a connected profile".
-5. `uv run clipforge policy dry-run` (the gate is still log-only). Note the count for S2b.
+**S2a (card 014), in two PRs** (updated 2026-10-06): PR 1 (migration 0002 and the data layer) was deployed 2026-10-06 02:27 UTC (`deploy-20261006-0227`). PR 2 (the dispatcher, the brake, autopilot, the gate and routing) has no migration:
+1. `scripts/deploy.sh --dry-run --rollout-step 4c.7`, then `scripts/deploy.sh --reason "S2a-2: dispatcher replaces posting_tick" --rollout-step 4c.7`, outside the blackout (`--rollout-step 4c.7` is needed on every deploy until card 040, log #154).
+2. `uv run modal run src/clipforge/app.py::db_doctor`: ok, head `0002`, a schedule copy for every account.
+3. In Telegram, send one `/pause` (no account means all). It writes the fleet brake key and keeps `posting_state` paused. **Don't send `/go all`:** it lifts every brake and unpauses every account, and a slot opened in the last 30 minutes could send a clip before the next `/pause` (PR #52 review). Until the first 07:00 UTC `posting_daily`, the paused `posting_state` row alone keeps realtalk silent; that run restores a missing per-account brake key and sends one "Brake key … was missing; restored" alert, which is expected.
+4. For one day: the `dispatcher:` log lines say braked or paused and send nothing, and `uv run clipforge posting verify` reports 0 differences.
+5. `uv run clipforge autopilot show realtalk-clips-en`: Hands-on, "Publish: on, waiting for a connected profile".
+6. `uv run clipforge policy dry-run` (the gate is still log-only). Note the count for S2b.
+- Rollback: first check `/status` says paused. Then revert PR 2's merge on `main` and run the same two `deploy.sh` commands, and send `/pause` again if `/status` doesn't say paused afterwards (a `/pause` during a Neon error writes only the brake key, which main ignores). The database stays at `0002` (never `alembic downgrade` in production); main ignores the new `brake:*`, `posting:publish:*` and `dispatch:*` Dict keys, which expire after 7 idle days, and `posting_tick` obeys the paused `posting_state` row.
 
 **Before S2b's code (card 015, plan Task 9, R5):**
 1. Buy Upload-Post **Basic** (monthly; $24 for 5 profiles; Free has no TikTok). Upgrade to Professional ($50, 25 profiles) when the 6th account is created (O4, #440).
