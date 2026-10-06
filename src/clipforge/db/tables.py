@@ -12,13 +12,16 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     Integer,
     MetaData,
+    SmallInteger,
     String,
     Table,
     Text,
+    text,
 )  # fmt: skip
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -29,6 +32,7 @@ ACTOR_CHECK = (r"actor ~ '^(telegram:[0-9]{1,20}|web:[A-Za-z0-9-]{1,39}"
                r"|system:[a-z]([a-z-]{0,38}[a-z])?)$' and length(actor) <= 80")  # fmt: skip
 POST_STATES_SQL = ("state in ('pending', 'claimed', 'scheduled', 'retrying', 'published', "
                    "'failed', 'final_failed', 'cancelled')")  # fmt: skip
+HOOK_STATUS_SQL = "status in ('draft', 'approved', 'retired')"  # 0003_hooks.py
 JSONB_ = JSON().with_variant(JSONB(), "postgresql")
 TS = DateTime(timezone=True)
 
@@ -151,8 +155,20 @@ content_items = Table(
     Column("gate", JSONB_),
     Column("approved_at", TS),
     Column("approved_by", Text),
+    # The hook stamp (0003, ADR-50); one writer: posting/enqueue.py through db/posting.py
+    Column("hook_pattern_id", String(16)),
+    Column("hook_version", Integer),
+    Column("hook_weights", JSONB_),
+    Column("hook_result", JSONB_),  # HookResult plus rotation_id and frozen_by
+    # the re-render that replaced this item; one writer: posting/actions.supersede (HK-2)
+    Column("superseded_by", String(64),
+           ForeignKey("content_items.id", name="fk_items_superseded_by")),
+    ForeignKeyConstraint(["hook_pattern_id", "hook_version"],
+                         ["hook_pattern_versions.pattern_id", "hook_pattern_versions.n"],
+                         name="fk_items_hook_version"),
     Index("ix_items_account", "account_id"),
     Index("ix_items_source_hash", "source_hash"),
+    Index("ix_items_hook_pattern", "hook_pattern_id"),
 )  # fmt: skip
 
 assets = Table(
@@ -314,4 +330,86 @@ clicks = Table(
     Column("sub_id", Text, nullable=False),
     Column("country", String(2)),
     Index("ix_clicks_slug_at", "slug", "at"),
+)  # fmt: skip
+
+# ---- the hook library (0003, ADR-50, hooks spec §3); one writer: hooks/library.py, except
+# hook_ratings (hooks/ratings.py) and their own hook_events kinds (ratings, rerender)
+
+hook_patterns = Table(
+    "hook_patterns", metadata,
+    Column("id", String(16), primary_key=True),
+    Column("account_id", String(40), ForeignKey("accounts.id")),
+    Column("blueprint_name", Text),
+    Column("status", Text, nullable=False),
+    Column("current_version", Integer, nullable=False),
+    Column("control", Boolean, nullable=False, server_default=text("false")),
+    Column("created_at", TS, nullable=False),
+    Column("updated_at", TS, nullable=False),
+    CheckConstraint("(account_id is null) <> (blueprint_name is null)",
+                    name="ck_hook_patterns_scope"),
+    CheckConstraint(HOOK_STATUS_SQL, name="ck_hook_patterns_status"),
+    Index("ix_hook_patterns_account", "account_id"),
+    Index("ix_hook_patterns_blueprint", "blueprint_name"),
+)  # fmt: skip
+
+hook_pattern_versions = Table(  # append-only (trigger)
+    "hook_pattern_versions", metadata,
+    Column("pattern_id", String(16), ForeignKey("hook_patterns.id"), primary_key=True),
+    Column("n", Integer, primary_key=True),
+    Column("data", JSONB_, nullable=False),  # HookPatternData
+    Column("author", Text, nullable=False),
+    Column("note", Text),
+    Column("created_at", TS, nullable=False),
+    CheckConstraint(ACTOR_CHECK.replace("actor", "author"), name="ck_hook_versions_author"),
+)  # fmt: skip
+
+hook_weights = Table(
+    "hook_weights", metadata,
+    Column("account_id", String(40), ForeignKey("accounts.id"), primary_key=True),
+    Column("pattern_id", String(16), ForeignKey("hook_patterns.id"), primary_key=True),
+    Column("weight", Float, nullable=False),
+    Column("updated_by", Text, nullable=False),
+    Column("updated_at", TS, nullable=False),
+    CheckConstraint("weight >= 0", name="ck_hook_weights_nonneg"),
+    CheckConstraint(ACTOR_CHECK.replace("actor", "updated_by"), name="ck_hook_weights_updated_by"),
+)  # fmt: skip
+
+hook_freezes = Table(
+    "hook_freezes", metadata,
+    Column("id", BigInteger, Identity(), primary_key=True),
+    Column("account_id", String(40), ForeignKey("accounts.id"), nullable=False),
+    Column("experiment_id", BigInteger, nullable=False),  # S3c's experiments.id
+    Column("rotation", JSONB_, nullable=False),  # HookRotation
+    Column("frozen_at", TS, nullable=False),
+    Column("frozen_by", Text, nullable=False),
+    Column("released_at", TS),
+    Column("released_by", Text),
+    CheckConstraint(ACTOR_CHECK.replace("actor", "frozen_by"), name="ck_hook_freezes_frozen_by"),
+    CheckConstraint(f"released_by is null or ({ACTOR_CHECK.replace('actor', 'released_by')})",
+                    name="ck_hook_freezes_released_by"),
+    Index("ux_hook_freezes_open", "account_id", unique=True,
+          postgresql_where=text("released_at is null")),
+)  # fmt: skip
+
+hook_ratings = Table(
+    "hook_ratings", metadata,
+    Column("item_id", String(64), ForeignKey("content_items.id"), primary_key=True),
+    Column("rating", SmallInteger, nullable=False),
+    Column("actor", Text, nullable=False),
+    Column("at", TS, nullable=False),
+    CheckConstraint("rating in (-1, 1)", name="ck_hook_ratings_value"),
+    CheckConstraint(ACTOR_CHECK, name="ck_hook_ratings_actor"),
+)  # fmt: skip
+
+hook_events = Table(  # append-only (trigger)
+    "hook_events", metadata,
+    Column("id", BigInteger, Identity(), primary_key=True),
+    Column("at", TS, nullable=False),
+    Column("actor", Text, nullable=False),
+    Column("account_id", String(40), ForeignKey("accounts.id")),
+    Column("pattern_id", String(16), ForeignKey("hook_patterns.id")),
+    Column("kind", Text, nullable=False),
+    Column("data", JSONB_, nullable=False),
+    CheckConstraint(ACTOR_CHECK, name="ck_hook_events_actor"),
+    Index("ix_hook_events_pattern", "pattern_id", "at"),
 )  # fmt: skip

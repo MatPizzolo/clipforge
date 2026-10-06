@@ -17,7 +17,7 @@ from clipforge.sanitize import redact
 
 # The newest revision in alembic/versions/. The Modal image has no alembic/ directory, so the
 # code carries it; tests/db/test_doctor.py fails when a new revision isn't reflected here.
-EXPECTED_HEAD = "0002"
+EXPECTED_HEAD = "0003"
 
 
 class DbReport(TypedDict):

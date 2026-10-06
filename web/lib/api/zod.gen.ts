@@ -87,6 +87,24 @@ export const zClipStatus = z.enum([
 ]);
 
 /**
+ * HookPatternData
+ *
+ * A pattern's versioned body; an edit writes v+1.
+ */
+export const zHookPatternData = z.object({
+    examples: z.record(z.string(), z.string()).optional(),
+    fits: z.array(z.enum([
+        'clips',
+        'story',
+        'avatar'
+    ])).min(1),
+    frame_brief: z.string().max(300).nullish(),
+    max_words: z.int().gte(2).lte(10).optional().default(10),
+    name: z.string().min(1).max(40),
+    structure: z.string().min(1).max(300)
+});
+
+/**
  * JobStatus
  */
 export const zJobStatus = z.enum([
@@ -295,6 +313,28 @@ export const zAccount = z.object({
 });
 
 /**
+ * RotationEntry
+ */
+export const zRotationEntry = z.object({
+    control: z.boolean().optional().default(false),
+    data: zHookPatternData,
+    pattern_id: z.string(),
+    version: z.int(),
+    weight: z.number().gt(0)
+});
+
+/**
+ * HookRotation
+ *
+ * The account's rotation, frozen on the job at create_job (spec §2.1).
+ */
+export const zHookRotation = z.object({
+    account_id: z.string(),
+    entries: z.array(zRotationEntry).optional(),
+    frozen_by: z.int().nullish()
+});
+
+/**
  * SourceEvent
  *
  * One change to a source (source_events): who, when, before and after.
@@ -473,6 +513,7 @@ export const zTelegramTarget = z.object({
  */
 export const zJobInput = z.object({
     channel: zChannelRef.nullish(),
+    hooks: zHookRotation.nullish(),
     notify: zTelegramTarget.nullish(),
     options: zClipOptions.optional(),
     permission: zPermission,

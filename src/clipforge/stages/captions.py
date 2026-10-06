@@ -1,8 +1,8 @@
 """Captions: ASS (one style preset) and SRT for a clip.
 
 Up to 3 words per line, white uppercase Anton with a 7 px black border. Key words chosen by
-the LLM (prompts/keywords_v1.md, ADR-18) are yellow. Positioned bottom-center with MarginV 380
-on a 1920 canvas, just above the platform UI in the bottom 20%."""
+the LLM (prompts/keywords_v2.md, ADR-18, ADR-20) are yellow. Positioned bottom-center with
+MarginV 380 on a 1920 canvas, just above the platform UI in the bottom 20%."""
 
 from __future__ import annotations
 
@@ -190,7 +190,7 @@ def build_srt(chunks: list[list[Word]]) -> str:
 @dataclass
 class CaptionsDeps:
     llm: LLMClient
-    prompt: Prompt  # prompts/keywords_v1.md
+    prompt: Prompt  # prompts/keywords_v2.md (keywords_v3 with HOOK_VARIANTS)
     settings: Settings
 
 

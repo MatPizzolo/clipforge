@@ -414,6 +414,60 @@ export type HttpValidationError = {
 };
 
 /**
+ * HookPatternData
+ *
+ * A pattern's versioned body; an edit writes v+1.
+ */
+export type HookPatternData = {
+    /**
+     * Examples
+     */
+    examples?: {
+        [key: string]: string;
+    };
+    /**
+     * Fits
+     */
+    fits: Array<'clips' | 'story' | 'avatar'>;
+    /**
+     * Frame Brief
+     */
+    frame_brief?: string | null;
+    /**
+     * Max Words
+     */
+    max_words?: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Structure
+     */
+    structure: string;
+};
+
+/**
+ * HookRotation
+ *
+ * The account's rotation, frozen on the job at create_job (spec §2.1).
+ */
+export type HookRotation = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Entries
+     */
+    entries?: Array<RotationEntry>;
+    /**
+     * Frozen By
+     */
+    frozen_by?: number | null;
+};
+
+/**
  * ImportReport
  *
  * Result of `posting import` (Dict queue -> Postgres, spec §5.5).
@@ -479,6 +533,7 @@ export type JobError = {
  */
 export type JobInput = {
     channel?: ChannelRef | null;
+    hooks?: HookRotation | null;
     notify?: TelegramTarget | null;
     options?: ClipOptions;
     permission: Permission;
@@ -706,6 +761,29 @@ export type PublisherProfile = {
      * Profile
      */
     profile: string;
+};
+
+/**
+ * RotationEntry
+ */
+export type RotationEntry = {
+    /**
+     * Control
+     */
+    control?: boolean;
+    data: HookPatternData;
+    /**
+     * Pattern Id
+     */
+    pattern_id: string;
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Weight
+     */
+    weight: number;
 };
 
 /**

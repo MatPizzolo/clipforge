@@ -223,3 +223,7 @@ def test_dashboard_url_is_optional_and_never_breaks_settings(tmp_path: Path) -> 
     assert url("http://dash.example") is None
     assert url("http://localhost:3000") == "http://localhost:3000"
     assert url("http://127.0.0.1:3000/") == "http://127.0.0.1:3000"
+
+
+def test_hook_variants_default_off() -> None:
+    assert Settings(_env_file=None).hook_variants is False

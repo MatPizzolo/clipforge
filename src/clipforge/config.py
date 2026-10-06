@@ -84,6 +84,8 @@ class Settings(BaseSettings):
 
     # Models
     highlight_model: str = "claude-haiku-4-5"
+    # HOOK_VARIANTS: clip title variants in captions (ADR-50); off keeps keywords_v2
+    hook_variants: bool = False
     whisper_model: str = "large-v3-turbo"
     modal_app_name: str = "clipforge"
 
