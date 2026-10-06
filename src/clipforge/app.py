@@ -244,11 +244,11 @@ def _spawn_task(name: str, key: str) -> None:
     dispatch_task.spawn(name, key)
 
 
-def _dispatch_ctx() -> DispatchCtx:
+def _dispatch_ctx(deps: Deps) -> DispatchCtx:
     settings = get_settings()
     return runtime.build_dispatch_ctx(
         settings,
-        _service_deps(),
+        deps,
         runtime.telegram_sender(settings),
         spawn=_spawn_task,
         db=_database,
@@ -268,14 +268,15 @@ def dispatcher() -> None:
     from clipforge.dispatch.tasks import tick
     from clipforge.jobs import utcnow
 
-    ctx = _dispatch_ctx()
-    try:
-        _service_deps().volume.reload()  # see clips rendered since this container started
+    deps = _service_deps()  # once per tick; the context is built inside the try, so its
+    try:  # failure is alerted too
+        ctx = _dispatch_ctx(deps)
+        deps.volume.reload()  # see clips rendered since this container started
         for line in tick(ctx, utcnow()):
             print(f"dispatcher: {line}")
     except Exception as exc:
-        if ctx.ops is not None:
-            ctx.ops.alert(f"dispatcher crashed: {redact(exc)}", "dispatch", "crash")
+        if deps.ops is not None:
+            deps.ops.alert(f"dispatcher crashed: {redact(exc)}", "dispatch", "crash")
         raise
 
 
@@ -291,8 +292,9 @@ def dispatch_task(name: str, key: str) -> None:
     from clipforge.dispatch.tasks import run_spawned
     from clipforge.jobs import utcnow
 
-    _service_deps().volume.reload()
-    print(f"dispatch_task: {run_spawned(_dispatch_ctx(), name, key, utcnow())}")
+    deps = _service_deps()
+    deps.volume.reload()
+    print(f"dispatch_task: {run_spawned(_dispatch_ctx(deps), name, key, utcnow())}")
 
 
 @app.function(

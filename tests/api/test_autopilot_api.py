@@ -103,3 +103,38 @@ def test_dry_run_lists_what_would_be_held_and_writes_nothing(tmp_path: Path, db:
     with db.begin() as conn:
         assert conn.execute(select(func.count()).select_from(post_events)).scalar() == before
     assert client.get("/admin/policy/dry-run", headers=AUTH).json()["checked"] == 3
+
+
+def test_only_web_and_cli_actors_reach_autopilot(tmp_path: Path, db: Database) -> None:
+    # a token holder can't record a fake Telegram tap or session write (PR #52 review)
+    client = _client(tmp_path, db)
+    body = {"field": "publish", "value": False}
+    for actor in ("telegram:42", "session:s2a", "system:autopilot"):
+        r = client.put(PATH, headers=AUTH | {"X-Clipforge-Actor": actor}, json=body)
+        assert r.status_code == 400, actor
+    assert client.put(PATH, headers=AUTH | {"X-Clipforge-Actor": "cli:mat"},
+                      json=body).status_code == 200  # fmt: skip
+
+
+def test_the_admin_routes_need_the_token(tmp_path: Path, db: Database) -> None:
+    client = _client(tmp_path, db)
+    assert (
+        client.put(PATH, headers=ACTOR, json={"field": "publish", "value": False}).status_code
+        == 401
+    )
+    assert client.get("/admin/policy/dry-run").status_code == 401
+    assert client.get("/admin/policy/dry-run", headers={"Authorization": "Bearer nope"}
+                      ).status_code == 401  # fmt: skip
+
+
+def test_account_create_refuses_a_system_actor_from_the_header(
+    tmp_path: Path, db: Database
+) -> None:
+    from clipforge.db.autopilot import AutopilotRepo
+    from tests.api.test_accounts_api import CREATE
+
+    client = api_client(tmp_path, db)
+    system = {"X-Clipforge-Actor": "system:migration"}
+    assert client.post("/accounts", json=CREATE, headers=AUTH | system).status_code == 400
+    assert client.post("/accounts", json=CREATE, headers=AUTH).status_code == 201  # no header
+    assert AutopilotRepo(db).history("founder-tapes-en")[0].actor == "system:accounts"

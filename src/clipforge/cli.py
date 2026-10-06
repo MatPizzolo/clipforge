@@ -98,12 +98,32 @@ class ApiError(RuntimeError):
 TIMEOUT_S = 60.0  # per request; reads get one retry on a read timeout (card 039)
 
 
+class ActorError(RuntimeError):
+    """The OS user name can't become an actor; the message says what to do."""
+
+
+def cli_actor(user: str | None = None) -> str:
+    """`cli:<os user>`, cleaned to the actor pattern (letters, digits, `.`, `_`, `-`, at most 32),
+    so the API never answers an opaque 400 for an odd user name."""
+    try:
+        raw = user if user is not None else getpass.getuser()
+    except Exception:  # no user name in this environment
+        raw = ""
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", raw).strip("-")[:32].strip("-")
+    if not cleaned:
+        raise ActorError(
+            "can't record who ran this: the OS user name has no letters or digits to use as "
+            "cli:<user>; run it as a user with a plain name"
+        )
+    return f"cli:{cleaned}"
+
+
 class ApiClient:
     def __init__(self, http: httpx.Client, token: str, actor: str | None = None) -> None:
         self._http = http
         self._headers = {
             "Authorization": f"Bearer {token}",
-            "X-Clipforge-Actor": actor or f"cli:{getpass.getuser()}",
+            "X-Clipforge-Actor": actor or cli_actor(),
         }
 
     def _request(self, method: str, path: str, json_body: str | None = None) -> httpx.Response:
@@ -464,7 +484,11 @@ def main(
         print("set API_URL and API_TOKEN in .env (see .env.example)", file=sys.stderr)
         return 2
     http = http or httpx.Client(base_url=str(settings.api_url), timeout=TIMEOUT_S)
-    client = ApiClient(http, settings.api_token.get_secret_value())
+    try:
+        client = ApiClient(http, settings.api_token.get_secret_value())
+    except ActorError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     try:
         if args.command == "run":
             return _run(args, settings, client, sleep)

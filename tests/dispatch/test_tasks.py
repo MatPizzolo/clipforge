@@ -12,6 +12,7 @@ import pytest
 from clipforge.bot.context import BotContext
 from clipforge.bot.posting import extras, post_html
 from clipforge.config import Settings
+from clipforge.db.engine import Database
 from clipforge.dispatch.tasks import (
     CLAIM_PREFIX,
     DispatchCtx,
@@ -258,3 +259,21 @@ def test_brake_keys_are_read_during_an_outage_and_a_problem(tmp_path: Path) -> N
 def test_an_upload_post_account_says_it_waits_for_s2b(tmp_path: Path) -> None:
     ctx, _ = _ctx(tmp_path, {RT: _copy(["12:00"], via="upload_post")})
     assert tick(ctx, NOW) == [f"{RT}: upload_post, waiting for S2b's publishing"]
+
+
+def test_deploy_day_a_paused_row_without_a_brake_key_sends_nothing(
+    tmp_path: Path, db: Database
+) -> None:
+    # migration review M2: right after the S2a deploy no brake:* key exists yet (posting_daily
+    # restores it at 07:00 UTC), so ADR-54's pause rests on posting_state alone
+    from tests.bot.helpers import two_account_ctx
+
+    ctx = two_account_ctx(tmp_path, db)
+    assert ctx.deps.posting is not None
+    for account_id in ("realtalk-clips-en", "founder-tapes-en"):
+        ctx.deps.posting.repo.set_paused(account_id, True, AT_8 - timedelta(days=1), "telegram:1")
+    assert not [k for k in ctx.deps.store.kv.keys() if k.startswith("brake:")]  # noqa: SIM118
+    lines = tick(dispatch_ctx(ctx), AT_8)  # realtalk's 08:00 slot is open
+    assert any(line.endswith(": paused") and line.startswith(RT) for line in lines)
+    assert isinstance(ctx.sender, FakeSender) and ctx.sender.videos == []
+    assert ctx.sender.messages == []

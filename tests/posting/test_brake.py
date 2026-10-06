@@ -15,6 +15,7 @@ from clipforge.bot import messages
 from clipforge.bot.context import BotContext
 from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database
+from clipforge.db.posting import SqlPostingRepo
 from clipforge.db.tables import posting_state
 from clipforge.models import Brake
 from clipforge.ops import OpsAlerts
@@ -157,7 +158,9 @@ def test_a_key_newer_than_the_row_writes_the_row(db: Database, stored: AccountsR
     kv = MemoryKV()
     stored.set_paused(RT, False, T, "telegram:1")
     brake.write(kv, Brake(scope=RT, on=True, at=T + timedelta(hours=1), actor="telegram:1"))
-    assert repair_brakes(kv, db, T + timedelta(hours=2)) == [f"{RT}: posting_state set to paused"]
+    assert repair_brakes(kv, db, T + timedelta(hours=2), repo=SqlPostingRepo(db)) == [
+        f"{RT}: posting_state set to paused"
+    ]
     assert _row(db, RT)[:2] == (True, "system:daily")
 
 
@@ -167,7 +170,7 @@ def test_a_go_during_an_outage_beats_an_older_paused_row(
     kv = MemoryKV()
     stored.set_paused(RT, True, T, "telegram:1")
     brake.write(kv, Brake(scope=RT, on=False, at=T + timedelta(hours=1), actor="telegram:1"))
-    repair_brakes(kv, db, T + timedelta(hours=2))
+    repair_brakes(kv, db, T + timedelta(hours=2), repo=SqlPostingRepo(db))
     assert _row(db, RT)[0] is False
 
 
@@ -175,7 +178,7 @@ def test_a_row_newer_than_the_key_rewrites_the_key(db: Database, stored: Account
     kv = MemoryKV()
     brake.write(kv, Brake(scope=RT, on=False, at=T, actor="telegram:1"))
     stored.set_paused(RT, True, T + timedelta(hours=1), "telegram:1")
-    repair_brakes(kv, db, T + timedelta(hours=2))
+    repair_brakes(kv, db, T + timedelta(hours=2), repo=SqlPostingRepo(db))
     found = brake.read(kv, RT)
     assert found is not None and found.on and found.actor == "system:daily"
 
@@ -186,7 +189,7 @@ def test_a_missing_key_with_a_paused_row_is_restored_and_alerts(
     kv, sender = MemoryKV(), FakeSender()
     ops = OpsAlerts(kv, sender, ALLOWED_USER, "UTC")
     stored.set_paused(RT, True, T, "telegram:1")
-    lines = repair_brakes(kv, db, T + timedelta(hours=2), ops=ops)
+    lines = repair_brakes(kv, db, T + timedelta(hours=2), repo=SqlPostingRepo(db), ops=ops)
     assert brake.braked(kv, RT) and any("missing brake key" in line for line in lines)
     assert any("was missing" in text for _, text, _ in sender.messages)
 
@@ -196,7 +199,7 @@ def test_a_missing_key_with_an_unpaused_row_does_nothing(
 ) -> None:
     kv = MemoryKV()
     stored.set_paused(RT, False, T, "telegram:1")
-    assert repair_brakes(kv, db, T + timedelta(hours=2)) == []
+    assert repair_brakes(kv, db, T + timedelta(hours=2), repo=SqlPostingRepo(db)) == []
     assert brake.read(kv, RT) is None
 
 
@@ -204,7 +207,7 @@ def test_agreeing_sides_change_nothing(db: Database, stored: AccountsRepo) -> No
     kv = MemoryKV()
     brake.write(kv, Brake(scope="all", on=True, at=T, actor="telegram:1"))
     stored.set_paused(RT, True, T, "telegram:1")
-    assert repair_brakes(kv, db, T + timedelta(hours=2)) == []
+    assert repair_brakes(kv, db, T + timedelta(hours=2), repo=SqlPostingRepo(db)) == []
 
 
 def test_a_newer_go_row_under_the_fleet_brake_converges_to_paused_and_alerts(
@@ -215,8 +218,10 @@ def test_a_newer_go_row_under_the_fleet_brake_converges_to_paused_and_alerts(
     ops = OpsAlerts(kv, sender, ALLOWED_USER, "UTC")
     brake.write(kv, Brake(scope="all", on=True, at=T, actor="telegram:1"))
     stored.set_paused(RT, False, T + timedelta(hours=1), "cli:mat")  # e.g. S1's /go on rollback
-    lines = repair_brakes(kv, db, T + timedelta(hours=2), ops=ops)
+    lines = repair_brakes(kv, db, T + timedelta(hours=2), repo=SqlPostingRepo(db), ops=ops)
     assert lines == [f"{RT}: posting_state set to paused (/pause all is on)"]
     assert _row(db, RT)[:2] == (True, "system:daily")
     assert any("send /go all" in text for _, text, _ in sender.messages)
-    assert repair_brakes(kv, db, T + timedelta(days=1, hours=2)) == []  # converged
+    assert (
+        repair_brakes(kv, db, T + timedelta(days=1, hours=2), repo=SqlPostingRepo(db)) == []
+    )  # converged

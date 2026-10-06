@@ -21,7 +21,6 @@ from sqlalchemy import select, text
 from clipforge.accounts.service import sync_schedules
 from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database, redact
-from clipforge.db.posting import SqlPostingRepo
 from clipforge.db.tables import (
     accounts,
     assets,
@@ -163,14 +162,15 @@ def _backfill(deps: Deps, db: Database) -> str:
 
 
 def _brakes(deps: Deps, db: Database, now: datetime) -> str:
-    repo = deps.posting.repo if deps.posting is not None else None
-    lines = repair_brakes(deps.store.kv, db, now, ops=deps.ops, repo=repo)
+    if deps.posting is None:
+        # rows are written through the Posting repo (Dual: Postgres and the Dict mirror) only
+        return "skipped (posting is not configured in this container)"
+    lines = repair_brakes(deps.store.kv, db, now, ops=deps.ops, repo=deps.posting.repo)
     return "; ".join(lines) or "in step"
 
 
 def repair_brakes(
-    kv: KV, db: Database, now: datetime, *, ops: OpsAlerts | None = None,
-    repo: PostingRepo | None = None,
+    kv: KV, db: Database, now: datetime, *, repo: PostingRepo, ops: OpsAlerts | None = None,
 ) -> list[str]:  # fmt: skip
     """Where a brake key and `posting_state` disagree, the newer one wins (S2 spec §6.7):
     - a key newer than the row (a /pause or /go during a Neon outage) rewrites the row;
@@ -179,7 +179,6 @@ def repair_brakes(
     The writes go through `actions.repair_brake` as `system:daily`. Returns one line per fix."""
     from clipforge.posting import actions  # actions imports the bot, which imports this package
 
-    repo = repo or SqlPostingRepo(db)
     accounts_repo = AccountsRepo(db)
     lines: list[str] = []
     for account in accounts_repo.list():

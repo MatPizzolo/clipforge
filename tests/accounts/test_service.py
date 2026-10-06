@@ -250,3 +250,13 @@ def test_drift_counts_a_missing_publish_path_only_when_it_reads_wrong(db: Databa
     assert schedule_drift(repo, kv) == ["realtalk-clips-en"]
     sync_schedules(repo, kv)
     assert schedule_drift(repo, kv) == []
+
+
+@pytest.mark.parametrize("reserved", ["all", "brake", "system"])
+def test_reserved_account_ids_are_refused(db: Database, tmp_path: Path, reserved: str) -> None:
+    # `all` would share the fleet brake key brake:all (coordinator's review of PR #52)
+    with pytest.raises(AccountError, match="reserved"):
+        create_account(AccountsRepo(db), make_settings(tmp_path), AccountCreate(
+            blueprint="founder-tapes", language="en", handle="founder.tapes", id=reserved),
+            NOW)  # fmt: skip
+    assert AccountsRepo(db).list() == []

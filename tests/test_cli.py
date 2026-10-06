@@ -939,3 +939,22 @@ def test_a_slow_write_is_not_retried(tmp_path: Path, capsys: pytest.CaptureFixtu
     http = _slow(1, {"added": 0}, seen)
     assert main(["status", "--rebuild"], http=http, settings=make_settings(tmp_path)) == 1
     assert len(seen) == 1 and "retrying" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("user", "actor"), [
+    ("mat", "cli:mat"), ("Mat Pizzolo", "cli:Mat-Pizzolo"), ("DOMAIN\\mat", "cli:DOMAIN-mat"),
+    ("x" * 40, "cli:" + "x" * 32), ("josé", "cli:jos"),
+])  # fmt: skip
+def test_the_cli_actor_is_cleaned_to_the_pattern(user: str, actor: str) -> None:
+    from clipforge.actors import ACTOR
+    from clipforge.cli import cli_actor
+
+    assert cli_actor(user) == actor and ACTOR.fullmatch(actor)
+
+
+def test_an_unusable_os_user_is_a_clear_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("clipforge.cli.getpass.getuser", lambda: "@@@")
+    assert main(["account", "list"], http=_api({}), settings=make_settings(tmp_path)) == 2
+    assert "can't record who ran this" in capsys.readouterr().err

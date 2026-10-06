@@ -137,3 +137,12 @@ def test_old_webhook_deliveries_are_pruned(db: Database) -> None:
     assert prune_deliveries(db, NOON - DELIVERIES_KEPT) == 1
     with db.begin() as conn:
         assert conn.execute(select(func.count()).select_from(webhook_deliveries)).scalar() == 1
+
+
+def test_the_brake_repair_is_skipped_without_posting(tmp_path: Path, db: Database) -> None:
+    # it writes rows only through the Posting repo (Dual), never a bare SQL repo (PR #52 review)
+    from clipforge.posting.daily import _brakes
+
+    harness = Harness.build(tmp_path)
+    harness.deps.posting = None
+    assert _brakes(harness.deps, db, NOON).startswith("skipped")

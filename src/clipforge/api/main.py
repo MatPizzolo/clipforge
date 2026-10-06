@@ -30,7 +30,7 @@ from clipforge.accounts.service import (
     create_account,
     edit_account,
 )
-from clipforge.actors import ACTOR, is_system
+from clipforge.actors import ACTOR
 from clipforge.bot.telegram import TelegramSender
 from clipforge.bot.webhook import BotContext, handle_update
 from clipforge.config import Settings
@@ -85,13 +85,25 @@ def actor(x_clipforge_actor: Annotated[str | None, Header()] = None) -> str:
     return (x_clipforge_actor or "api").strip()[:80] or "api"
 
 
+HTTP_ACTOR_PREFIXES = ("web:", "cli:")  # the people who reach the API (the dashboard, the CLI)
+
+
 def person(x_clipforge_actor: Annotated[str | None, Header()] = None) -> str:
     """The person making an autopilot change: `web:<login>` from the dashboard or the CLI's
-    `cli:<user>`. Never anonymous and never `system:` from outside."""
+    `cli:<user>`. Never anonymous, and never `system:`, `telegram:` or `session:` from outside:
+    a token holder can't record a Telegram tap or a component's write."""
     who = (x_clipforge_actor or "").strip()
-    if not ACTOR.fullmatch(who) or is_system(who):
+    if not ACTOR.fullmatch(who) or not who.startswith(HTTP_ACTOR_PREFIXES):
         raise HTTPException(400, "X-Clipforge-Actor must name the person (web:<login>, cli:<user>)")
     return who
+
+
+def creator(x_clipforge_actor: Annotated[str | None, Header()] = None) -> str | None:
+    """Who creates an account: a person's actor from the header (as `person`), or None when
+    there is no header (the accounts service then records `system:accounts`)."""
+    if x_clipforge_actor is None or not x_clipforge_actor.strip():
+        return None
+    return person(x_clipforge_actor)
 
 
 def _same(given: str | None, expected: str) -> bool:
@@ -136,7 +148,7 @@ def create_app(ctx: ApiContext) -> FastAPI:
         return value
 
     @app.post("/accounts", status_code=201, dependencies=authorized)
-    def post_account(req: AccountCreate, who: Annotated[str, Depends(actor)]) -> Account:
+    def post_account(req: AccountCreate, who: Annotated[str | None, Depends(creator)]) -> Account:
         try:
             return create_account(
                 AccountsRepo(database()),

@@ -41,6 +41,9 @@ SCHEDULE_PREFIX = "posting:schedule:"
 # Next to each copy, the account's publish path (S2 spec §1.1; same writer). Missing: assisted.
 PUBLISH_PREFIX = "posting:publish:"
 PROFILE = r"[A-Za-z0-9._-]{1,64}"  # an Upload-Post profile username
+# Account ids that name something else: `brake:all` is the fleet brake, and `/pause all` its
+# command; `brake` and `system` would read like key prefixes and actors
+RESERVED_IDS = frozenset({"all", "brake", "system"})
 
 
 class AccountError(ValueError):
@@ -209,8 +212,11 @@ def create_account(
                  for p, prof in blueprint.platform_defaults.items()}  # fmt: skip
     posting = env_schedule(settings) if req.posting_from_env else PostingSchedule()
     try:
+        account_id = req.id or f"{blueprint.name}-{req.language}"
+        if account_id in RESERVED_IDS:
+            raise AccountError(f"{account_id!r} is reserved: choose another account id")
         account = Account(
-            id=req.id or f"{blueprint.name}-{req.language}", blueprint=blueprint.name,
+            id=account_id, blueprint=blueprint.name,
             blueprint_version=blueprint.version, kind=blueprint.category, language=req.language,
             niche=blueprint.niche, platforms=platforms, posting=_checked(posting, settings),
         )  # fmt: skip
