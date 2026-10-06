@@ -174,6 +174,42 @@ def test_database_and_state_settings(tmp_path: Path) -> None:
     assert defaults.state_reads == "dict" and defaults.database_url is None
 
 
+@pytest.mark.parametrize("value", ["postgress", "sql", "Postgres "])
+def test_a_bad_state_reads_turns_posting_off_not_the_app(tmp_path: Path, value: str) -> None:
+    # card 039 / rollout 010: `STATE_READS=postgress` failed every container for 5 minutes
+    s = make_settings(tmp_path, posting_chat_id=ALLOWED_USER, state_reads=value)
+    if value.strip().lower() == "postgres":  # case and spaces are forgiven
+        assert s.state_reads == "postgres" and s.state_reads_problem is None
+        return
+    assert s.state_reads == "dict"  # the Dict is still written on every action (ADR-41)
+    assert s.state_reads_problem == f"STATE_READS must be dict or postgres, got {value!r}"
+    assert s.posting_problem == s.state_reads_problem
+    assert s.posting_chat_id is None
+
+
+def test_a_bad_state_reads_from_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("STATE_READS", "postgress")
+    s = Settings(_env_file=None, jobs_root=tmp_path)  # type: ignore[call-arg]
+    assert s.state_reads == "dict"
+    assert s.state_reads_problem is not None and "postgress" in s.state_reads_problem
+
+
+def test_a_mangled_state_reads_is_not_echoed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # security review: a missing newline can put a connection string in the value
+    monkeypatch.setenv("STATE_READS", "postgres DATABASE_URL=postgresql://u:pw@host/db")
+    monkeypatch.setenv("STATE_READS_PROBLEM", "forged")
+    s = Settings(_env_file=None, jobs_root=tmp_path)  # type: ignore[call-arg]
+    expected = "STATE_READS must be dict or postgres, got a value of 47 characters"
+    assert s.state_reads_problem == expected
+    monkeypatch.setenv("STATE_READS", "dict")
+    fine = Settings(_env_file=None, jobs_root=tmp_path)  # type: ignore[call-arg]
+    assert fine.state_reads_problem is None
+
+
 def test_dashboard_url_is_optional_and_never_breaks_settings(tmp_path: Path) -> None:
     def url(value: str | None) -> str | None:
         return Settings(_env_file=None, jobs_root=tmp_path,  # type: ignore[call-arg]

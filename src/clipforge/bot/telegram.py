@@ -33,6 +33,13 @@ Button = tuple[str, str]  # (label, callback data), or (label, "https://…") fo
 Keyboard = list[list[Button]]
 UPDATE_TYPES = ["message", "callback_query"]
 
+
+def not_modified(exc: BaseException) -> bool:
+    """Telegram's BadRequest for an edit that changes nothing: the message already shows that
+    state (a redraw after a tap whose buttons were already drawn, card 039)."""
+    return "message is not modified" in str(exc).lower()
+
+
 # httpx logs every request URL at INFO, and Bot API URLs contain the bot token (rule 8).
 logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)

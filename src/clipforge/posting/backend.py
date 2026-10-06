@@ -46,6 +46,16 @@ class Posting:
     problem: str | None = None
     # The tick's schedules, read before any database call (card 002 A3). None: from accounts().
     schedules: Callable[[], dict[str, PostingSchedule]] | None = None
+    # Every source in one read, for views that look up many (card 039). None: no database.
+    all_sources: Callable[[], list[Source]] | None = None
+
+    def source_lookup(self) -> Callable[[str], Source | None]:
+        """`source`, read once for a whole view: one query for every source instead of one per
+        job or clip (the overview took 11 to 42 s on Neon, card 039)."""
+        if self.all_sources is None:
+            return self.source
+        found = {s.id: s for s in self.all_sources()}
+        return found.get
 
     def all_schedules(self) -> dict[str, PostingSchedule]:
         """Every account's schedule, without touching Postgres in postgres mode (the Dict
@@ -78,24 +88,27 @@ def posting_of(deps: Deps) -> Posting:
     return deps.posting
 
 
-def dict_posting(kv: KV, account: Account) -> Posting:
+def dict_posting(kv: KV, account: Account, problem: str | None = None) -> Posting:
     return Posting(DictPostingRepo(kv, account.id), PostingClaims(kv), lambda: [account],
-                   _no_source, account.id)  # fmt: skip
+                   _no_source, account.id, problem=problem)  # fmt: skip
 
 
 def build_posting(settings: Settings, kv: KV, db: Database | None) -> Posting:
     claims = PostingClaims(kv)
     default = settings.posting_account_id
+    # A bad STATE_READS reads the Dict (settings set `dict`) with posting off and alerted
+    problem = settings.state_reads_problem
     if db is None:
         if settings.state_reads == "postgres":
             return Posting(cast(PostingRepo, _Unavailable(NO_DATABASE)), claims, lambda: [],
                            _no_source, default, requires_source=True, problem=NO_DATABASE)  # fmt: skip  # noqa: E501
-        return dict_posting(kv, env_account(settings))
+        return dict_posting(kv, env_account(settings), problem)
     dict_repo, sql = DictPostingRepo(kv, default), SqlPostingRepo(db)
     sources = SourcesRepo(db)
     if settings.state_reads == "postgres":
         return Posting(DualPostingRepo(sql, dict_repo), claims, AccountsRepo(db).list,
                        sources.get, default, requires_source=True,
-                       schedules=lambda: read_schedules(kv))  # fmt: skip
+                       schedules=lambda: read_schedules(kv), all_sources=sources.list)  # fmt: skip
     env = env_account(settings)
-    return Posting(DualPostingRepo(dict_repo, sql), claims, lambda: [env], sources.get, default)
+    return Posting(DualPostingRepo(dict_repo, sql), claims, lambda: [env], sources.get, default,
+                   problem=problem, all_sources=sources.list)  # fmt: skip

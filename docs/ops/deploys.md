@@ -16,3 +16,4 @@ CI deploys (`ci.yml`'s deploy job, once `DEPLOY_ENABLED` is on) aren't listed he
 | 2026-10-05 21:10 | 399196c | deploy-20261005-2110 | owner | S1 rollout 4c.2: dual write (manual deploy: GitHub Actions outage; code identical to green CI run 37130686598) |
 | 2026-10-05 21:45 | 399196c | deploy-20261005-2145 | owner | S1 rollout 4c.7: reads from Postgres (the secret had `STATE_READS=postgress`: every container failed settings validation 21:45–21:50 UTC; nothing written, no slot due) |
 | 2026-10-05 21:50 | 399196c | deploy-20261005-2150 | owner | S1 rollout 4c.7: fix STATE_READS typo in the secret |
+| 2026-10-05 23:36 | 3f0fc88 | deploy-20261005-2336 | <your name> | 039: S1 follow-ups |
