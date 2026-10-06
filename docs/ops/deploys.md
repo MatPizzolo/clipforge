@@ -18,3 +18,4 @@ CI deploys (`ci.yml`'s deploy job, once `DEPLOY_ENABLED` is on) aren't listed he
 | 2026-10-05 21:50 | 399196c | deploy-20261005-2150 | owner | S1 rollout 4c.7: fix STATE_READS typo in the secret |
 | 2026-10-05 23:36 | 3f0fc88 | deploy-20261005-2336 | owner | 039: S1 follow-ups |
 | 2026-10-06 02:27 | 3cf7f2f | deploy-20261006-0227 | owner | S2a-1: migration 0002, data layer |
+| 2026-10-06 18:09 | 9857082 | deploy-20261006-1809 | owner | S2a-2: dispatcher replaces posting_tick |
