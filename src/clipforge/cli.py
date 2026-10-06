@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import json
 import os
 import re
 import sys
@@ -54,6 +55,12 @@ from clipforge.models import (
     CampaignRules,
     ChannelRef,
     ClipStatus,
+    HookDetail,
+    HookLibraryView,
+    HookPattern,
+    HookPatternData,
+    HookPatternVersion,
+    HookSeedReport,
     ImportReport,
     InboxEntry,
     JobInput,
@@ -230,6 +237,41 @@ class ApiClient:
         path = "/posting/restore" if day is None else f"/posting/restore?date={quote(day)}"
         return int(self._request("POST", path).json()["restored"])
 
+    # ---- the hook library (ADR-50; the /admin hooks routes)
+
+    def hooks(self, account_id: str) -> HookLibraryView:
+        path = f"/admin/accounts/{quote(account_id)}/hooks"
+        return HookLibraryView.model_validate(self._request("GET", path).json())
+
+    def hook(self, pattern_id: str) -> HookDetail:
+        path = f"/admin/hooks/{quote(pattern_id)}"
+        return HookDetail.model_validate(self._request("GET", path).json())
+
+    def create_hook(self, account_id: str, data: HookPatternData) -> HookPattern:
+        body = json.dumps({"account_id": account_id, "data": data.model_dump(mode="json")})
+        return HookPattern.model_validate(self._request("POST", "/admin/hooks", body).json())
+
+    def edit_hook(
+        self, pattern_id: str, data: HookPatternData, note: str | None
+    ) -> HookPatternVersion:
+        body = json.dumps({"data": data.model_dump(mode="json"), "note": note})
+        path = f"/admin/hooks/{quote(pattern_id)}"
+        return HookPatternVersion.model_validate(self._request("PUT", path, body).json())
+
+    def hook_action(self, pattern_id: str, action: str, body: dict[str, object]) -> HookPattern:
+        path = f"/admin/hooks/{quote(pattern_id)}/{action}"
+        return HookPattern.model_validate(self._request("POST", path, json.dumps(body)).json())
+
+    def hook_weight(self, pattern_id: str, account_id: str, weight: float, reason: str) -> float:
+        body = json.dumps({"account_id": account_id, "weight": weight, "reason": reason})
+        path = f"/admin/hooks/{quote(pattern_id)}/weight"
+        return float(self._request("PUT", path, body).json()["weight"])
+
+    def seed_hooks(self, account_ids: list[str] | None, dry_run: bool) -> HookSeedReport:
+        path = f"/admin/hooks/seed?dry_run={'true' if dry_run else 'false'}"
+        body = json.dumps({"account_ids": account_ids})
+        return HookSeedReport.model_validate(self._request("POST", path, body).json())
+
 
 def progress_line(view: JobView) -> str:
     line = f"{view.status} · {view.stage or 'queued'}"
@@ -351,6 +393,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_account_parser(commands)
     _add_autopilot_parsers(commands)
     _add_source_parser(commands)
+    _add_hooks_parser(commands)
     posting = commands.add_parser("posting", help="posting queue: move the Dict queue to Postgres")
     pacts = posting.add_subparsers(dest="action", required=True)
     pacts.add_parser("import").add_argument("--dry-run", action="store_true")
@@ -408,6 +451,41 @@ def _add_autopilot_parsers(commands: argparse._SubParsersAction[argparse.Argumen
     pacts = policy.add_subparsers(dest="action", required=True)
     dry = pacts.add_parser("dry-run", help="what the gate would hold now; exits 1 if anything")
     dry.add_argument("--account")
+
+
+def _add_hooks_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    hooks = commands.add_parser("hooks", help="the hook library: patterns, weights (ADR-50)")
+    hacts = hooks.add_subparsers(dest="action", required=True)
+    hacts.add_parser("list", help="an account's patterns and weights").add_argument("account")
+    hacts.add_parser("show", help="a pattern and its versions").add_argument("pattern")
+    add = hacts.add_parser("add", help="a draft pattern (approve it to rotate)")
+    add.add_argument("account")
+    edit = hacts.add_parser("edit", help="a new version of a pattern")
+    edit.add_argument("pattern")
+    edit.add_argument("--note", required=True, help="why it changed")
+    for sub, required in ((add, True), (edit, False)):
+        sub.add_argument("--name", required=required)
+        sub.add_argument("--structure", required=required, help="the instruction the LLM follows")
+        sub.add_argument("--example", action="append", default=[], metavar="LANG=TEXT",
+                         help="an example line per language (repeatable)")  # fmt: skip
+        sub.add_argument("--max-words", type=int)
+    approve = hacts.add_parser("approve", help="into rotation (weight 1.0 unless given)")
+    approve.add_argument("pattern")
+    approve.add_argument("--account", required=True)
+    approve.add_argument("--weight", type=float)
+    retire = hacts.add_parser("retire", help="out of rotation (weight 0); history stays")
+    retire.add_argument("pattern")
+    retire.add_argument("--account", required=True)
+    hacts.add_parser("share", help="to the account's blueprint").add_argument("pattern")
+    weight = hacts.add_parser("weight", help="set an account's weight for a pattern")
+    weight.add_argument("pattern")
+    weight.add_argument("weight", type=float)
+    weight.add_argument("--account", required=True)
+    weight.add_argument("--reason", required=True)
+    seed = hacts.add_parser("seed", help="six patterns per clips account without a library")
+    seed.add_argument("--account", action="append", help="only these accounts (repeatable)")
+    seed.add_argument("--dry-run", action="store_true")
+    hacts.add_parser("stats", help="a pattern's results (HK-2)").add_argument("pattern")
 
 
 def _add_source_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -514,6 +592,8 @@ def main(
             return _source(args, client)
         if args.command == "posting":
             return _posting_migration(args, client)
+        if args.command == "hooks":
+            return _hooks(args, client)
         if args.command == "jobs":
             backfill = client.backfill_jobs(args.dry_run)
             print(backfill.model_dump_json(indent=2))
@@ -1125,3 +1205,100 @@ def _policy_dry_run(args: argparse.Namespace, client: ApiClient) -> int:
     for hold in held:
         print(f"  {hold.account_id}  {hold.ref}  {', '.join(hold.codes)}")
     return 1 if held else 0
+
+
+def _examples(values: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for value in values:
+        lang, sep, text = value.partition("=")
+        if not sep or not lang.strip() or not text.strip():
+            raise ValueError(f"--example takes LANG=TEXT, got {value!r}")
+        out[lang.strip()] = text.strip()
+    return out
+
+
+def _hook_line(pattern: HookPattern, version: HookPatternVersion, weight: float) -> str:
+    tags = " ".join(t for t in ("control" if pattern.control else "",
+                                f"shared:{pattern.blueprint_name}" if pattern.blueprint_name
+                                else "") if t)  # fmt: skip
+    return (f"{pattern.id}  {version.data.name:<18} v{version.n}  {pattern.status:<8} "
+            f"weight {weight:g}  {tags}").rstrip()  # fmt: skip
+
+
+def _hooks(args: argparse.Namespace, client: ApiClient) -> int:
+    action = args.action
+    if action == "list":
+        view = client.hooks(args.account)
+        for row in view.patterns:
+            print(_hook_line(row.pattern, row.version, row.weight))
+        frozen = f", frozen by experiment {view.frozen_by}" if view.frozen_by is not None else ""
+        nothing = " (nothing rotates: clips ship today's title)" if not view.rotating else ""
+        print(f"{view.rotating} rotating{frozen}{nothing}")
+        return 0
+    if action == "show":
+        detail = client.hook(args.pattern)
+        scope = detail.pattern.account_id or f"blueprint {detail.pattern.blueprint_name}"
+        print(f"{detail.pattern.id}  {detail.pattern.status}  {scope}")
+        for v in detail.versions:
+            examples = "; ".join(f"{k}: {t}" for k, t in v.data.examples.items())
+            line = (f"  v{v.n} {v.created_at:%Y-%m-%d} {v.author}  {v.data.name}: "
+                    f"{v.data.structure}  [max {v.data.max_words} words] {examples}")  # fmt: skip
+            print(line.rstrip())
+            if v.note:
+                print(f"     note: {v.note}")
+        return 0
+    if action == "stats":
+        print("pattern stats arrive with HK-2 (card 029)", file=sys.stderr)
+        return 2
+    try:
+        if action == "add":
+            fields: dict[str, object] = {
+                "name": args.name,
+                "structure": args.structure,
+                "fits": ["clips"],
+                "examples": _examples(args.example),
+            }
+            if args.max_words:
+                fields["max_words"] = args.max_words
+            data = HookPatternData.model_validate(fields)
+            pattern = client.create_hook(args.account, data)
+            print(f"draft {pattern.id}: approve it with `clipforge hooks approve {pattern.id} "
+                  f"--account {args.account}`")  # fmt: skip
+            return 0
+        if action == "edit":
+            current = client.hook(args.pattern).versions[-1].data
+            changes: dict[str, object] = {}
+            if args.name:
+                changes["name"] = args.name
+            if args.structure:
+                changes["structure"] = args.structure
+            if args.example:
+                changes["examples"] = {**current.examples, **_examples(args.example)}
+            if args.max_words:
+                changes["max_words"] = args.max_words
+            data = HookPatternData.model_validate(current.model_dump() | changes)
+            version = client.edit_hook(args.pattern, data, args.note)
+            print(f"{args.pattern}: v{version.n}")
+            return 0
+    except (ValueError, ValidationError) as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    if action in ("approve", "retire", "share"):
+        body: dict[str, object] = {} if action == "share" else {"account_id": args.account}
+        if action == "approve" and args.weight is not None:
+            body["weight"] = args.weight
+        pattern = client.hook_action(args.pattern, action, body)
+        print(f"{pattern.id}: {pattern.status}"
+              + (f", shared to {pattern.blueprint_name}" if action == "share" else ""))  # fmt: skip
+        return 0
+    if action == "weight":
+        weight = client.hook_weight(args.pattern, args.account, args.weight, args.reason)
+        print(f"{args.pattern} on {args.account}: weight {weight:g}")
+        return 0
+    report = client.seed_hooks(args.account, args.dry_run)
+    suffix = " (dry run)" if report.dry_run else ""
+    for account_id, written in report.written.items():
+        already = " (already has a library)" if not written else ""
+        print(f"{account_id}: {written} patterns{already}{suffix}")
+    print("0 running experiments (S3c isn't built yet): nothing frozen")
+    return 0

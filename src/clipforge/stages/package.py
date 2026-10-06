@@ -11,6 +11,7 @@ from pathlib import Path
 import clipforge
 from clipforge.config import Settings
 from clipforge.hashing import cache_key
+from clipforge.hooks.rotation import rotation_note, stamp_for
 from clipforge.jobs import JobContext, Stored, cached_stage, merged_cost, utcnow
 from clipforge.models import (
     Job,
@@ -79,6 +80,8 @@ def run(
             shutil.copyfile(ctx.path(clip.video_path), folder / "video.mp4")
             shutil.copyfile(ctx.path(clip.srt_path), folder / "captions.srt")
             (folder / "post.md").write_text(post_markdown(job, clip))
+            stamp, _ = stamp_for(job.input.hooks, clip.spec.candidate.title, clip.hook,
+                                 flag_on=settings.hook_variants)  # fmt: skip
             packaged.append(
                 PackagedClip(
                     clip_id=clip.clip_id,
@@ -93,6 +96,7 @@ def run(
                     title=clip.spec.candidate.title,
                     hook=clip.spec.candidate.hook,
                     probe=clip.probe,
+                    hook_stamp=stamp,
                 )
             )
         metadata = JobMetadata(
@@ -110,6 +114,7 @@ def run(
                 highlight_model=settings.highlight_model,
                 whisper_model=transcript.model,
                 producer_version=producer_version,
+                hook_rotation=rotation_note(job.input.hooks, job.hooks_note),
             ),
             started_at=job.created_at,
             finished_at=utcnow(),

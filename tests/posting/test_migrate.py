@@ -236,3 +236,23 @@ def test_live_sub_keys_win_over_the_snapshot_when_the_base_key_expired(
     assert len(rec.sends) == 1  # the snapshot's send came back
     assert report.imported == 3 and report.from_snapshot >= 1
     assert before == sum(1 for k, _ in kv.items() if k.startswith("post:"))  # Dict untouched
+
+
+def test_verify_ignores_the_hook_stamp(db: Database) -> None:
+    # ADR-50: the stamp lives in Postgres and metadata.json only; the Dict keeps the legacy
+    # item, so a stamped item is the same in both stores until card 040 retires the Dict
+    from clipforge.hooks.library import HookLibrary
+    from clipforge.hooks.rotation import control_stamp
+    from clipforge.hooks.seeds import seed as seed_hooks
+    from clipforge.models import LEGACY_PLATFORMS
+    from clipforge.posting.repo import DictPostingRepo
+
+    seed(db, make_account(), sources=[BILLY_SOURCE])
+    library = HookLibrary(db)
+    seed_hooks(library, [ACCOUNT], T0)
+    stamp = control_stamp(library.rotation_for(ACCOUNT, "clips"), "A title")
+    stamped = item("clip_01").model_copy(update={"hook_stamp": stamp})
+    kv = MemoryKV()
+    DictPostingRepo(kv, ACCOUNT).add(stamped, list(LEGACY_PLATFORMS))
+    SqlPostingRepo(db).add(stamped, list(LEGACY_PLATFORMS))
+    assert migrate.verify_posting(kv, db, ACCOUNT).differences == 0

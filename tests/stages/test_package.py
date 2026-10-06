@@ -96,3 +96,38 @@ def test_package_layout_metadata_and_zip(tmp_path: Path) -> None:
             for f in ("video.mp4", "captions.srt", "post.md")
         ),
     }
+
+
+# ---- the hook stamp in metadata.json (ADR-50, HK-1)
+
+
+def _package_with(tmp_path: Path, job_input: JobInput, **job_updates: object) -> JobMetadata:
+    ctx = make_ctx(tmp_path, job_input)
+    ctx.store.save_clip(JOB_ID, ClipState(clip_id="clip_01", spec_ref="x", updated_at=utcnow()))
+    job = ctx.job().model_copy(update={"clip_ids": ["clip_01"], **job_updates})
+    ctx.store.save(job)
+    settings = Settings(_env_file=None, jobs_root=tmp_path)
+    package.run(ctx, job, make_source(), make_transcript(), [rendered(tmp_path, "clip_01", 1, 0.9)],
+                settings, VERSIONS)  # fmt: skip
+    path = tmp_path / JOB_ID / "output" / "metadata.json"
+    return JobMetadata.model_validate_json(path.read_text())
+
+
+def test_flag_off_metadata_carries_the_control_stamp(tmp_path: Path) -> None:
+    from tests.hooks.builders import entry, rotation
+
+    rot = rotation(entry("hp_ctl", 1.0, control=True), entry("hp_a", 1.0))
+    job_input = JobInput(source_path="x.mp4", permission="own", hooks=rot)
+    meta = _package_with(tmp_path, job_input)
+    stamp = meta.clips[0].hook_stamp
+    assert stamp is not None and stamp.result.pattern_id == "hp_ctl"
+    assert stamp.result.text == meta.clips[0].title and stamp.result.drawn is False
+    assert meta.versions.hook_rotation == rot.id
+    assert meta.clips[0].hook == make_spec().candidate.hook  # the spoken line is unchanged
+
+
+def test_metadata_says_why_a_job_had_no_rotation(tmp_path: Path) -> None:
+    job_input = JobInput(source_path="x.mp4", permission="own")
+    assert _package_with(tmp_path, job_input).versions.hook_rotation == "none"
+    meta = _package_with(tmp_path / "b", job_input, hooks_note="unavailable")
+    assert meta.versions.hook_rotation == "unavailable" and meta.clips[0].hook_stamp is None

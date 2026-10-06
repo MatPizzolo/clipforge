@@ -6,11 +6,14 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 
+from clipforge.hooks.rotation import stamp_for
 from clipforge.models import (
     Account,
     AssetSource,
     ClipOrigin,
     ContentItem,
+    HookResult,
+    HookRotation,
     Job,
     PackagedClip,
     Platform,
@@ -37,17 +40,19 @@ class ClipFacts:
     title: str
     hook: str
     video_path: str  # relative to JOBS_ROOT
+    hook_result: HookResult | None = None  # the title card's hook (HK-2's drawn result)
 
     @classmethod
     def from_rendered(cls, r: RenderedClip) -> ClipFacts:
         c = r.spec.candidate
         return cls(r.clip_id, r.spec.rank, r.spec.source.source_hash, r.spec.start, r.spec.end,
-                   c.score, c.title, c.hook, r.video_path)  # fmt: skip
+                   c.score, c.title, c.hook, r.video_path, r.hook)  # fmt: skip
 
     @classmethod
     def from_packaged(cls, c: PackagedClip, source_hash: str, output_dir: str) -> ClipFacts:
+        hook = c.hook_stamp.result if c.hook_stamp is not None else None
         return cls(c.clip_id, c.rank, source_hash, c.start, c.end, c.score, c.title, c.hook,
-                   f"{output_dir}/{c.video}")  # fmt: skip
+                   f"{output_dir}/{c.video}", hook)  # fmt: skip
 
 
 def platforms_for(account: Account) -> list[Platform]:
@@ -55,13 +60,18 @@ def platforms_for(account: Account) -> list[Platform]:
 
 
 def items_for(job: Job, clips: list[ClipFacts], now: datetime, account: Account,
-              source: Source | None, version: str) -> list[ContentItem]:  # fmt: skip
+              source: Source | None, version: str, *, rotation: HookRotation | None = None,
+              flag_on: bool = False) -> list[ContentItem]:  # fmt: skip
+    """`rotation` is the job's frozen one (`job.input.hooks`): each item is stamped with the
+    control, or with its drawn result once HOOK_VARIANTS is on (ADR-50)."""
     channel = job.input.channel
     if channel is None:
         return []
     credit = source.credit_name if source else channel.name
     permission = source.permission.type if source else job.input.permission
     sponsored = bool(source and source.campaign and source.campaign.sponsored)
+    stamps = {c.clip_id: stamp_for(rotation, c.title, c.hook_result, flag_on=flag_on)
+              for c in clips}  # fmt: skip
     return [
         ContentItem(
             id=f"{job.job_id}:{c.clip_id}",
@@ -71,7 +81,7 @@ def items_for(job: Job, clips: list[ClipFacts], now: datetime, account: Account,
             language=account.language,
             video_path=c.video_path,
             duration=c.end - c.start,
-            title=c.title,
+            title=stamps[c.clip_id][1],
             hook=c.hook,
             score=c.score,
             credits=[credit],
@@ -94,6 +104,7 @@ def items_for(job: Job, clips: list[ClipFacts], now: datetime, account: Account,
                 episode_finished_at=job.updated_at,
             ),
             queued_at=now,
+            hook_stamp=stamps[c.clip_id][0],
         )
         for c in sorted(clips, key=lambda c: c.rank)
     ]
@@ -116,7 +127,13 @@ def enqueue(repo: PostingRepo, items: list[ContentItem], platforms: list[Platfor
 
 
 def enqueue_job(
-    posting: Posting, job: Job, clips: list[ClipFacts], now: datetime, version: str
+    posting: Posting,
+    job: Job,
+    clips: list[ClipFacts],
+    now: datetime,
+    version: str,
+    *,
+    flag_on: bool = False,
 ) -> int:
     channel = job.input.channel
     if channel is None:
@@ -140,4 +157,6 @@ def enqueue_job(
         platforms = [p for p in platforms if p not in missing]
         if not platforms:
             return 0
-    return enqueue(posting.repo, items_for(job, clips, now, account, source, version), platforms)
+    items = items_for(job, clips, now, account, source, version, rotation=job.input.hooks,
+                      flag_on=flag_on)  # fmt: skip
+    return enqueue(posting.repo, items, platforms)

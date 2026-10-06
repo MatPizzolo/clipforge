@@ -49,6 +49,7 @@ from clipforge.sanitize import clean, redact
 
 if TYPE_CHECKING:
     from clipforge.db.jobs import JobsRepo
+    from clipforge.hooks.library import HookLibrary
     from clipforge.ops import OpsAlerts
     from clipforge.posting.backend import Posting
 
@@ -104,6 +105,8 @@ class Deps:
     version: str = "clips:unknown"  # producer version on new items (ADR-43), not the git SHA
     build: str | None = None  # the deploy's git SHA, kept on job rows
     ops: OpsAlerts | None = None  # silent failures to the owner's chat (ADR-45)
+    hooks: HookLibrary | None = None  # the hook library (ADR-50); None without a database
+    hook_variants: bool = False  # HOOK_VARIANTS (HK-2); off: items carry the control stamp
 
     def notifier(self, job: Job) -> Notifier:
         """Never raises: a broken notifier must not fail or retry a step (ADR-14)."""
@@ -466,7 +469,8 @@ def _enqueue_posts(deps: Deps, job: Job, rendered: list[RenderedClip]) -> None:
         return
     try:
         clips = [ClipFacts.from_rendered(r) for r in rendered]
-        added = enqueue_job(deps.posting, job, clips, utcnow(), deps.version)
+        added = enqueue_job(deps.posting, job, clips, utcnow(), deps.version,
+                            flag_on=deps.hook_variants)  # fmt: skip
         log.info("queued %d clip(s) of %s for posting", added, job.job_id)
     except Exception as exc:
         log.exception("queueing %s for posting failed", job.job_id)
