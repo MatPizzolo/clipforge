@@ -1,6 +1,6 @@
 # Card 028: HK (HK-1) — the hook library: tables, seeds, rotation on jobs, control stamps
 
-Status: sent 2026-10-06; PR 1 (hk-1a: contracts, migration 0003, the freezer protocol) merged 2026-10-06 (PR #54), deploy next; PR 2 (library, seeds, rotation, stamps, CLI) after PR 1 is deployed
+Status: deployed 2026-10-06 19:26 UTC (PRs #54 and #56 together, deploy-20261006-1926; report docs/reports/028-hk-2026-10-06.md); done after the owner's seed and one clipped episode (report item 11, steps 4–6)
 Stream: HK (HK-1) · Branch: `hk/library` · Worktree: `../clipForge-hk` (created with `scripts/worktree.sh hk/library`)
 Decision-log range: #550–#579 (append only; #550–#562 are taken, so #563–#579 are free, shared in sequence by cards 028–030: re-read the log and take the next free number)
 Model: mid-tier (implementing a written plan); most capable for the migration and Task 5's enqueue and package change

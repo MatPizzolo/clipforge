@@ -41,7 +41,7 @@ Run card docs/cards/NNN-<stream>-<topic>.md
 | [025](025-s3b-produce.md) | S3-4: Produce with batches and estimates, the Jobs tab, Resume, Sources (plan Tasks 16–18) | proposed | 024 deployed |
 | [026](026-s3b-results.md) | S3-5: Results → Costs, Compare, the account read view (plan Tasks 19–21) | proposed | 025 deployed; strikes and Promote need 016 deployed |
 | [027](027-s3b-cutover.md) | S3-5b: `/clip`, `/status <id>` and typed `/resume` retired; the CLI on `admin`, `web` public-only (#146) (plan Tasks 22–23; `REVIEW_BATCH` removed by ADR-54) | proposed | 026 deployed, then each 7-day window |
-| [028](028-hk-library.md) | HK-1: the hook library: migration (numbered at landing), seeds, rotation on jobs, control stamps, `/admin` hooks routes and `clipforge hooks` (plan Tasks 1–6) | sent 2026-10-06; PR 1 merged (PR #54), PR 2 next | 010 done; 014 deployed |
+| [028](028-hk-library.md) | HK-1: the hook library: migration (numbered at landing), seeds, rotation on jobs, control stamps, `/admin` hooks routes and `clipforge hooks` (plan Tasks 1–6) | deployed 2026-10-06 (PRs #54, #56); done after the seed and one episode | 010 done; 014 deployed |
 | [029](029-hk-variants.md) | HK-2: `keywords_v3` hook variants behind `HOOK_VARIANTS`, ranking, ratings, re-render (plan Tasks 7–11); the flag flip is a separate owner redeploy (ADR-49 window) | proposed | 028 deployed; fallbacks where 015, 016, 022, 023, 024 aren't |
 | [030](030-hk-page.md) | HK-3: the interim `/hooks?account=` page (plan Task 12) | proposed | 029 and 022 deployed; skipped if S3c's Hooks tab ships first |
 | [031](031-s5-split.md) | S5-1: `app.py` split into `modal_app/`, nothing live changes (plan Task 1) | proposed | 014 deployed; before 015 or 022 starts (#591) |
