@@ -12,7 +12,7 @@ from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database, DatabaseUnavailable
 from clipforge.db.posting import SqlPostingRepo
 from clipforge.db.sources import SourcesRepo
-from clipforge.models import Account, PostingSchedule, Source
+from clipforge.models import Account, ScheduleCopy, Source
 from clipforge.pipeline.deps import KV
 from clipforge.posting.repo import DictPostingRepo, DualPostingRepo, PostingClaims, PostingRepo
 
@@ -45,7 +45,7 @@ class Posting:
     requires_source: bool = False
     problem: str | None = None
     # The tick's schedules, read before any database call (card 002 A3). None: from accounts().
-    schedules: Callable[[], dict[str, PostingSchedule]] | None = None
+    schedules: Callable[[], dict[str, ScheduleCopy]] | None = None
     # Every source in one read, for views that look up many (card 039). None: no database.
     all_sources: Callable[[], list[Source]] | None = None
 
@@ -57,14 +57,15 @@ class Posting:
         found = {s.id: s for s in self.all_sources()}
         return found.get
 
-    def all_schedules(self) -> dict[str, PostingSchedule]:
-        """Every account's schedule, without touching Postgres in postgres mode (the Dict
-        copies the accounts service writes)."""
+    def all_schedules(self) -> dict[str, ScheduleCopy]:
+        """Every account's schedule and publish path, without touching Postgres in postgres
+        mode (the Dict copies the accounts service writes). In dict mode the env account's,
+        always assisted (S2 spec §4.1)."""
         if self.schedules is not None:
             return self.schedules()
-        return {a.id: a.posting for a in self.accounts()}
+        return {a.id: ScheduleCopy.of(a.posting) for a in self.accounts()}
 
-    def posting_schedules(self) -> dict[str, PostingSchedule]:
+    def posting_schedules(self) -> dict[str, ScheduleCopy]:
         """Accounts with a posting chat and their schedules, in id order."""
         found = self.all_schedules()
         return {k: v for k, v in sorted(found.items()) if v.chat_id is not None}

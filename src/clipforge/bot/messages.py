@@ -17,7 +17,7 @@ from clipforge.models import (
 USAGE = (
     "Send a direct video link, or a video file up to 20 MB.\n"
     '/clip <link> [n=auto] [score=0.8] [len=30-60] [lang=en] [perm=own] [credit="..."]\n'
-    "/status [<job_id>] · /resume <job_id> · /next · /pause · /go"
+    "/status [<job_id>] · /resume <job_id> · /next · /pause [all|<account>] · /go [all|<account>]"
 )
 TOO_BIG = (
     "That file is over 20 MB, the most a Telegram bot can download. "
@@ -141,6 +141,8 @@ QUEUE_EMPTY = "The queue is empty. Add videos to videos/<channel>/ and run `clip
 SEND_FAILED = "Couldn't send the next clip. Try /next again in a minute."
 PAUSED = "Paused. No clips until you send /go."
 RESUMED = "Back on. Clips resume at the next slot."
+STILL_BRAKED = "go recorded, but still braked by /pause all; send /go all to resume."
+BRAKE_ONLY = " The database is unavailable, so this is recorded in the brake only."
 GONE = "That clip isn't in the queue any more."
 SAVE_FAILED = "Couldn't save that. Tap again."
 OUTAGE_CLEARED = "Outage flag cleared: posting_daily's rebuild and the slots run again."

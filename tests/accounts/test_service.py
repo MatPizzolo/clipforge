@@ -142,3 +142,121 @@ def test_schedule_drift_names_posting_accounts_without_a_current_copy(db: Databa
     assert schedule_drift(repo, kv) == ["realtalk-clips-en"]
     sync_schedules(repo, kv)
     assert schedule_drift(repo, kv) == []
+
+
+# ---- S2 (card 014 Task 3): autopilot on create, the publisher, the publish path
+
+
+def test_create_inserts_a_hands_on_row_with_the_creating_actor(
+    db: Database, tmp_path: Path
+) -> None:
+    from clipforge.accounts.autopilot import AutopilotService
+
+    kv = MemoryKV()
+    create_account(AccountsRepo(db), make_settings(tmp_path), AccountCreate(
+        blueprint="founder-tapes", language="en", handle="founder.tapes"), NOW, kv=kv,
+        actor="cli:mat")  # fmt: skip
+    svc = AutopilotService(db, AccountsRepo(db), kv)
+    [first] = svc.history("founder-tapes-en")
+    assert (first.field, first.to_value, first.actor) == ("preset", "hands_on", "cli:mat")
+    assert svc.get("founder-tapes-en").updated_by == "cli:mat"
+    assert read_schedules(kv)["founder-tapes-en"].publish_via == "assisted"
+
+
+def test_create_with_an_odd_actor_records_system_accounts(db: Database, tmp_path: Path) -> None:
+    from clipforge.db.autopilot import AutopilotRepo
+
+    create_account(AccountsRepo(db), make_settings(tmp_path), AccountCreate(
+        blueprint="founder-tapes", language="en", handle="founder.tapes"), NOW,
+        actor="api")  # fmt: skip
+    assert AutopilotRepo(db).history("founder-tapes-en")[0].actor == "system:accounts"
+
+
+def test_edit_publisher_profile_rewrites_the_path_and_clear_disconnects(
+    db: Database, tmp_path: Path
+) -> None:
+    from tests.accounts.helpers import make_account as stored_account
+
+    kv, repo, settings = MemoryKV(), AccountsRepo(db), make_settings(tmp_path)
+    stored_account(db)
+    edited = edit_account(repo, settings, "realtalk-clips-en", AccountEdit(
+        publisher_profile="realtalk-clips-en", facebook_page_id="123"), NOW, kv=kv)  # fmt: skip
+    assert edited.publisher is not None and edited.publisher.facebook_page_id == "123"
+    copy = read_schedules(kv)["realtalk-clips-en"]
+    assert (copy.publish_via, copy.profile) == ("upload_post", "realtalk-clips-en")
+    stored = repo.get("realtalk-clips-en")
+    assert stored is not None and stored.publisher == edited.publisher
+    edit_account(repo, settings, "realtalk-clips-en", AccountEdit(clear_publisher=True), NOW,
+                 kv=kv)  # fmt: skip
+    assert read_schedules(kv)["realtalk-clips-en"].publish_via == "assisted"
+
+
+def test_publish_off_keeps_the_assisted_path_with_a_profile(db: Database, tmp_path: Path) -> None:
+    from clipforge.accounts.autopilot import AutopilotService
+    from tests.accounts.helpers import make_account as stored_account
+
+    kv, repo, settings = MemoryKV(), AccountsRepo(db), make_settings(tmp_path)
+    stored_account(db)
+    AutopilotService(db, repo, kv).set("realtalk-clips-en", "publish", False, "cli:mat", None, NOW)
+    edit_account(repo, settings, "realtalk-clips-en",
+                 AccountEdit(publisher_profile="realtalk-clips-en"), NOW, kv=kv)  # fmt: skip
+    assert read_schedules(kv)["realtalk-clips-en"].publish_via == "assisted"
+
+
+@pytest.mark.parametrize("edit", [
+    AccountEdit(facebook_page_id="123"),
+    AccountEdit(clear_publisher=True, publisher_profile="x"),
+])  # fmt: skip
+def test_bad_publisher_edits(db: Database, tmp_path: Path, edit: AccountEdit) -> None:
+    from tests.accounts.helpers import make_account as stored_account
+
+    stored_account(db)
+    with pytest.raises(AccountError):
+        edit_account(AccountsRepo(db), make_settings(tmp_path), "realtalk-clips-en", edit, NOW)
+
+
+def test_schedule_copy_without_a_publish_path_reads_assisted() -> None:
+    kv = MemoryKV()
+    kv.put("posting:schedule:realtalk-clips-en", make_account().posting.model_dump_json())
+    copy = read_schedules(kv)["realtalk-clips-en"]
+    assert (copy.publish_via, copy.profile) == ("assisted", None)
+
+
+def test_s1_reader_still_validates_the_copy_after_a_rollback() -> None:
+    # the publish path is its own key, so S1's PostingSchedule (extra=forbid) still reads the
+    # schedule copy after a revert deploy (log #481)
+    from clipforge.accounts.service import write_schedule_copy
+    from clipforge.models import PostingSchedule
+
+    kv = MemoryKV()
+    write_schedule_copy(kv, make_account())
+    PostingSchedule.model_validate_json(kv.get("posting:schedule:realtalk-clips-en") or "")
+
+
+def test_drift_counts_a_missing_publish_path_only_when_it_reads_wrong(db: Database) -> None:
+    # right after the S2a deploy no publish key exists yet: assisted is what it reads as, so
+    # db_doctor stays clean; a connected profile without its key is drift
+    from clipforge.accounts.service import schedule_drift, write_schedule_copy
+    from clipforge.models import PublisherProfile
+    from tests.dbhelpers import seed
+
+    kv, repo = MemoryKV(), AccountsRepo(db)
+    account = make_account(chat_id=ALLOWED_USER)
+    seed(db, account)
+    write_schedule_copy(kv, account)
+    kv.delete("posting:publish:realtalk-clips-en")
+    assert schedule_drift(repo, kv) == []
+    repo.update(account.model_copy(update={"publisher": PublisherProfile(profile="rt")}), NOW)
+    assert schedule_drift(repo, kv) == ["realtalk-clips-en"]
+    sync_schedules(repo, kv)
+    assert schedule_drift(repo, kv) == []
+
+
+@pytest.mark.parametrize("reserved", ["all", "brake", "system"])
+def test_reserved_account_ids_are_refused(db: Database, tmp_path: Path, reserved: str) -> None:
+    # `all` would share the fleet brake key brake:all (coordinator's review of PR #52)
+    with pytest.raises(AccountError, match="reserved"):
+        create_account(AccountsRepo(db), make_settings(tmp_path), AccountCreate(
+            blueprint="founder-tapes", language="en", handle="founder.tapes", id=reserved),
+            NOW)  # fmt: skip
+    assert AccountsRepo(db).list() == []

@@ -80,8 +80,9 @@ class PostingRepo(Protocol):
     def set_verdict(self, ref: str, verdict: PostVerdict, actor: str | None = None) -> None: ...
     def set_reason(self, ref: str, reason: RejectReason, actor: str | None = None) -> bool: ...
     def paused(self, account_id: str) -> bool: ...
-    def set_paused(self, account_id: str, on: bool, at: datetime,
-                   actor: str | None = None) -> None: ...  # fmt: skip
+    # `actor` and `reason` land in posting_state.changed_by/reason (0002); the Dict drops them
+    def set_paused(self, account_id: str, on: bool, at: datetime, actor: str | None = None,
+                   reason: str | None = None) -> None: ...  # fmt: skip
 
 
 class PostingClaims:
@@ -182,7 +183,10 @@ class DictPostingRepo:
     def paused(self, account_id: str) -> bool:
         return account_id == self.account_id and self.kv.get(PAUSED_KEY) is not None
 
-    def set_paused(self, account_id: str, on: bool, at: datetime, actor: str | None = None) -> None:
+    def set_paused(
+        self, account_id: str, on: bool, at: datetime, actor: str | None = None,
+        reason: str | None = None,
+    ) -> None:  # fmt: skip
         if account_id != self.account_id:
             return
         if on:
@@ -305,6 +309,10 @@ class DualPostingRepo:
     def paused(self, account_id: str) -> bool:
         return self.primary.paused(account_id)
 
-    def set_paused(self, account_id: str, on: bool, at: datetime, actor: str | None = None) -> None:
-        self.primary.set_paused(account_id, on, at, actor)
-        self._mirror("set_paused", lambda: self.mirror.set_paused(account_id, on, at, actor))
+    def set_paused(
+        self, account_id: str, on: bool, at: datetime, actor: str | None = None,
+        reason: str | None = None,
+    ) -> None:  # fmt: skip
+        self.primary.set_paused(account_id, on, at, actor, reason)
+        self._mirror("set_paused",
+                     lambda: self.mirror.set_paused(account_id, on, at, actor, reason))  # fmt: skip

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from clipforge.accounts.service import publish_schedule
 from clipforge.bot.context import BotContext
@@ -13,6 +15,9 @@ from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
 from tests.dbhelpers import BILLY_SOURCE, make_account, seed
 from tests.pipeline.harness import Harness
 from tests.posting.builders import JOB, item
+
+if TYPE_CHECKING:
+    from clipforge.dispatch.tasks import DispatchCtx
 
 
 def dict_ctx(tmp_path: Path) -> BotContext:
@@ -43,3 +48,33 @@ def two_account_ctx(tmp_path: Path, db: Database, founder_chat: int = ALLOWED_US
         (tmp_path / it.video_path).write_bytes(b"mp4")  # type: ignore[arg-type]
         deps.posting.repo.add(it, list(LEGACY_PLATFORMS))
     return BotContext(settings, FakeSender(), deps)
+
+
+def dispatch_ctx(ctx: BotContext, spawned: list[tuple[str, str]] | None = None) -> DispatchCtx:
+    """The dispatcher's context over a bot test context, as runtime.build_dispatch_ctx builds
+    it in production."""
+    from clipforge.dispatch.tasks import DispatchCtx
+
+    assert ctx.deps.posting is not None
+    calls = spawned if spawned is not None else []
+    return DispatchCtx(settings=ctx.settings, kv=ctx.deps.store.kv, posting=ctx.deps.posting,
+                       bot=ctx, spawn=lambda n, k: calls.append((n, k)),
+                       ops=ctx.deps.ops)  # fmt: skip
+
+
+def tick(ctx: BotContext, now: datetime) -> str:
+    """One dispatcher tick, reported in `posting_tick`'s old format ("<account>: <outcome>"
+    joined by "; " in account order, "off" when no account posts), so S1's tick tests pin the
+    dispatcher path unchanged (card 014 Task 7)."""
+    from clipforge.dispatch.tasks import tick as dispatch_tick
+
+    lines = dispatch_tick(dispatch_ctx(ctx), now)
+    if lines == ["idle"]:
+        return "off"
+    out = []
+    for line in lines:
+        key, _, outcome = line.partition(": ")
+        if outcome and ":" in key and not key.startswith(("off", "outage")):
+            key = key.split(":", 1)[0]  # "<account>:<slot>" -> "<account>"
+        out.append(f"{key}: {outcome}" if outcome else line)
+    return "; ".join(sorted(out))

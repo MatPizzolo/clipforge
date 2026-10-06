@@ -98,6 +98,14 @@ export type AccountEdit = {
      */
     clear_chat?: boolean;
     /**
+     * Clear Publisher
+     */
+    clear_publisher?: boolean;
+    /**
+     * Facebook Page Id
+     */
+    facebook_page_id?: string | null;
+    /**
      * Handles
      */
     handles?: {
@@ -107,6 +115,10 @@ export type AccountEdit = {
      * Hashtags
      */
     hashtags?: Array<string> | null;
+    /**
+     * Publisher Profile
+     */
+    publisher_profile?: string | null;
     /**
      * Review Tier
      */
@@ -181,6 +193,137 @@ export type AccountPosting = {
      * Waiting
      */
     waiting?: number;
+};
+
+/**
+ * Autopilot
+ */
+export type Autopilot = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Batch Line Usd
+     */
+    batch_line_usd?: number;
+    /**
+     * Monthly Cap Usd
+     */
+    monthly_cap_usd: number;
+    /**
+     * Preset
+     */
+    preset?: 'hands_on' | 'supervised' | 'autopilot' | 'custom';
+    /**
+     * Produce
+     */
+    produce?: boolean;
+    /**
+     * Publish
+     */
+    publish?: boolean;
+    /**
+     * Review Dial
+     */
+    review_dial?: 'review' | 'sample' | 'auto';
+    /**
+     * Runway Days
+     */
+    runway_days?: number;
+    /**
+     * Scale
+     */
+    scale?: boolean;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by: string;
+};
+
+/**
+ * AutopilotChange
+ *
+ * `PUT /admin/accounts/{id}/autopilot`: one control (`field`, `value`) or a `preset`.
+ */
+export type AutopilotChange = {
+    /**
+     * Field
+     */
+    field?: string | null;
+    /**
+     * Preset
+     */
+    preset?: string | null;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+    /**
+     * Value
+     */
+    value?: boolean | number | number | string | null;
+};
+
+/**
+ * AutopilotEvent
+ */
+export type AutopilotEvent = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Actor
+     */
+    actor: string;
+    /**
+     * At
+     */
+    at: string;
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * From Value
+     */
+    from_value: string | null;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * To Value
+     */
+    to_value: string;
+};
+
+/**
+ * AutopilotView
+ *
+ * `GET /admin/accounts/{id}/autopilot` and `clipforge autopilot show`.
+ */
+export type AutopilotView = {
+    autopilot: Autopilot;
+    /**
+     * History
+     */
+    history: Array<AutopilotEvent>;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Waiting On
+     */
+    waiting_on: {
+        [key: string]: string;
+    };
 };
 
 /**
@@ -582,6 +725,40 @@ export type PlatformProfile = {
      * Min Len
      */
     min_len?: number | null;
+};
+
+/**
+ * PolicyDryRun
+ *
+ * `GET /admin/policy/dry-run`: the gate over every eligible queued item; writes nothing.
+ */
+export type PolicyDryRun = {
+    /**
+     * Checked
+     */
+    checked: number;
+    /**
+     * Would Hold
+     */
+    would_hold: Array<PolicyHold>;
+};
+
+/**
+ * PolicyHold
+ */
+export type PolicyHold = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Codes
+     */
+    codes: Array<string>;
+    /**
+     * Ref
+     */
+    ref: string;
 };
 
 /**
@@ -1059,6 +1236,10 @@ export type PostAccountAccountsPostData = {
          * Authorization
          */
         authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
     };
     path?: never;
     query?: never;
@@ -1154,6 +1335,118 @@ export type PatchAccountAccountsAccountIdPatchResponses = {
 };
 
 export type PatchAccountAccountsAccountIdPatchResponse = PatchAccountAccountsAccountIdPatchResponses[keyof PatchAccountAccountsAccountIdPatchResponses];
+
+export type GetAutopilotAdminAccountsAccountIdAutopilotGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/admin/accounts/{account_id}/autopilot';
+};
+
+export type GetAutopilotAdminAccountsAccountIdAutopilotGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetAutopilotAdminAccountsAccountIdAutopilotGetError = GetAutopilotAdminAccountsAccountIdAutopilotGetErrors[keyof GetAutopilotAdminAccountsAccountIdAutopilotGetErrors];
+
+export type GetAutopilotAdminAccountsAccountIdAutopilotGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: AutopilotView;
+};
+
+export type GetAutopilotAdminAccountsAccountIdAutopilotGetResponse = GetAutopilotAdminAccountsAccountIdAutopilotGetResponses[keyof GetAutopilotAdminAccountsAccountIdAutopilotGetResponses];
+
+export type PutAutopilotAdminAccountsAccountIdAutopilotPutData = {
+    body: AutopilotChange;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/admin/accounts/{account_id}/autopilot';
+};
+
+export type PutAutopilotAdminAccountsAccountIdAutopilotPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutAutopilotAdminAccountsAccountIdAutopilotPutError = PutAutopilotAdminAccountsAccountIdAutopilotPutErrors[keyof PutAutopilotAdminAccountsAccountIdAutopilotPutErrors];
+
+export type PutAutopilotAdminAccountsAccountIdAutopilotPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: AutopilotView;
+};
+
+export type PutAutopilotAdminAccountsAccountIdAutopilotPutResponse = PutAutopilotAdminAccountsAccountIdAutopilotPutResponses[keyof PutAutopilotAdminAccountsAccountIdAutopilotPutResponses];
+
+export type GetPolicyDryRunAdminPolicyDryRunGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Account
+         */
+        account?: string | null;
+    };
+    url: '/admin/policy/dry-run';
+};
+
+export type GetPolicyDryRunAdminPolicyDryRunGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetPolicyDryRunAdminPolicyDryRunGetError = GetPolicyDryRunAdminPolicyDryRunGetErrors[keyof GetPolicyDryRunAdminPolicyDryRunGetErrors];
+
+export type GetPolicyDryRunAdminPolicyDryRunGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PolicyDryRun;
+};
+
+export type GetPolicyDryRunAdminPolicyDryRunGetResponse = GetPolicyDryRunAdminPolicyDryRunGetResponses[keyof GetPolicyDryRunAdminPolicyDryRunGetResponses];
 
 export type PostJobJobsPostData = {
     body: JobInput;

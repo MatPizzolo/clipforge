@@ -48,6 +48,8 @@ from clipforge.inbox import (
 )
 from clipforge.models import (
     Account,
+    AutopilotChange,
+    AutopilotView,
     BackfillReport,
     CampaignRules,
     ChannelRef,
@@ -59,6 +61,7 @@ from clipforge.models import (
     JobView,
     Permission,
     Platform,
+    PolicyDryRun,
     PostingOverview,
     Source,
     SourceEvent,
@@ -95,12 +98,32 @@ class ApiError(RuntimeError):
 TIMEOUT_S = 60.0  # per request; reads get one retry on a read timeout (card 039)
 
 
+class ActorError(RuntimeError):
+    """The OS user name can't become an actor; the message says what to do."""
+
+
+def cli_actor(user: str | None = None) -> str:
+    """`cli:<os user>`, cleaned to the actor pattern (letters, digits, `.`, `_`, `-`, at most 32),
+    so the API never answers an opaque 400 for an odd user name."""
+    try:
+        raw = user if user is not None else getpass.getuser()
+    except Exception:  # no user name in this environment
+        raw = ""
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", raw).strip("-")[:32].strip("-")
+    if not cleaned:
+        raise ActorError(
+            "can't record who ran this: the OS user name has no letters or digits to use as "
+            "cli:<user>; run it as a user with a plain name"
+        )
+    return f"cli:{cleaned}"
+
+
 class ApiClient:
     def __init__(self, http: httpx.Client, token: str, actor: str | None = None) -> None:
         self._http = http
         self._headers = {
             "Authorization": f"Bearer {token}",
-            "X-Clipforge-Actor": actor or f"cli:{getpass.getuser()}",
+            "X-Clipforge-Actor": actor or cli_actor(),
         }
 
     def _request(self, method: str, path: str, json_body: str | None = None) -> httpx.Response:
@@ -187,6 +210,21 @@ class ApiClient:
 
     def verify_posting(self) -> VerifyReport:
         return VerifyReport.model_validate(self._request("GET", "/posting/verify").json())
+
+    def autopilot(self, account_id: str) -> AutopilotView:
+        path = f"/admin/accounts/{quote(account_id)}/autopilot"
+        return AutopilotView.model_validate(self._request("GET", path).json())
+
+    def change_autopilot(self, account_id: str, change: AutopilotChange) -> AutopilotView:
+        path = f"/admin/accounts/{quote(account_id)}/autopilot"
+        body = change.model_dump_json(exclude_none=True)
+        return AutopilotView.model_validate(self._request("PUT", path, body).json())
+
+    def policy_dry_run(self, account_id: str | None = None) -> PolicyDryRun:
+        path = "/admin/policy/dry-run"
+        if account_id is not None:
+            path += f"?account={quote(account_id)}"
+        return PolicyDryRun.model_validate(self._request("GET", path).json())
 
     def restore_posting(self, day: str | None = None) -> int:
         path = "/posting/restore" if day is None else f"/posting/restore?date={quote(day)}"
@@ -311,6 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("resume").add_argument("job_id")
     commands.add_parser("set-webhook", help="register the Telegram webhook")
     _add_account_parser(commands)
+    _add_autopilot_parsers(commands)
     _add_source_parser(commands)
     posting = commands.add_parser("posting", help="posting queue: move the Dict queue to Postgres")
     pacts = posting.add_subparsers(dest="action", required=True)
@@ -343,7 +382,32 @@ def _add_account_parser(commands: argparse._SubParsersAction[argparse.ArgumentPa
     edit.add_argument("--timezone")
     edit.add_argument("--hashtags", help="comma-separated")
     edit.add_argument("--review-tier", choices=["review", "sample", "auto"])
+    publisher = edit.add_mutually_exclusive_group()
+    publisher.add_argument("--publisher-profile", help="the Upload-Post profile (S2)")
+    publisher.add_argument("--clear-publisher", action="store_true",
+                           help="disconnect the Upload-Post profile")  # fmt: skip
+    edit.add_argument("--facebook-page-id")
     acts.add_parser("list")
+
+
+def _add_autopilot_parsers(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    autopilot = commands.add_parser("autopilot", help="per-account autopilot (ADR-48)")
+    aacts = autopilot.add_subparsers(dest="action", required=True)
+    aacts.add_parser("show").add_argument("account_id")
+    set_ = aacts.add_parser("set", help="one control: produce, review_dial, publish, scale, "
+                            "runway_days, batch_line_usd, monthly_cap_usd")  # fmt: skip
+    set_.add_argument("account_id")
+    set_.add_argument("field")
+    set_.add_argument("value")
+    set_.add_argument("--reason", help="required for a change to review_dial")
+    preset = aacts.add_parser("preset")
+    preset.add_argument("account_id")
+    preset.add_argument("preset", choices=["hands_on", "supervised", "autopilot"])
+    preset.add_argument("--reason")
+    policy = commands.add_parser("policy", help="the policy gate (S2)")
+    pacts = policy.add_subparsers(dest="action", required=True)
+    dry = pacts.add_parser("dry-run", help="what the gate would hold now; exits 1 if anything")
+    dry.add_argument("--account")
 
 
 def _add_source_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -420,7 +484,11 @@ def main(
         print("set API_URL and API_TOKEN in .env (see .env.example)", file=sys.stderr)
         return 2
     http = http or httpx.Client(base_url=str(settings.api_url), timeout=TIMEOUT_S)
-    client = ApiClient(http, settings.api_token.get_secret_value())
+    try:
+        client = ApiClient(http, settings.api_token.get_secret_value())
+    except ActorError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     try:
         if args.command == "run":
             return _run(args, settings, client, sleep)
@@ -435,6 +503,10 @@ def main(
             )
         if args.command == "account":
             return _account(args, client)
+        if args.command == "autopilot":
+            return _autopilot(args, client)
+        if args.command == "policy":
+            return _policy_dry_run(args, client)
         if args.command == "source":
             if args.action == "import-toml":
                 importer = ApiClient(http, settings.api_token.get_secret_value(), "import-toml")
@@ -836,6 +908,9 @@ def _account(args: argparse.Namespace, client: ApiClient) -> int:
             timezone=args.timezone,
             hashtags=_csv(args.hashtags) if args.hashtags is not None else None,
             review_tier=args.review_tier,
+            publisher_profile=args.publisher_profile,
+            facebook_page_id=args.facebook_page_id,
+            clear_publisher=args.clear_publisher,
         )
     except (ValueError, ValidationError) as exc:
         print(exc, file=sys.stderr)
@@ -1011,3 +1086,42 @@ def _import_toml(args: argparse.Namespace, client: ApiClient) -> int:
     if not args.dry_run:
         print(f"{path} is no longer read. Check `clipforge source list`, then delete it.")
     return 1 if failed else 0
+
+
+def autopilot_text(view: AutopilotView) -> str:
+    ap = view.autopilot
+    lines = [f"{ap.account_id}: {view.label}"]
+    lines += [f"  {line}" for line in view.waiting_on.values()]
+    lines.append(f"  runway {ap.runway_days} days · batch line ${ap.batch_line_usd:.2f} · "
+                 f"monthly cap ${ap.monthly_cap_usd:.2f}")  # fmt: skip
+    if view.history:
+        last = view.history[-1]
+        why = f" ({last.reason})" if last.reason else ""
+        lines.append(f"  last change: {last.at:%Y-%m-%d %H:%M} UTC by {last.actor}: "
+                     f"{last.field} {last.from_value or '-'} → {last.to_value}{why}")  # fmt: skip
+    return "\n".join(lines)
+
+
+def _autopilot(args: argparse.Namespace, client: ApiClient) -> int:
+    if args.action == "show":
+        print(autopilot_text(client.autopilot(args.account_id)))
+        return 0
+    try:
+        if args.action == "set":
+            change = AutopilotChange(field=args.field, value=args.value, reason=args.reason)
+        else:
+            change = AutopilotChange(preset=args.preset, reason=args.reason)
+    except ValidationError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    print(autopilot_text(client.change_autopilot(args.account_id, change)))
+    return 0
+
+
+def _policy_dry_run(args: argparse.Namespace, client: ApiClient) -> int:
+    report = client.policy_dry_run(args.account)
+    held = report.would_hold
+    print(f"checked {report.checked} queued item(s); {len(held)} items would be held")
+    for hold in held:
+        print(f"  {hold.account_id}  {hold.ref}  {', '.join(hold.codes)}")
+    return 1 if held else 0

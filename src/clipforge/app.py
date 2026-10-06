@@ -1,6 +1,6 @@
-"""Modal app (ADR-9): images, the pipeline step functions, the web endpoint, the sweeper and
-posting_tick crons and local entrypoints. The only module that imports modal; each function is
-one call into the Modal-free code.
+"""Modal app (ADR-9): images, the pipeline step functions, the web endpoint, the sweeper,
+dispatcher and posting_daily crons and local entrypoints. The only module that imports modal;
+each function is one call into the Modal-free code.
 
     uv run modal run src/clipforge/app.py::doctor    # local + GPU environment checks
     uv run modal run src/clipforge/app.py::smoke     # one real job on the 10 s fixture (~$0.01)
@@ -15,6 +15,7 @@ import os
 import time
 import uuid
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import modal
 from fastapi import FastAPI
@@ -24,6 +25,9 @@ from clipforge.api.main import ApiContext, create_app
 from clipforge.config import get_settings
 from clipforge.db.engine import Database, database_from_settings, redact
 from clipforge.pipeline.steps import MAX_ATTEMPTS, STEP_TIMEOUT_S, Deps, Step, dispatch, sweep
+
+if TYPE_CHECKING:
+    from clipforge.dispatch.tasks import DispatchCtx
 
 APP_NAME = "clipforge"
 # Baked into the GPU image at build time. Keep in sync with Settings.whisper_model.
@@ -101,8 +105,9 @@ secrets = modal.Secret.from_name("clipforge-secrets")
 
 # A 257 MB zip took 600 s on a ~3 Mbit/s connection and hit the old 10 min limit.
 WEB_TIMEOUT_S = 3600
-# posting_tick: one upload per account, serial; an account not reached is served by the next tick
-# within the 30-min window. Each upload is UPLOAD_TIMEOUT_S = 300 s plus the scan and reload.
+# dispatcher: the assisted task sends one upload per account, serial; an account not reached is
+# served by the next tick within the 30-min window. Each upload is UPLOAD_TIMEOUT_S = 300 s plus
+# the scan and reload.
 POSTING_TICK_TIMEOUT_S = 900
 
 RETRIES = modal.Retries(max_retries=MAX_ATTEMPTS - 1, backoff_coefficient=2.0, initial_delay=5.0)
@@ -235,6 +240,21 @@ def sweeper() -> None:
         print(f"sweeper: failed {len(failed)} stalled job(s): {', '.join(failed)}")
 
 
+def _spawn_task(name: str, key: str) -> None:
+    dispatch_task.spawn(name, key)
+
+
+def _dispatch_ctx(deps: Deps) -> DispatchCtx:
+    settings = get_settings()
+    return runtime.build_dispatch_ctx(
+        settings,
+        deps,
+        runtime.telegram_sender(settings),
+        spawn=_spawn_task,
+        db=_database,
+    )
+
+
 @app.function(
     image=base_image,
     cpu=0.25,
@@ -243,24 +263,38 @@ def sweeper() -> None:
     volumes={JOBS_ROOT: jobs_volume},
     secrets=[secrets],
 )
-def posting_tick() -> None:
-    """Send the next clip to the owner's phone when a posting slot is due (ADR-23)."""
-    from clipforge.bot.context import BotContext
-    from clipforge.bot.posting import tick
+def dispatcher() -> None:
+    """ADR-27: every periodic task, due from Dict state only (replaces posting_tick)."""
+    from clipforge.dispatch.tasks import tick
     from clipforge.jobs import utcnow
 
-    settings = get_settings()
-    sender = runtime.telegram_sender(settings)
-    if sender is None:
-        return
-    deps = _service_deps()
-    try:
+    deps = _service_deps()  # once per tick; the context is built inside the try, so its
+    try:  # failure is alerted too
+        ctx = _dispatch_ctx(deps)
         deps.volume.reload()  # see clips rendered since this container started
-        print(f"posting_tick: {tick(BotContext(settings, sender, deps), utcnow())}")
+        for line in tick(ctx, utcnow()):
+            print(f"dispatcher: {line}")
     except Exception as exc:
         if deps.ops is not None:
-            deps.ops.alert(f"posting_tick crashed: {redact(exc)}", "tick", "crash")
+            deps.ops.alert(f"dispatcher crashed: {redact(exc)}", "dispatch", "crash")
         raise
+
+
+@app.function(
+    image=base_image,
+    cpu=0.5,
+    timeout=600,
+    volumes={JOBS_ROOT: jobs_volume},
+    secrets=[secrets],
+)
+def dispatch_task(name: str, key: str) -> None:
+    """A slow dispatcher task, spawned so the tick moves on (ADR-27)."""
+    from clipforge.dispatch.tasks import run_spawned
+    from clipforge.jobs import utcnow
+
+    deps = _service_deps()
+    deps.volume.reload()
+    print(f"dispatch_task: {run_spawned(_dispatch_ctx(deps), name, key, utcnow())}")
 
 
 @app.function(

@@ -23,7 +23,6 @@ from clipforge.bot.posting import (
     parse_callback,
     post_html,
     send_next,
-    tick,
     video_caption,
 )
 from clipforge.db.accounts import AccountsRepo
@@ -43,7 +42,7 @@ from clipforge.models import (
 from clipforge.posting.backend import build_posting, dict_posting
 from clipforge.posting.repo import DictPostingRepo
 from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
-from tests.bot.helpers import dict_ctx, two_account_ctx
+from tests.bot.helpers import dict_ctx, tick, two_account_ctx
 from tests.conftest import TALKING_HEAD, requires_ffmpeg
 from tests.dbhelpers import make_account
 from tests.pipeline.harness import Harness
@@ -617,3 +616,76 @@ def test_the_tick_sends_nothing_during_an_outage_and_go_clears_it(ctx: BotContex
     assert outage_since(ctx.deps.store.kv) is None
     assert "outage" in _sender(ctx).messages[-1][1].lower()
     assert tick(ctx, at(8)).startswith(f"{ACCOUNT}: sent ")
+
+
+# ---- S2a (card 014 Task 7): the gate on the assisted path, the in-flight exclusion, copy_for
+
+
+def test_the_gate_is_log_only_by_default(ctx: BotContext, caplog: pytest.LogCaptureFixture) -> None:
+    # dict mode: no source rows, so every Dict item fails license_unrecorded (spec §5.1)
+    assert not ctx.settings.gate_enforce
+    assert tick(ctx, at(8)).startswith(f"{ACCOUNT}: sent ")
+    assert "gate (log-only): license_unrecorded" in caplog.text
+
+
+def test_the_gate_holds_violations_when_enforced(ctx: BotContext) -> None:
+    ctx = BotContext(ctx.settings.model_copy(update={"gate_enforce": True}), ctx.sender, ctx.deps)
+    assert tick(ctx, at(8)) == f"{ACCOUNT}: empty"
+    assert _sender(ctx).videos == []
+
+
+def test_an_item_upload_post_may_still_publish_is_never_sent(ctx: BotContext) -> None:
+    from clipforge.bot.posting import INFLIGHT_PREFIX
+
+    for r in _store(ctx).records(ACCOUNT):
+        ctx.deps.store.kv.put(f"{INFLIGHT_PREFIX}{r.item.id}", "1")
+    assert tick(ctx, at(8)) == f"{ACCOUNT}: empty"
+    assert send_next(ctx, at(9)) == messages.QUEUE_EMPTY
+
+
+def test_copy_for_first_version_is_the_cards_text() -> None:
+    from clipforge.posting import captions
+    from tests.sources_builders import account, source
+
+    it = item().model_copy(update={"sponsored": True})
+    acct = account()
+    copies = captions.copy_for(it, acct, source(), list(Platform))
+    tags, links = extras(acct, source(), it)
+    assert tags[0] == "ad"
+    assert copies[Platform.TIKTOK].text == captions.tiktok(it, tags, links)
+    assert copies[Platform.INSTAGRAM].text == captions.instagram(it, tags, links)
+    assert copies[Platform.YOUTUBE].title == captions.youtube_title(it)
+    assert copies[Platform.YOUTUBE].text == captions.youtube_description(it, tags, links)
+    assert copies[Platform.FACEBOOK].text == captions.tiktok(it, tags, links)
+
+
+SNAPSHOT_POST_HTML = (
+    "🎙️ <b>Billy Garton Jr.</b> — “A title”\n\n<b>TikTok</b>\n<pre>A hook.\n\n🎙️ Billy Garton Jr."
+    "\n\nhttps://x.example/a\n\n#ad #mindset</pre>\n\n<b>Instagram</b>\n<pre>A title\n\nA hook."
+    "\n\n🎙️ Billy Garton Jr.\n\nhttps://x.example/a\n\n#ad #mindset</pre>\n\n<b>YouTube title</b>"
+    "\n<pre>A title #shorts</pre>\n\n<b>YouTube description</b>\n<pre>A hook.\n\n🎙️ Billy Garton "
+    "Jr.\n\nhttps://x.example/a\n\n#ad #mindset</pre>\n\n<b>Facebook</b>\n<pre>A hook.\n\n🎙️ "
+    "Billy Garton Jr.\n\nhttps://x.example/a\n\n#ad #mindset</pre>"
+)
+
+
+def test_post_html_keeps_its_text_byte_for_byte() -> None:
+    # S1's card text, captured before S2a moved `extras` to captions.py (card 014 Task 7)
+    text = post_html(item(), ["ad", "mindset"], list(Platform), ["https://x.example/a"])
+    assert text == SNAPSHOT_POST_HTML
+
+
+def test_an_in_flight_item_keeps_its_sends_for_the_same_video_rule(ctx: BotContext) -> None:
+    from clipforge.bot.posting import INFLIGHT_PREFIX
+
+    first = tick(ctx, at(8)).split("sent ")[1]
+    ctx.deps.store.kv.put(f"{INFLIGHT_PREFIX}{first}", "1")  # the last sent clip goes in flight
+    second = tick(ctx, at(12)).split("sent ")[1]
+    assert second != first
+    # the in-flight marker is only read for clips that could be picked
+    reads: list[str] = []
+    kv = ctx.deps.store.kv
+    real = kv.get
+    kv.get = lambda key: reads.append(key) or real(key)  # type: ignore[method-assign]
+    send_next(ctx, at(13))
+    assert f"{INFLIGHT_PREFIX}{first}" not in reads and f"{INFLIGHT_PREFIX}{second}" not in reads

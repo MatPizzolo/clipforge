@@ -1,13 +1,14 @@
 """The posting assistant (ADR-23): at each slot, send the next clip to the owner's phone with
-copyable captions and buttons, and handle the taps. Modal-free: `app.posting_tick` calls
-`tick`, the webhook calls `handle_callback` and `send_next`."""
+copyable captions and buttons, and handle the taps. Modal-free: the dispatcher's `assisted` task
+calls `assisted_tick` (it replaced `posting_tick`, ADR-27), the webhook calls `handle_callback`
+and `send_next`. Paused since 2026-10-05 (ADR-54): dormant code until S2b unregisters it."""
 
 from __future__ import annotations
 
 import contextlib
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from html import escape
@@ -33,9 +34,10 @@ from clipforge.models import (
     RejectReason,
     Source,
 )
+from clipforge.policy.checks import check_record
+from clipforge.policy.gate import codes
 from clipforge.posting import captions
 from clipforge.posting.backend import Posting, posting_of
-from clipforge.posting.keepalive import outage_since
 from clipforge.posting.queue import PAUSE_AFTER, eligible, pick_next, status, unanswered
 from clipforge.posting.slots import current_slot
 from clipforge.sources import hold_reason
@@ -59,6 +61,9 @@ ACTIONS = frozenset({*PLATFORM_ACTIONS, "skip", "rej", "noop"})
 BLOCK_LIMIT = 700
 HEAD_LIMIT = 300
 _CLIP_ID = re.compile(r"clip_\d{2}")
+# Set while Upload-Post may still publish an item; written only by publishing/state.py (S2b,
+# spec §3.1). The assisted pick never sends an item that has it.
+INFLIGHT_PREFIX = "publishing:inflight:"
 
 
 @dataclass(frozen=True)
@@ -176,20 +181,7 @@ def post_html(
     return "\n\n".join([head, *blocks])
 
 
-def extras(
-    account: Account, source: Source | None, item: ContentItem
-) -> tuple[list[str], list[str]]:
-    """Hashtags and links for one send: #ad first when sponsored, then a campaign's required
-    tags, then the account's own (spec §6.3)."""
-    tags = list(account.posting.hashtags)
-    links: list[str] = []
-    if source is not None and source.campaign is not None:
-        required = source.campaign.required_tags
-        tags = [*required, *(t for t in tags if t not in required)]
-        links = [str(link) for link in source.campaign.required_links]
-    if item.sponsored:
-        tags = ["ad", *(t for t in tags if t != "ad")]
-    return tags, links
+extras = captions.extras  # moved to posting/captions.py (S2's copy_for uses it)
 
 
 def held(record: PostRecord, source: Source | None, now: datetime) -> str | None:
@@ -320,46 +312,77 @@ def _send_best(
     slot: datetime | None,
     now: datetime,
 ) -> str | None:
-    """Send the best eligible clip; returns its ref, or None when nothing is eligible."""
-    for _ in range(MAX_PICKS):
+    """Send the best eligible clip; returns its ref, or None when nothing is eligible. The
+    policy gate checks each pick: with GATE_ENFORCE off (S2a) it only logs (log #461); on, a
+    clip with a violation is held and the next one is picked."""
+    kv = ctx.deps.store.kv
+    # only eligible records can be picked: one Dict read each, and the others keep their sends
+    # for the same-video rule
+    for r in [r for r in records if eligible(r, now)]:
+        if kv.get(f"{INFLIGHT_PREFIX}{r.item.id}") is not None:
+            records = _without(records, r)
+    tries = 0
+    while tries < MAX_PICKS:
         record = pick_next(records, now)
         if record is None:
             return None
+        if _gate_holds(ctx, posting, account, sources, record, now):
+            records = _without(records, record)
+            continue
+        tries += 1
         waiting = sum(eligible(r, now) for r in records) - 1
         if _deliver(ctx, posting, account, sources, record, slot, now, waiting):
             return record.item.id
-        records = [
-            r.model_copy(update={"unavailable": True}) if r.item.id == record.item.id else r
-            for r in records
-        ]
+        records = _without(records, record)
     return None
 
 
-def tick(ctx: BotContext, now: datetime) -> str:
-    """One cron tick (spec §5.2): each account with a posting chat, in id order. The slot is
-    computed from the schedule copies first, so a tick with no slot due never queries Postgres
-    (card 002 A3). Silent failures go to the owner through ops alerts (ADR-45)."""
+def _without(records: list[PostRecord], record: PostRecord) -> list[PostRecord]:
+    """Out of this pick (read as unavailable), keeping its sends for the same-video rule."""
+    return [r.model_copy(update={"unavailable": True}) if r.item.id == record.item.id else r
+            for r in records]  # fmt: skip
+
+
+def _gate_holds(
+    ctx: BotContext, posting: Posting, account: Account, sources: _Sources, record: PostRecord,
+    now: datetime,
+) -> bool:  # fmt: skip
+    """Run the gate on one pick (S2 spec §4.2). True only when GATE_ENFORCE is on and the clip
+    has a violation. Log-only, a failure to run the gate never stops a send."""
+    item = record.item
+    try:
+        result = check_record(posting, ctx.settings.blueprints_dir, account,
+                              sources(item.source_id), record, now)  # fmt: skip
+    except Exception as exc:
+        if ctx.settings.gate_enforce:
+            raise
+        log.warning("gate (log-only): could not check %s: %s", item.id, redact(exc))
+        return False
+    if not result.violations:
+        return False
+    found = ",".join(codes(result))
+    if not ctx.settings.gate_enforce:
+        log.warning("gate (log-only): %s on %s", found, item.id)
+        return False
+    log.warning("gate: holding %s (%s)", item.id, found)
+    return True
+
+
+def assisted_tick(
+    ctx: BotContext, now: datetime, account_ids: Sequence[str],
+    schedules: Mapping[str, PostingSchedule] | None = None,
+) -> list[str]:  # fmt: skip
+    """The dispatcher's `assisted` task (ADR-27): `posting_tick`'s per-account body, unchanged,
+    for the given accounts in id order. The slot is computed from the schedule copies first, so
+    an account with no slot due never queries Postgres (card 002 A3). One account's failure
+    never stops the others; it goes to the owner as an ops alert (ADR-45)."""
     posting = posting_of(ctx.deps)
     ops = ctx.deps.ops
-    if ops is not None:
-        ops.flush(now)  # alerts held over quiet hours or the hourly cap
-    if posting.problem is not None:
-        log.warning("posting: %s", posting.problem)
-        if ops is not None:
-            ops.alert(f"Posting is off: {posting.problem}", "posting", "problem", now=now)
-        return f"off: {posting.problem}"
-    since = outage_since(ctx.deps.store.kv)
-    if since is not None:  # posting_daily found an outage: nothing goes out until /go or restore
-        return f"outage since {since}: restore, check /status, then /go"
-    schedules = posting.all_schedules()
-    if not schedules and posting.schedules is not None and ops is not None:
-        # postgres mode with no schedule copy at all: nothing would ever send (A3, #203)
-        ops.alert("Posting found no schedule copies (posting:schedule:*), so no account will "
-                  "send. Run the daily sync, or edit an account, to rewrite them.",
-                  "posting", "schedules", path="/accounts", now=now)  # fmt: skip
+    found = posting.all_schedules() if schedules is None else schedules
     results = []
-    for account_id, schedule in sorted(schedules.items()):
-        if schedule.chat_id is None:
+    for account_id in sorted(account_ids):
+        schedule = found.get(account_id)
+        if schedule is None or schedule.chat_id is None:
             continue
         try:
             outcome = _tick_account(ctx, posting, account_id, schedule, now)
@@ -372,7 +395,7 @@ def tick(ctx: BotContext, now: datetime) -> str:
                 ops.alert(f"Posting tick for {account_id} failed: {redact(exc)}", "tick",
                           account_id, path=f"/accounts/{account_id}", now=now)  # fmt: skip
         results.append(f"{account_id}: {outcome}")
-    return "; ".join(results) or "off"
+    return results
 
 
 def slot_already_sent(records: list[PostRecord], slot: datetime) -> bool:

@@ -146,5 +146,4 @@ def ops_alerts(kv: KV, sender: TelegramSender | None, settings: Settings) -> Ops
     chat = owner_chat(settings)
     if sender is None or chat is None:
         return None
-    zone = settings.owner_timezone or settings.posting_timezone
-    return OpsAlerts(kv, sender, chat, zone, settings.dashboard_url)
+    return OpsAlerts(kv, sender, chat, settings.owner_zone(), settings.dashboard_url)
