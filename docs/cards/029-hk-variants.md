@@ -26,6 +26,14 @@ Also:
 - **The flag flip (#555):** `HOOK_VARIANTS=true` changes every clips account's `producer_version` once and opens ADR-49's 5-item window per account (about 15 reviews). The owner flips it alone, right after this deploy, unless another clips stage or prompt bump is due the same week (#439).
 - `prompts/keywords_v3.md` is new; `keywords_v2.md` is never edited (CLAUDE.md rule 4).
 
+- **Follow-ups from the HK-1 post-deploy review (2026-10-06, coordinator; fix them in this card, each with a test):**
+  1. `hooks seed` can seed an account twice when two runs overlap (`hooks/library.py:221` checks "no patterns yet" without a lock). Lock the account row (`SELECT … FOR UPDATE` on `accounts`) before the check.
+  2. `POST /admin/hooks/seed` writes as `system:migration` with no person (`api/main.py:282`). Require `person` and record the caller in the `seeded` event's data (ADR-48: `system:` only when nobody tapped).
+  3. The hook routes answer a bare 500 on `IntegrityError` or a lock timeout. Map those to 409 or 503 with a clean message.
+  4. `HookSeedRequest.account_ids` has no length cap.
+  5. Index `hook_events.account_id` in the next migration that lands (S3 or S3c), or here if this card adds one.
+  6. `package` writes the hook metadata without a `STAGE_VERSION` bump (ADR-8's status note, log #564). This card adds `flag_on` to the package key.
+
 ## Read first
 1. `CLAUDE.md`, `STATUS.md`
 2. The hooks plan: Global Constraints, Review Focus (1–4 pin in this part), File map, Part HK-2 (Tasks 7–11, the owner deploy steps and the rollback)
