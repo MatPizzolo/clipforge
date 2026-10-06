@@ -241,3 +241,7 @@ def test_owner_zone_falls_back_to_posting_timezone() -> None:
         Settings(_env_file=None, posting_timezone="Europe/Madrid").owner_zone() == "Europe/Madrid"
     )
     assert Settings(_env_file=None, owner_timezone="UTC").owner_zone() == "UTC"
+
+
+def test_hook_variants_default_off() -> None:
+    assert Settings(_env_file=None).hook_variants is False

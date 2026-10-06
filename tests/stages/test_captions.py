@@ -116,7 +116,7 @@ def test_run_writes_cached_files(tmp_path: Path) -> None:
     assert "inside clip." in ctx.path(files.srt_path).read_text()
 
 
-# ---- key words chosen by the LLM (prompts/keywords_v1.md)
+# ---- key words chosen by the LLM (prompts/keywords_v2.md)
 
 SETTINGS = Settings(_env_file=None)
 _TEXT = "the greatest lesson the ocean gave me is humility and 76 percent"
@@ -257,3 +257,15 @@ def test_run_writes_the_title_from_the_candidate(tmp_path: Path) -> None:
     deps, _ = _deps(_keywords(4, title=1))
     ass = ctx.path(captions.run(ctx, spec, t, deps).value.ass_path).read_text()
     assert _title_event(ass).endswith("THE {\\c&H0000FFFF&}OCEAN{\\c&H00FFFFFF&} LESSON")
+
+
+def test_flag_off_keeps_the_captions_cache_key(tmp_path: Path) -> None:
+    # ADR-50, HK-1: with HOOK_VARIANTS off, captions keys stay byte for byte as before the hook
+    # library (keywords_v2, STAGE_VERSION 3), so no cached captions or render re-run
+    assert SETTINGS.hook_variants is False
+    assert captions.STAGE_VERSION == "3" and captions.KEYWORDS_PROMPT == "keywords_v2"
+    ctx = make_ctx(tmp_path)
+    spec = make_spec()
+    t = transcript_of([w(x.text, spec.start + x.start, spec.start + x.end) for x in WORDS])
+    deps, _ = _deps(_keywords(4))
+    assert captions.run(ctx, spec, t, deps).ref == "cache/captions/22d22c602c1d6f65/result.json"

@@ -10,6 +10,8 @@ Models that parse LLM output ignore unknown keys; every other contract rejects t
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from pathlib import PurePosixPath
@@ -22,6 +24,7 @@ from pydantic import (
     ConfigDict,
     Field,
     computed_field,
+    field_validator,
     model_validator,
 )
 
@@ -130,6 +133,7 @@ class JobInput(Contract):
     options: ClipOptions = Field(default_factory=ClipOptions)
     notify: TelegramTarget | None = None  # set for jobs that came from Telegram
     channel: ChannelRef | None = None  # set by `clipforge clip` for channel folders (ADR-22)
+    hooks: HookRotation | None = None  # the account's rotation, frozen by create_job (ADR-50)
 
     @model_validator(mode="after")
     def _check(self) -> JobInput:
@@ -258,6 +262,172 @@ class PostCopy(Contract):
     links: list[str] = Field(default_factory=list)
 
 
+# ---- hooks (ADR-50; hooks spec §1) -------------------------------------------------------
+
+HookFit = Literal["clips", "story", "avatar"]
+HookStatus = Literal["draft", "approved", "retired"]
+
+
+class HookPatternData(Contract):
+    """A pattern's versioned body; an edit writes v+1."""
+
+    name: str = Field(min_length=1, max_length=40)
+    structure: str = Field(min_length=1, max_length=300)  # the instruction the LLM follows
+    examples: dict[str, str] = Field(default_factory=dict)  # language -> example line
+    fits: list[HookFit] = Field(min_length=1)  # which producers may draw it
+    max_words: int = Field(default=10, ge=2, le=10)  # the title card shows at most 10
+    frame_brief: str | None = Field(default=None, max_length=300)  # story: what frame 0 shows
+
+    @field_validator("examples")
+    @classmethod
+    def _cap_examples(cls, value: dict[str, str]) -> dict[str, str]:
+        for language, line in value.items():
+            if len(language) > 8 or len(line) > 120:
+                raise ValueError("an example is at most 120 characters, keyed by a language code")
+        return value
+
+
+class HookPattern(Contract):
+    id: str  # "hp_" + 8 hex characters
+    account_id: str | None  # exactly one of account_id / blueprint_name
+    blueprint_name: str | None
+    status: HookStatus
+    current_version: int
+    # Ship the producer's own line unchanged; set once at creation, never versioned
+    control: bool = False
+
+
+class HookPatternVersion(Contract):
+    pattern_id: str
+    n: int
+    data: HookPatternData
+    author: str
+    note: str | None = None
+    created_at: datetime
+
+
+class RotationEntry(Contract):
+    pattern_id: str
+    version: int
+    weight: float = Field(gt=0)
+    control: bool = False  # copied from HookPattern.control
+    data: HookPatternData  # the version's body, so steps never read the database
+
+
+class HookRotation(Contract):
+    """The account's rotation, frozen on the job at create_job (spec §2.1)."""
+
+    account_id: str
+    entries: list[RotationEntry] = Field(default_factory=list)
+    frozen_by: int | None = None  # S3c's experiments.id when a freeze snapshot was used
+
+    @property
+    def id(self) -> str:
+        rows = sorted((e.pattern_id, e.version, e.weight) for e in self.entries)
+        return hashlib.sha256(json.dumps(rows).encode()).hexdigest()[:16]
+
+
+class HookPick(Contract):
+    """What the clip step passes to captions (HK-2)."""
+
+    pattern_id: str
+    version: int
+    control: bool
+    data: HookPatternData
+
+
+class HookVariants(LLMOutput):
+    """The reply sub-model shared by producers' prompts (clips and story)."""
+
+    variants: list[str] = Field(min_length=1, max_length=3)
+    best: int
+
+
+class HookResult(Contract):
+    """The title card a clip shipped; cached with captions."""
+
+    pattern_id: str | None  # None: a manual title (re-render)
+    version: int | None
+    variants: list[str] = Field(default_factory=list)  # as written, before cleaning
+    chosen: int | None = None
+    # The shipped line as written (ContentItem.title); the title card shows
+    # captions.title_words(text), cleaned and upper-cased
+    text: str
+    # The pattern came from the weighted draw (flag on); False for flag-off control stamps
+    # and manual titles, which never enter the stats
+    drawn: bool = False
+    fallback: bool = False  # rule 5 failed twice: the producer's own line shipped
+    manual: bool = False  # a title given in a re-render
+
+
+class HookStamp(Contract):
+    """An item's hook record: content_items.hook_* and metadata.json."""
+
+    result: HookResult
+    rotation_id: str | None
+    weights: dict[str, float] = Field(default_factory=dict)  # "<pattern_id>@<version>" -> weight
+    frozen_by: int | None = None
+
+
+# The /admin hooks routes (spec §7.1); the CLI and, from HK-3, the dashboard read them
+
+
+class HookRow(Contract):
+    pattern: HookPattern
+    version: HookPatternVersion  # the current one
+    weight: float  # this account's (0.0 without a row: a pattern shared to it)
+
+
+class HookLibraryView(Contract):
+    account_id: str
+    frozen_by: int | None  # the experiment whose freeze the rotation is (❄); None: live
+    rotating: int  # entries in the rotation a new job would freeze; 0: nothing rotates
+    patterns: list[HookRow]
+
+
+class HookDetail(Contract):
+    pattern: HookPattern
+    versions: list[HookPatternVersion]  # oldest first
+
+
+class HookCreate(Contract):
+    account_id: str
+    data: HookPatternData
+
+
+class HookEdit(Contract):
+    data: HookPatternData
+    note: str | None = Field(default=None, max_length=300)
+
+
+class HookAccountRef(Contract):
+    account_id: str
+
+
+class HookApprove(Contract):
+    account_id: str
+    weight: float = Field(default=1.0, ge=0, le=100)
+
+
+class HookWeightChange(Contract):
+    account_id: str
+    weight: float  # 0-100, checked by the library (400)
+    reason: str = Field(max_length=300)
+
+
+class HookWeight(Contract):
+    weight: float
+
+
+class HookSeedRequest(Contract):
+    account_ids: list[str] | None = None  # None: every clips account
+
+
+class HookSeedReport(Contract):
+    written: dict[str, int]  # patterns written per account; 0: it had a library already
+    dry_run: bool
+
+
 class ContentItem(Contract):
     id: str  # "<job_id>:<clip_id>" for clips (keeps Telegram buttons valid)
     account_id: str
@@ -283,6 +453,9 @@ class ContentItem(Contract):
     # The spec's `copy` (the column is `content_items.copy`): renamed because `copy` shadows
     # BaseModel.copy (log #480). None: built by posting/captions.py; S3 edits write it.
     post_copy: dict[Platform, PostCopy] | None = None
+    # The title card's pattern and text (ADR-50); `hook` above stays highlights' spoken line
+    hook_stamp: HookStamp | None = None
+    superseded_by: str | None = None  # the re-render that replaced this item (HK-2)
 
 
 class PostRecord(Contract):
@@ -831,6 +1004,8 @@ class Job(BaseModel):
     outputs: dict[StageName, str] = Field(default_factory=dict)  # stage -> result.json ref
     clip_ids: list[str] = Field(default_factory=list)
     output_zip: str | None = None
+    # "unavailable": create_job couldn't read the hook rotation (the job runs without one)
+    hooks_note: Literal["unavailable"] | None = None
 
 
 class ClipStatus(StrEnum):
@@ -958,10 +1133,12 @@ class LLMClipsResponse(LLMOutput):
 
 
 class KeywordsReply(LLMOutput):
-    """Output of prompts/keywords_v1: indices of the clip words to show in color."""
+    """Output of prompts/keywords_v2 (and v3): indices of the clip words to show in color."""
 
     keywords: list[int] = Field(max_length=200)
     title_keyword: int | None = None  # keywords_v2: index into the title's words
+    variants: list[str] | None = None  # keywords_v3: lines in the drawn hook pattern
+    best: int | None = None  # keywords_v3: index of the best variant
 
 
 class ClipCandidate(Contract):
@@ -1072,6 +1249,7 @@ class CaptionFiles(Contract):
     srt_path: str
     style: str
     offset_s: float  # source time subtracted from word times; must equal ClipSpec.start
+    hook: HookResult | None = None  # the title card's hook (HK-2; None with HOOK_VARIANTS off)
 
 
 class ProbeInfo(Contract):
@@ -1096,6 +1274,7 @@ class RenderedClip(Contract):
     srt_path: str
     encoder: Literal["h264_nvenc", "libx264"]
     probe: ProbeInfo
+    hook: HookResult | None = None  # from CaptionFiles.hook
 
 
 # ---- timeline (S4, ADR-31): the only input to render ------------------------------------
@@ -1280,8 +1459,11 @@ class PackagedClip(Contract):
     end: float
     score: float
     title: str
-    hook: str
+    hook: str  # highlights' spoken line, as in ContentItem.hook
     probe: ProbeInfo
+    # The title card's stamp (ADR-50). The spec calls it `PackagedClip.hook`, which is taken
+    # by the spoken line above, so it is named as on ContentItem
+    hook_stamp: HookStamp | None = None
 
 
 class PackageResult(Contract):
@@ -1299,6 +1481,7 @@ class Versions(Contract):
     highlight_model: str
     whisper_model: str
     producer_version: str | None = None  # "clips:<hash>" (ADR-43); absent in older files
+    hook_rotation: str | None = None  # the job's rotation id, "unavailable" or "none" (ADR-50)
 
 
 class JobMetadata(Contract):

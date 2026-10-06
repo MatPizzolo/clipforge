@@ -1,5 +1,7 @@
 # Studio HK: the hook library, implementation plan
 
+**Status (2026-10-06):** HK-1 ships as two PRs (card 028, owner ruling, like #488). PR 1 `hk/library-data`: Tasks 1–2 (contracts, the setting, migration 0003, `hooks/freezer.py`), no writers. PR 2 `hk/library`: Tasks 3–6, built and saved, restored after PR 1 deploys. HK-2 and HK-3 not started.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build ADR-50's hook library in three deployable parts:
@@ -155,12 +157,12 @@ The five conditions the spec implies but no task's main tests exercise, most lik
   - `Settings.hook_variants: bool = False`
   - `Job.hooks_note: Literal["unavailable"] | None = None` and `Versions.hook_rotation: str | None = None` (Task 5 writes them)
 
-- [ ] **Step 1: Fix the stale `keywords_v1` comments** (the STATUS follow-up; the code loads `keywords_v2`):
+- [x] **Step 1: Fix the stale `keywords_v1` comments** (the STATUS follow-up; the code loads `keywords_v2`):
   - `src/clipforge/stages/captions.py`: the module docstring's "(prompts/keywords_v1.md, ADR-18)" becomes "(prompts/keywords_v2.md, ADR-18, ADR-20)"; `CaptionsDeps.prompt`'s comment "# prompts/keywords_v1.md" becomes "# prompts/keywords_v2.md (keywords_v3 with HOOK_VARIANTS)".
   - `src/clipforge/models.py`: `KeywordsReply`'s docstring becomes "Output of prompts/keywords_v2 (and v3): indices of the clip words to show in color."
   - `tests/stages/test_captions.py`: the section comment "# ---- key words chosen by the LLM (prompts/keywords_v1.md)" says `keywords_v2.md`.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 ```python
 # tests/test_models.py (add)
@@ -205,12 +207,12 @@ def test_hook_variants_default_off() -> None:
     assert Settings(_env_file=None).hook_variants is False
 ```
 
-- [ ] **Step 3: Run and see them fail**
+- [x] **Step 3: Run and see them fail**
 
 Run: `uv run pytest -q tests/test_models.py tests/test_config.py`
 Expected: FAIL (ImportError on the hook contracts).
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 Add the contracts from spec §1 to `models.py` (a `# ---- hooks (ADR-50)` section after the posting contracts, before `ContentItem` so it can reference them). `HookRotation.id`:
 
@@ -223,12 +225,12 @@ def id(self) -> str:
 
 `HookPatternData` validates each `examples` value at most 120 characters (a `field_validator`). Add the optional fields listed under Interfaces. Add `hook_variants: bool = False` to `Settings` with the comment `# HOOK_VARIANTS: clip title variants in captions (ADR-50); off keeps keywords_v2`.
 
-- [ ] **Step 5: Run and see them pass**
+- [x] **Step 5: Run and see them pass**
 
 Run: `uv run pytest -q tests/test_models.py tests/test_config.py tests/stages/test_captions.py`
 Expected: PASS.
 
-- [ ] **Step 6: Check and record**
+- [x] **Step 6: Check and record**
 
 Run `scripts/check.sh --python`, then note the task.
 
@@ -243,7 +245,7 @@ Run `scripts/check.sh --python`, then note the task.
 - Consumes: S2a's `ACTOR_CHECK` string (copy it from `alembic/versions/0002_s2.py` into this migration; migrations never import each other).
 - Produces: `tables.hook_patterns`, `hook_pattern_versions`, `hook_weights`, `hook_freezes`, `hook_ratings`, `hook_events`; `content_items` columns `hook_pattern_id`, `hook_version`, `hook_weights`, `hook_result`, `superseded_by`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/db/test_hooks_tables.py
@@ -322,12 +324,12 @@ def test_head_is_hooks(db) -> None:
 
 The existing `test_round_trip` and `test_tables_match_the_migrations` (empty autogenerate) cover the downgrade and `tables.py` matching the migration.
 
-- [ ] **Step 2: Run and see them fail**
+- [x] **Step 2: Run and see them fail**
 
 Run: `uv run pytest -q tests/db/test_hooks_tables.py tests/db/test_migrations.py`
 Expected: FAIL (relation "hook_patterns" does not exist).
 
-- [ ] **Step 3: Implement the migration**
+- [x] **Step 3: Implement the migration**
 
 ```python
 # alembic/versions/NNNN_hooks.py   (revision = "NNNN", down_revision = <main's head at landing>)
@@ -429,12 +431,12 @@ def downgrade() -> None:
 
 Mirror every table and column in `db/tables.py` (so the empty-autogenerate test passes), and set `EXPECTED_HEAD = "NNNN"`.
 
-- [ ] **Step 4: Run and see them pass**
+- [x] **Step 4: Run and see them pass**
 
 Run: `uv run pytest -q tests/db`
 Expected: PASS.
 
-- [ ] **Step 5: Check and record**
+- [x] **Step 5: Check and record**
 
 Run `scripts/check.sh --python`, then note the task.
 

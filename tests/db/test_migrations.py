@@ -11,7 +11,9 @@ from clipforge.db.migrations import downgrade, upgrade
 from clipforge.db.tables import metadata
 
 TABLES = {"accounts", "posting_state", "sources", "source_events", "jobs", "content_items",
-          "assets", "posts", "sends", "post_events", "costs"}  # fmt: skip
+          "assets", "posts", "sends", "post_events", "costs", "hook_patterns",
+          "hook_pattern_versions", "hook_weights", "hook_freezes", "hook_ratings",
+          "hook_events"}  # fmt: skip
 
 
 def test_round_trip(pg_url: str) -> None:
@@ -31,7 +33,7 @@ def test_tables_match_the_migrations(pg_url: str) -> None:
 def test_every_revision_is_frozen() -> None:
     # explicit DDL only: later edits to db/tables.py never change what a revision builds
     revisions = sorted((Path(__file__).parents[2] / "alembic/versions").glob("0*.py"))
-    assert [p.name[:4] for p in revisions] == ["0001", "0002"]
+    assert [p.name[:4] for p in revisions] == ["0001", "0002", "0003"]
     for path in revisions:
         text_ = path.read_text()
         assert not re.search(r"\bmetadata\b", text_) and "clipforge.db.tables" not in text_, path
@@ -146,10 +148,10 @@ def _in_schema(pg_url: str, name: str, sql: str) -> list[tuple[object, ...]]:
         engine.dispose()
 
 
-def test_head_is_0002(db: Database) -> None:
-    assert EXPECTED_HEAD == "0002"
+def test_head_is_hooks(db: Database) -> None:
+    assert EXPECTED_HEAD == "0003"
     with db.begin() as conn:
-        assert conn.execute(text("select version_num from alembic_version")).scalar_one() == "0002"
+        assert conn.execute(text("select version_num from alembic_version")).scalar_one() == "0003"
 
 
 def test_0002_backfills_actor_and_seeds_hands_on(pg_url: str) -> None:
@@ -264,3 +266,65 @@ def test_links_item_id_is_a_foreign_key(db: Database) -> None:
                           " 'realtalk-clips-en', 'bio', 'subid', now(), 'cli:mat')"))  # fmt: skip
     with pytest.raises(DBAPIError), db.begin() as conn:
         conn.execute(text("update links set item_id = 'no-such-item'"))
+
+
+# ---- 0003, the hook library (card 028, hooks plan Task 2)
+
+
+def _revision(name: str) -> object:
+    import importlib.util
+
+    path = Path(__file__).parents[2] / "alembic/versions" / name
+    spec = importlib.util.spec_from_file_location(name[:4], path)
+    assert spec is not None and spec.loader is not None
+    rev = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rev)
+    return rev
+
+
+def test_0003_copies_0002s_actor_check() -> None:
+    from clipforge.db import tables
+
+    hooks, s2 = _revision("0003_hooks.py"), _revision("0002_s2.py")
+    assert hooks.ACTOR_CHECK == s2.ACTOR_CHECK == tables.ACTOR_CHECK  # type: ignore[attr-defined]
+    named = {c.name: str(c.sqltext) for t in tables.metadata.sorted_tables
+             for c in t.constraints if c.name and c.name.startswith("ck_hook")}  # fmt: skip
+    status = hooks._in("status", hooks.STATUSES)  # type: ignore[attr-defined]
+    assert named["ck_hook_patterns_status"].replace(" ", "") == status.replace(" ", "")
+    check = hooks.ACTOR_CHECK  # type: ignore[attr-defined]
+    for name, column in (("ck_hook_versions_author", "author"),
+                         ("ck_hook_weights_updated_by", "updated_by"),
+                         ("ck_hook_freezes_frozen_by", "frozen_by"),
+                         ("ck_hook_ratings_actor", "actor"),
+                         ("ck_hook_events_actor", "actor")):  # fmt: skip
+        assert named[name] == check.replace("actor", column), name
+    released = "released_by is null or (" + check.replace("actor", "released_by") + ")"
+    assert named["ck_hook_freezes_released_by"] == released
+
+
+def test_0003_downgrade_and_upgrade_on_a_throwaway_schema(pg_url: str) -> None:
+    with throwaway_schema(pg_url) as (name, conn):
+        conn.commit()
+        upgrade(pg_url, "0003", schema=name)
+        downgrade(pg_url, "0002", schema=name)
+        tables = {r[0] for r in _in_schema(pg_url, name, "select tablename from pg_tables"
+                                           f" where schemaname = '{name}'")}  # fmt: skip
+        assert "hook_patterns" not in tables and "autopilot" in tables
+        columns = {r[0] for r in _in_schema(pg_url, name, "select column_name from"
+                   " information_schema.columns where table_name = 'content_items'"
+                   f" and table_schema = '{name}'")}  # fmt: skip
+        assert "hook_pattern_id" not in columns and "superseded_by" not in columns
+        functions = _in_schema(pg_url, name, "select count(*) from pg_proc p join pg_namespace n"
+                               f" on n.oid = p.pronamespace where n.nspname = '{name}'"
+                               " and p.proname like 'hook_%'")  # fmt: skip
+        assert functions == [(0,)]
+        upgrade(pg_url, "head", schema=name)
+        engine = make_engine(pg_url)
+        try:
+            with engine.connect() as c:
+                c.execute(text(f'SET search_path TO "{name}"'))
+                c.commit()
+                diff = compare_metadata(MigrationContext.configure(c), metadata)
+        finally:
+            engine.dispose()
+        assert diff == []

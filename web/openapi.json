@@ -1014,6 +1014,103 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HookPatternData": {
+        "additionalProperties": false,
+        "description": "A pattern's versioned body; an edit writes v+1.",
+        "properties": {
+          "examples": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "object"
+          },
+          "fits": {
+            "items": {
+              "enum": [
+                "clips",
+                "story",
+                "avatar"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Fits",
+            "type": "array"
+          },
+          "frame_brief": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Brief"
+          },
+          "max_words": {
+            "default": 10,
+            "maximum": 10.0,
+            "minimum": 2.0,
+            "title": "Max Words",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "structure": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Structure",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "structure",
+          "fits"
+        ],
+        "title": "HookPatternData",
+        "type": "object"
+      },
+      "HookRotation": {
+        "additionalProperties": false,
+        "description": "The account's rotation, frozen on the job at create_job (spec \u00a72.1).",
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/RotationEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "frozen_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen By"
+          }
+        },
+        "required": [
+          "account_id"
+        ],
+        "title": "HookRotation",
+        "type": "object"
+      },
       "ImportReport": {
         "additionalProperties": false,
         "description": "Result of `posting import` (Dict queue -> Postgres, spec \u00a75.5).",
@@ -1107,6 +1204,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ChannelRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hooks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HookRotation"
               },
               {
                 "type": "null"
@@ -1641,6 +1748,40 @@
           "profile"
         ],
         "title": "PublisherProfile",
+        "type": "object"
+      },
+      "RotationEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "control": {
+            "default": false,
+            "title": "Control",
+            "type": "boolean"
+          },
+          "data": {
+            "$ref": "#/components/schemas/HookPatternData"
+          },
+          "pattern_id": {
+            "title": "Pattern Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "weight": {
+            "exclusiveMinimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "pattern_id",
+          "version",
+          "weight",
+          "data"
+        ],
+        "title": "RotationEntry",
         "type": "object"
       },
       "Source": {
