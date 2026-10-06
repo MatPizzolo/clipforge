@@ -260,9 +260,6 @@ def test_a_row_without_cost_rows_takes_the_breakdown_from_metadata(
     tmp_path: Path, db: Database
 ) -> None:
     # pipeline review I1: never a made-up PACKAGE line (the dashboard sums costs per stage)
-    # Flaky on WSL2 (card 017): when the wall clock steps back between create_job and package,
-    # JobsRepo.upsert's `updated_at <=` guard silently drops the DONE write and the row stays
-    # `queued`. A src/ bug, not a test bug: root cause and the fix in docs/reports/017-x0-*.md
     harness = Harness.build(tmp_path)
     harness.deps.jobs_db = JobsRepo(db)
     job_id = channel_job(harness)

@@ -202,7 +202,7 @@ Decision: Neon Postgres, reached through the pooled endpoint with SQLAlchemy 2 +
 Consequences: One new managed dependency, free until it's outgrown. Tests need a local Postgres, and CI a Postgres service. Alembic runs in the deploy job before `modal deploy`. During the switch a setting points reads back at the Dict for rollback. The ADR-24 keep-alive and snapshot are removed a week after the migration is verified.
 
 ## ADR-27: One dispatcher cron
-Date: 2026-09-29 · Status: Accepted (2026-10-02, the owner's approval of card 011's S2 spec; ruling #434; log #441, #445, #455, #461; built in S2a)
+Date: 2026-09-29 · Status: Accepted (2026-10-02, the owner's approval of card 011's S2 spec; ruling #434; log #441, #445, #455, #461; built in S2a); the assisted per-slot task runs on every due tick without a `dispatch:` claim, relying on its slot claim and the #202 guard as `posting_tick` did (log #489, 2026-10-06)
 Context: Modal Starter allows 5 deployed crons; three are used (`sweeper`, `posting_tick`, `posting_daily`). S2 adds the 09:00 digest, publish reconcile and per-slot review and hand-off phases; S6, S7 and S3b add the queue filler, the analytics pull, program checks and a weekly report.
 Decision: One `dispatcher` function runs every 5 minutes, replacing `posting_tick`, and runs each periodic task when it is due. Every tick first folds the ops alerts held over quiet hours or the hourly cap into one message (ADR-45's alert fold, moved from `posting_tick`). A task declares `due(now)` from Dict state only (the brake, the outage flag, the schedule copies, last-run markers) and `run(key)` within a time budget; slow work is spawned. Each due key is claimed set-if-absent (`dispatch:<task>:<key>`) and released on failure, which raises an ops alert. Postgres is opened only when a task is due, so Neon can scale to zero between due times. Planning and the digest run in the owner's time zone for every account. `sweeper` and `posting_daily` stay as they are: 3 crons.
 Consequences: Adding a periodic task needs no new cron. One slow task can't delay the others beyond its budget. The per-slot phases (plan at 08:50 owner time, review card at S − 2 h, hand-off at S − 30 min) wake Neon about 13 times a day per account. Spec: docs/superpowers/specs/2026-10-01-studio-s2-design.md §4.
@@ -284,7 +284,7 @@ Decision:
 Consequences: Platform-compliant accounts that can take brand deals openly. Some "indistinguishable from real" growth tactics are deliberately off the table.
 
 ## ADR-41: Moving to Postgres by writing to both stores, and posting per account
-Date: 2026-09-29 · Status: Accepted (S1; written into this file by card 002, 2026-09-30; completes ADR-26's switch; the Dict writes retire at S1 Task 23)
+Date: 2026-09-29 · Status: Accepted (S1; written into this file by card 002, 2026-09-30; completes ADR-26's switch; the Dict writes retire at S1 Task 23); "at least 7 days of clean verifies" updated by log #154 (2026-10-06: 2 days, card 040)
 Context: ADR-26 moves durable state to Neon and asks for a setting that points reads back at the Dict for rollback. The studio also needs several accounts posting on their own schedules (S1 kickoff, 2026-09-29).
 Decision:
 - A `PostingRepo` protocol with Dict, Sql and Dual implementations. `STATE_READS` (`dict` | `postgres`) picks the primary. Every successful write is repeated on the other store, best-effort, so a rollback flips reads onto a store that is still current. The Dict side serves account #1 only. A mirror failure is an ops alert (ADR-45).

@@ -15,7 +15,10 @@ import re
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
+from typing import Literal
 
+from clipforge.actors import ACTOR as ACTOR  # re-exported: one pattern for every writer
+from clipforge.actors import checked
 from clipforge.bot import messages
 from clipforge.bot.context import BotContext
 from clipforge.bot.deeplinks import item_row
@@ -23,18 +26,20 @@ from clipforge.bot.posting import keyboard
 from clipforge.bot.posting import send_next as _send_next
 from clipforge.bot.telegram import not_modified
 from clipforge.db.engine import is_db_error, redact
-from clipforge.models import Platform, PostVerdict, RejectReason
+from clipforge.models import Account, Brake, Platform, PostVerdict, RejectReason
+from clipforge.pipeline.deps import KV
+from clipforge.posting import brake
 from clipforge.posting.backend import Posting, posting_of
 from clipforge.posting.keepalive import clear_outage
+from clipforge.posting.repo import PostingRepo
 
 log = logging.getLogger(__name__)
 
-# ADR-42's actors: telegram:<id>, web:<login>, session:<name>, and the CLI's cli:<os user>
-ACTOR = re.compile(
-    r"telegram:\d{1,20}|web:[A-Za-z0-9-]{1,39}|session:[a-z0-9][a-z0-9-]{0,39}"
-    r"|cli:[A-Za-z0-9._-]{1,32}"
-)
+# The actor pattern lives in clipforge/actors.py (shared with the autopilot service)
 _LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}")  # a GitHub login
+
+
+DAILY = "system:daily"  # posting_daily's brake repair
 
 
 class ActionFailed(Exception):
@@ -55,9 +60,7 @@ def web_actor(header: str | None) -> str:
 
 
 def _checked(actor: str) -> str:
-    if not ACTOR.fullmatch(actor):
-        raise ValueError(f"not an actor: {actor!r}")
-    return actor
+    return checked(actor)
 
 
 @contextmanager
@@ -92,16 +95,36 @@ def set_posted(
     return on
 
 
+def _answer_time(posting: Posting, ref: str, now: datetime) -> datetime:
+    """A verdict answers the send it was made for: it is stamped no earlier than the record's
+    latest send or verdict, so a container whose clock is behind the sender's can't leave the
+    clip reading as `sent` (card 017 item 9, log #143). Stamping, rather than recording the
+    send number, keeps the Dict and Postgres formats unchanged."""
+    record = posting.repo.get(ref)
+    if record is None:
+        return now
+    times = [now, *(s.at for s in record.sends)]
+    if record.verdict is not None:
+        times.append(record.verdict.at)
+    return max(times)
+
+
+def _set_verdict(
+    posting: Posting, ref: str, kind: Literal["skipped", "rejected"], actor: str, now: datetime
+) -> None:
+    def write() -> None:
+        verdict = PostVerdict(kind=kind, at=_answer_time(posting, ref, now))
+        posting.repo.set_verdict(ref, verdict, actor)
+
+    _write("skip" if kind == "skipped" else "reject", ref, write)
+
+
 def skip(posting: Posting, ref: str, actor: str, now: datetime) -> None:
-    actor = _checked(actor)
-    verdict = PostVerdict(kind="skipped", at=now)
-    _write("skip", ref, lambda: posting.repo.set_verdict(ref, verdict, actor))
+    _set_verdict(posting, ref, "skipped", _checked(actor), now)
 
 
 def reject(posting: Posting, ref: str, actor: str, now: datetime) -> None:
-    actor = _checked(actor)
-    verdict = PostVerdict(kind="rejected", at=now)
-    _write("reject", ref, lambda: posting.repo.set_verdict(ref, verdict, actor))
+    _set_verdict(posting, ref, "rejected", _checked(actor), now)
 
 
 def set_reason(posting: Posting, ref: str, reason: RejectReason, actor: str) -> bool:
@@ -112,51 +135,93 @@ def set_reason(posting: Posting, ref: str, reason: RejectReason, actor: str) -> 
 # ---- account actions
 
 
-def pause(ctx: BotContext, account_id: str | None, on: bool, actor: str, now: datetime) -> str:
-    """`/pause [account]` and `/go [account]`; returns the reply. With several accounts, each
-    one answers for itself, so a failure on one never hides what changed on another."""
+def pause(
+    ctx: BotContext, scope: str | None, on: bool, actor: str, now: datetime,
+    reason: str | None = None,
+) -> str:  # fmt: skip
+    """`/pause [account|all]` and `/go [account|all]` (S2 spec §6.7); returns the reply.
+
+    1. The brake key `brake:<scope>` is written first (no scope means `all`): it is what the
+       dispatcher obeys, and it survives a Neon outage. `/go all` also turns off every account
+       key that is on, so it resumes everything, as `/go` always did.
+    2. Then `posting_state` for each account in scope records the account's effective brake
+       (on while `brake:all` or its own key is on), with the actor and reason. A database error
+       there is reported per account ("recorded in the brake only"), never raised.
+    With several accounts, each one answers for itself."""
     actor = _checked(actor)
+    scope = scope or brake.ALL
     posting = posting_of(ctx.deps)
+    kv = ctx.deps.store.kv
     try:
-        with _store("pause", account_id or "accounts"):
+        with _store("pause", scope):
             accounts = posting.posting_accounts()
-    except ActionFailed as exc:
-        return str(exc)
+        listed = True
+    except ActionFailed:
+        accounts, listed = [], False
+    if scope != brake.ALL and scope not in _known(posting, accounts):
+        return messages.unknown_account(scope, [a.id for a in accounts])
+    brake.write(kv, Brake(scope=scope, on=on, at=now, actor=actor, reason=reason))
+    if scope == brake.ALL and not on:
+        for b in brake.touch_all(kv):
+            if b.scope != brake.ALL and b.on:
+                brake.write(kv, Brake(scope=b.scope, on=False, at=now, actor=actor, reason=reason))
+    log.info("posting: brake %s %s by %s", scope, "on" if on else "off", actor)
+    outage_note = _clear_outage(ctx, actor) if not on else ""
+    done = messages.PAUSED if on else messages.RESUMED
+    if not on and scope != brake.ALL and brake.braked(kv, scope):
+        done = messages.STILL_BRAKED
+    if not listed:
+        return done + messages.BRAKE_ONLY + outage_note
     if not accounts:
         # Posting is off (no chat): keep the flag working for the default account, so a
         # /pause sent while fixing the settings still holds once posting turns on (#96).
-        if account_id is not None:
-            return messages.unknown_account(account_id, [])
-        outage_note = _clear_outage(ctx, actor) if not on else ""
+        target = posting.default_account_id
         try:
-            posting.repo.set_paused(posting.default_account_id, on, now, actor)
+            posting.repo.set_paused(target, brake.braked(kv, target), now, actor, reason)
         except Exception as exc:
             log.warning("posting: setting the pause flag failed: %s", redact(exc))
             return messages.POSTING_OFF + outage_note
-        log.info("posting: %s %s by %s", posting.default_account_id,
-                 "paused" if on else "resumed", actor)  # fmt: skip
-        return (messages.PAUSED if on else messages.RESUMED) + outage_note
-    targets = [a for a in accounts if account_id is None or a.id == account_id]
-    if account_id is not None and not targets:
-        return messages.unknown_account(account_id, [a.id for a in accounts])
-    outage_note = _clear_outage(ctx, actor) if not on else ""
-    done = messages.PAUSED if on else messages.RESUMED
+        return (done if scope == brake.ALL else f"{scope}: {done}") + outage_note
+    # an account named without a posting chat still gets its row
+    targets = [a.id for a in accounts] if scope == brake.ALL else [scope]
     replies = []
-    for account in targets:
+    for account_id in targets:
         try:
-            with _store("pause", account.id):
-                posting.repo.set_paused(account.id, on, now, actor)
-            # posting_state has no actor column (0001 is frozen), so the actor is logged
-            log.info("posting: %s %s by %s", account.id, "paused" if on else "resumed", actor)
-            replies.append((account.id, done))
-        except ActionFailed as exc:
-            replies.append((account.id, str(exc)))
-    if len(replies) == 1:
-        reply = replies[0][1]
-        return (reply if account_id is None else f"{account_id}: {reply}") + outage_note
+            with _store("pause", account_id):
+                posting.repo.set_paused(account_id, brake.braked(kv, account_id), now, actor,
+                                        reason)  # fmt: skip
+            replies.append((account_id, done))
+        except ActionFailed:
+            replies.append((account_id, done + messages.BRAKE_ONLY))
+    if len(replies) == 1 and scope != brake.ALL:
+        return f"{scope}: {replies[0][1]}" + outage_note
     if all(reply == done for _, reply in replies):
         return done + outage_note
     return "\n".join(f"{name}: {reply}" for name, reply in replies) + outage_note
+
+
+def _known(posting: Posting, accounts: list[Account]) -> set[str]:
+    """Accounts a brake may name: those posting, plus every schedule copy (read from the Dict,
+    so it works with Neon down)."""
+    known = {a.id for a in accounts}
+    try:
+        known |= set(posting.all_schedules())
+    except Exception as exc:  # dict mode without settings: posting accounts only
+        log.warning("posting: reading the schedule copies failed: %s", redact(exc))
+    return known
+
+
+def repair_brake(
+    ctx_kv: KV, repo: PostingRepo, account_id: str, *, side: Literal["key", "row"], on: bool,
+    at: datetime, reason: str,
+) -> None:  # fmt: skip
+    """`posting_daily`'s repair (spec §6.7): write only the side that is behind, as
+    `system:daily`, so pausing keeps one writer module. `key` writes `brake:<account>`; `row`
+    writes `posting_state`."""
+    if side == "key":
+        brake.write(ctx_kv, Brake(scope=account_id, on=on, at=at, actor=DAILY, reason=reason))
+    else:
+        repo.set_paused(account_id, on, at, DAILY, reason)
 
 
 def _clear_outage(ctx: BotContext, actor: str) -> str:

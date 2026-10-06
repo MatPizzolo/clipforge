@@ -43,8 +43,8 @@ def test_with_a_database_it_verifies_backfills_syncs_and_snapshots(
     kv.delete(f"post:{JOB}:clip_01")  # drift: realtalk's clip is now only in Postgres
     lines = run_daily(deps, db, "realtalk-clips-en", NOON)
     names = [line.split(":")[0] for line in lines]
-    assert names == ["touch", "dict snapshot", "verify", "jobs backfill", "schedules", "rebuild",
-                     "db snapshot"]  # fmt: skip
+    assert names == ["touch", "dict snapshot", "verify", "brakes", "jobs backfill", "schedules",
+                     "deliveries", "rebuild", "db snapshot"]  # fmt: skip
     assert "founder-tapes-en" in read_schedules(kv)  # the lost copy is back
     assert any("posting verify: 1 differences" in t for _, t, _ in alerts.messages)
     path = tmp_path / "posting" / "snapshots" / "db-2026-09-30.json"
@@ -119,3 +119,30 @@ def test_rebuild_waits_for_a_restore_after_a_long_outage(tmp_path: Path) -> None
     clear_outage(harness.store.kv)  # what /go and POST /posting/restore do
     lines = run_daily(harness.deps, None, "realtalk-clips-en", NOON + timedelta(days=2))
     assert "rebuild: 0 clips queued" in lines
+
+
+def test_old_webhook_deliveries_are_pruned(db: Database) -> None:
+    from sqlalchemy import func, select
+
+    from clipforge.db.tables import webhook_deliveries
+    from clipforge.posting.daily import DELIVERIES_KEPT, prune_deliveries
+
+    with db.begin() as conn:
+        conn.execute(webhook_deliveries.insert(), [
+            {"delivery_id": "old", "event": "upload_completed", "payload": {},
+             "received_at": NOON - DELIVERIES_KEPT - timedelta(minutes=1)},
+            {"delivery_id": "new", "event": "upload_completed", "payload": {},
+             "received_at": NOON - timedelta(days=1)},
+        ])  # fmt: skip
+    assert prune_deliveries(db, NOON - DELIVERIES_KEPT) == 1
+    with db.begin() as conn:
+        assert conn.execute(select(func.count()).select_from(webhook_deliveries)).scalar() == 1
+
+
+def test_the_brake_repair_is_skipped_without_posting(tmp_path: Path, db: Database) -> None:
+    # it writes rows only through the Posting repo (Dual), never a bare SQL repo (PR #52 review)
+    from clipforge.posting.daily import _brakes
+
+    harness = Harness.build(tmp_path)
+    harness.deps.posting = None
+    assert _brakes(harness.deps, db, NOON).startswith("skipped")

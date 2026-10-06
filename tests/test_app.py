@@ -34,7 +34,8 @@ def test_step_functions_and_endpoints_exist() -> None:
         "clip_step",
         "package_step",
         "sweeper",
-        "posting_tick",
+        "dispatcher",
+        "dispatch_task",
         "posting_daily",
         "db_doctor",
         "web",
@@ -89,7 +90,15 @@ def test_web_timeout_allows_slow_zip_downloads() -> None:
     assert app.WEB_TIMEOUT_S >= 3600
 
 
-def test_posting_tick_outlasts_one_telegram_upload() -> None:
+def test_dispatcher_replaces_posting_tick() -> None:
+    # ADR-27: sweeper, dispatcher and posting_daily are the only crons (Modal Starter allows 5)
+    assert hasattr(app, "dispatcher") and not hasattr(app, "posting_tick")
+    text = Path(app.__file__).read_text()
+    assert text.count("schedule=modal.Cron(") == 3
+    assert 'schedule=modal.Cron("*/5 * * * *")' in text
+
+
+def test_dispatcher_outlasts_one_telegram_upload() -> None:
     from clipforge.bot.telegram import UPLOAD_TIMEOUT_S
 
     assert app.POSTING_TICK_TIMEOUT_S >= 2 * UPLOAD_TIMEOUT_S

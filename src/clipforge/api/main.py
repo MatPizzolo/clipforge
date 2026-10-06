@@ -21,6 +21,8 @@ from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.exc import TimeoutError as PoolTimeout
 from telegram.error import TelegramError
 
+from clipforge.accounts.autopilot import AutopilotError, AutopilotService, describe
+from clipforge.accounts.autopilot import UnknownAccount as UnknownAutopilotAccount
 from clipforge.accounts.service import (
     AccountCreate,
     AccountEdit,
@@ -28,6 +30,7 @@ from clipforge.accounts.service import (
     create_account,
     edit_account,
 )
+from clipforge.actors import ACTOR
 from clipforge.bot.telegram import TelegramSender
 from clipforge.bot.webhook import BotContext, handle_update
 from clipforge.config import Settings
@@ -39,10 +42,13 @@ from clipforge.links import verify, with_download_url
 from clipforge.models import (
     ACCOUNT_ID,
     Account,
+    AutopilotChange,
+    AutopilotView,
     BackfillReport,
     ImportReport,
     JobInput,
     JobView,
+    PolicyDryRun,
     PostingOverview,
     Source,
     SourceEvent,
@@ -50,7 +56,9 @@ from clipforge.models import (
     VerifyReport,
 )
 from clipforge.pipeline.steps import Deps, JobNotResumable
+from clipforge.policy.checks import dry_run
 from clipforge.posting import migrate
+from clipforge.posting.backend import posting_of
 from clipforge.service import (
     PostingOutage,
     create_job,
@@ -75,6 +83,27 @@ class ApiContext:
 def actor(x_clipforge_actor: Annotated[str | None, Header()] = None) -> str:
     """Who made a change, for source_events (informational: the bearer token is the auth)."""
     return (x_clipforge_actor or "api").strip()[:80] or "api"
+
+
+HTTP_ACTOR_PREFIXES = ("web:", "cli:")  # the people who reach the API (the dashboard, the CLI)
+
+
+def person(x_clipforge_actor: Annotated[str | None, Header()] = None) -> str:
+    """The person making an autopilot change: `web:<login>` from the dashboard or the CLI's
+    `cli:<user>`. Never anonymous, and never `system:`, `telegram:` or `session:` from outside:
+    a token holder can't record a Telegram tap or a component's write."""
+    who = (x_clipforge_actor or "").strip()
+    if not ACTOR.fullmatch(who) or not who.startswith(HTTP_ACTOR_PREFIXES):
+        raise HTTPException(400, "X-Clipforge-Actor must name the person (web:<login>, cli:<user>)")
+    return who
+
+
+def creator(x_clipforge_actor: Annotated[str | None, Header()] = None) -> str | None:
+    """Who creates an account: a person's actor from the header (as `person`), or None when
+    there is no header (the accounts service then records `system:accounts`)."""
+    if x_clipforge_actor is None or not x_clipforge_actor.strip():
+        return None
+    return person(x_clipforge_actor)
 
 
 def _same(given: str | None, expected: str) -> bool:
@@ -119,10 +148,15 @@ def create_app(ctx: ApiContext) -> FastAPI:
         return value
 
     @app.post("/accounts", status_code=201, dependencies=authorized)
-    def post_account(req: AccountCreate) -> Account:
+    def post_account(req: AccountCreate, who: Annotated[str | None, Depends(creator)]) -> Account:
         try:
             return create_account(
-                AccountsRepo(database()), settings, req, utcnow(), kv=ctx.deps().store.kv
+                AccountsRepo(database()),
+                settings,
+                req,
+                utcnow(),
+                kv=ctx.deps().store.kv,
+                actor=who,
             )
         except AccountError as exc:
             raise HTTPException(400, str(exc)) from None
@@ -290,6 +324,50 @@ def create_app(ctx: ApiContext) -> FastAPI:
         if path is None or not path.is_relative_to(root) or not path.is_file():
             raise HTTPException(404, "zip not found")
         return FileResponse(path, media_type="application/zip", filename=f"clipforge-{job_id}.zip")
+
+    # ---- S2a admin routes (bearer token; they move to the `admin` endpoint in S3-1, ADR-38)
+
+    def autopilot_service() -> AutopilotService:
+        db = database()
+        return AutopilotService(db, AccountsRepo(db), ctx.deps().store.kv)
+
+    def autopilot_view(svc: AutopilotService, account_id: str) -> AutopilotView:
+        ap = svc.get(account_id)
+        return AutopilotView(autopilot=ap, label=describe(ap),
+                             waiting_on=svc.waiting_on(account_id),
+                             history=svc.history(account_id))  # fmt: skip
+
+    @app.get("/admin/accounts/{account_id}/autopilot", dependencies=authorized)
+    def get_autopilot(account_id: str) -> AutopilotView:
+        wanted = slug(account_id)
+        try:
+            return autopilot_view(autopilot_service(), wanted)
+        except UnknownAutopilotAccount:
+            raise HTTPException(404, "unknown account") from None
+
+    @app.put("/admin/accounts/{account_id}/autopilot", dependencies=authorized)
+    def put_autopilot(
+        account_id: str, change: AutopilotChange, who: Annotated[str, Depends(person)]
+    ) -> AutopilotView:
+        wanted = slug(account_id)
+        svc = autopilot_service()
+        try:
+            if change.preset is not None:
+                svc.apply_preset(wanted, change.preset, who, change.reason, utcnow())
+            else:
+                assert change.field is not None
+                svc.set(wanted, change.field, change.value, who, change.reason, utcnow())
+            return autopilot_view(svc, wanted)
+        except UnknownAutopilotAccount:
+            raise HTTPException(404, "unknown account") from None
+        except AutopilotError as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    @app.get("/admin/policy/dry-run", dependencies=authorized)
+    def get_policy_dry_run(account: str | None = None) -> PolicyDryRun:
+        """The gate over every eligible queued item; writes nothing (log #461)."""
+        wanted = slug(account) if account is not None else None
+        return dry_run(posting_of(ctx.deps()), settings.blueprints_dir, utcnow(), wanted)
 
     @app.post("/telegram/webhook")
     def telegram_webhook(

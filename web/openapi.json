@@ -182,6 +182,23 @@
             "title": "Clear Chat",
             "type": "boolean"
           },
+          "clear_publisher": {
+            "default": false,
+            "title": "Clear Publisher",
+            "type": "boolean"
+          },
+          "facebook_page_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]{1,32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facebook Page Id"
+          },
           "handles": {
             "additionalProperties": {
               "type": "string"
@@ -205,6 +222,18 @@
               }
             ],
             "title": "Hashtags"
+          },
+          "publisher_profile": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9._-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher Profile"
           },
           "review_tier": {
             "anyOf": [
@@ -352,6 +381,238 @@
           "paused"
         ],
         "title": "AccountPosting",
+        "type": "object"
+      },
+      "Autopilot": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "batch_line_usd": {
+            "default": 2.0,
+            "title": "Batch Line Usd",
+            "type": "number"
+          },
+          "monthly_cap_usd": {
+            "title": "Monthly Cap Usd",
+            "type": "number"
+          },
+          "preset": {
+            "default": "hands_on",
+            "enum": [
+              "hands_on",
+              "supervised",
+              "autopilot",
+              "custom"
+            ],
+            "title": "Preset",
+            "type": "string"
+          },
+          "produce": {
+            "default": false,
+            "title": "Produce",
+            "type": "boolean"
+          },
+          "publish": {
+            "default": true,
+            "title": "Publish",
+            "type": "boolean"
+          },
+          "review_dial": {
+            "default": "review",
+            "enum": [
+              "review",
+              "sample",
+              "auto"
+            ],
+            "title": "Review Dial",
+            "type": "string"
+          },
+          "runway_days": {
+            "default": 7,
+            "title": "Runway Days",
+            "type": "integer"
+          },
+          "scale": {
+            "default": false,
+            "title": "Scale",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "title": "Updated By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "monthly_cap_usd",
+          "updated_by",
+          "updated_at"
+        ],
+        "title": "Autopilot",
+        "type": "object"
+      },
+      "AutopilotChange": {
+        "additionalProperties": false,
+        "description": "`PUT /admin/accounts/{id}/autopilot`: one control (`field`, `value`) or a `preset`.",
+        "properties": {
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "AutopilotChange",
+        "type": "object"
+      },
+      "AutopilotEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "from_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Value"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "to_value": {
+            "title": "To Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "at",
+          "actor",
+          "field",
+          "from_value",
+          "to_value",
+          "reason"
+        ],
+        "title": "AutopilotEvent",
+        "type": "object"
+      },
+      "AutopilotView": {
+        "additionalProperties": false,
+        "description": "`GET /admin/accounts/{id}/autopilot` and `clipforge autopilot show`.",
+        "properties": {
+          "autopilot": {
+            "$ref": "#/components/schemas/Autopilot"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/AutopilotEvent"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "waiting_on": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Waiting On",
+            "type": "object"
+          }
+        },
+        "required": [
+          "autopilot",
+          "label",
+          "waiting_on",
+          "history"
+        ],
+        "title": "AutopilotView",
         "type": "object"
       },
       "BackfillReport": {
@@ -1219,6 +1480,56 @@
         "title": "PlatformProfile",
         "type": "object"
       },
+      "PolicyDryRun": {
+        "additionalProperties": false,
+        "description": "`GET /admin/policy/dry-run`: the gate over every eligible queued item; writes nothing.",
+        "properties": {
+          "checked": {
+            "title": "Checked",
+            "type": "integer"
+          },
+          "would_hold": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyHold"
+            },
+            "title": "Would Hold",
+            "type": "array"
+          }
+        },
+        "required": [
+          "checked",
+          "would_hold"
+        ],
+        "title": "PolicyDryRun",
+        "type": "object"
+      },
+      "PolicyHold": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Codes",
+            "type": "array"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "account_id",
+          "codes"
+        ],
+        "title": "PolicyHold",
+        "type": "object"
+      },
       "PostStatus": {
         "description": "Derived from a clip's keys, never stored (spec \u00a74).",
         "enum": [
@@ -2019,6 +2330,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-clipforge-actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Clipforge-Actor"
+            }
           }
         ],
         "requestBody": {
@@ -2172,6 +2499,203 @@
           }
         },
         "summary": "Patch Account"
+      }
+    },
+    "/admin/accounts/{account_id}/autopilot": {
+      "get": {
+        "operationId": "get_autopilot_admin_accounts__account_id__autopilot_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutopilotView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Autopilot"
+      },
+      "put": {
+        "operationId": "put_autopilot_admin_accounts__account_id__autopilot_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-clipforge-actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Clipforge-Actor"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutopilotChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutopilotView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Autopilot"
+      }
+    },
+    "/admin/policy/dry-run": {
+      "get": {
+        "description": "The gate over every eligible queued item; writes nothing (log #461).",
+        "operationId": "get_policy_dry_run_admin_policy_dry_run_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Account"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyDryRun"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Policy Dry Run"
       }
     },
     "/jobs": {

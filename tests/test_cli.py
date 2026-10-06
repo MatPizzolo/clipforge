@@ -837,6 +837,76 @@ def test_posting_import_dry_run_sends_the_flag(tmp_path: Path) -> None:
     assert code == 1 and seen[0].url.params["dry_run"] == "true"
 
 
+# ---- S2a (card 014 Task 8): autopilot and the policy dry run
+
+AUTOPILOT_JSON = {
+    "autopilot": {"account_id": "realtalk-clips-en", "preset": "hands_on", "produce": False,
+                  "review_dial": "review", "publish": True, "scale": False, "runway_days": 7,
+                  "batch_line_usd": 2.0, "monthly_cap_usd": 5.0, "updated_by": "system:migration",
+                  "updated_at": "2026-10-05T22:00:00Z"},
+    "label": "Hands-on",
+    "waiting_on": {"review_dial": "Review: review", "produce": "Produce: off",
+                   "publish": "Publish: on, waiting for a connected profile",
+                   "scale": "Scale: no paired account"},
+    "history": [{"account_id": "realtalk-clips-en", "at": "2026-10-05T22:00:00Z",
+                 "actor": "system:migration", "field": "preset", "from_value": None,
+                 "to_value": "hands_on", "reason": "S2 migration seed"}],
+}  # fmt: skip
+AUTOPILOT_PATH = "/admin/accounts/realtalk-clips-en/autopilot"
+
+
+def test_autopilot_show_prints_the_controls(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    http = _api({("GET", AUTOPILOT_PATH): AUTOPILOT_JSON})
+    assert main(["autopilot", "show", "realtalk-clips-en"], http=http,
+                settings=make_settings(tmp_path)) == 0  # fmt: skip
+    out = capsys.readouterr().out
+    assert "realtalk-clips-en: Hands-on" in out
+    assert "Publish: on, waiting for a connected profile" in out
+    assert "by system:migration: preset - → hands_on (S2 migration seed)" in out
+
+
+def test_autopilot_set_and_preset_send_the_change_with_the_cli_actor(tmp_path: Path) -> None:
+    seen: list[httpx.Request] = []
+    http = _api({("PUT", AUTOPILOT_PATH): AUTOPILOT_JSON}, seen)
+    settings = make_settings(tmp_path)
+    assert main(["autopilot", "set", "realtalk-clips-en", "review_dial", "sample", "--reason",
+                 "fine"], http=http, settings=settings) == 0  # fmt: skip
+    assert main(["autopilot", "preset", "realtalk-clips-en", "supervised"], http=http,
+                settings=settings) == 0  # fmt: skip
+    bodies = [json.loads(r.content) for r in seen]
+    assert bodies == [{"field": "review_dial", "value": "sample", "reason": "fine"},
+                      {"preset": "supervised"}]  # fmt: skip
+    assert all(r.headers["X-Clipforge-Actor"].startswith("cli:") for r in seen)
+
+
+def test_policy_dry_run_exits_1_when_anything_would_be_held(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    clean = _api({("GET", "/admin/policy/dry-run"): {"checked": 12, "would_hold": []}})
+    assert main(["policy", "dry-run"], http=clean, settings=make_settings(tmp_path)) == 0
+    assert "0 items would be held" in capsys.readouterr().out
+    held = {"checked": 3, "would_hold": [{"ref": "20260928-aaaaaaaa-0001:clip_01",
+                                          "account_id": "realtalk-clips-en",
+                                          "codes": ["license_unrecorded"]}]}  # fmt: skip
+    dirty = _api({("GET", "/admin/policy/dry-run"): held})
+    assert main(["policy", "dry-run", "--account", "realtalk-clips-en"], http=dirty,
+                settings=make_settings(tmp_path)) == 1  # fmt: skip
+    out = capsys.readouterr().out
+    assert "1 items would be held" in out and "license_unrecorded" in out
+
+
+def test_account_edit_publisher_flags(tmp_path: Path) -> None:
+    seen: list[httpx.Request] = []
+    http = _api({("PATCH", "/accounts/realtalk-clips-en"): ACCOUNT_JSON}, seen)
+    assert main(["account", "edit", "realtalk-clips-en", "--publisher-profile", "realtalk",
+                 "--facebook-page-id", "123"], http=http,
+                settings=make_settings(tmp_path)) == 0  # fmt: skip
+    assert json.loads(seen[0].content) == {"publisher_profile": "realtalk",
+                                           "facebook_page_id": "123"}  # fmt: skip
+
+
 def _slow(times: int, body: object, seen: list[httpx.Request]) -> httpx.Client:
     """Times out `times` times, then answers `body` (card 039: the overview took 20 to 42 s)."""
 
@@ -869,3 +939,22 @@ def test_a_slow_write_is_not_retried(tmp_path: Path, capsys: pytest.CaptureFixtu
     http = _slow(1, {"added": 0}, seen)
     assert main(["status", "--rebuild"], http=http, settings=make_settings(tmp_path)) == 1
     assert len(seen) == 1 and "retrying" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("user", "actor"), [
+    ("mat", "cli:mat"), ("Mat Pizzolo", "cli:Mat-Pizzolo"), ("DOMAIN\\mat", "cli:DOMAIN-mat"),
+    ("x" * 40, "cli:" + "x" * 32), ("josé", "cli:jos"),
+])  # fmt: skip
+def test_the_cli_actor_is_cleaned_to_the_pattern(user: str, actor: str) -> None:
+    from clipforge.actors import ACTOR
+    from clipforge.cli import cli_actor
+
+    assert cli_actor(user) == actor and ACTOR.fullmatch(actor)
+
+
+def test_an_unusable_os_user_is_a_clear_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("clipforge.cli.getpass.getuser", lambda: "@@@")
+    assert main(["account", "list"], http=_api({}), settings=make_settings(tmp_path)) == 2
+    assert "can't record who ran this" in capsys.readouterr().err

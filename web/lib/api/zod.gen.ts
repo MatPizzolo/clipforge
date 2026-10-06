@@ -14,6 +14,74 @@ export const zAccountCreate = z.object({
 });
 
 /**
+ * Autopilot
+ */
+export const zAutopilot = z.object({
+    account_id: z.string(),
+    batch_line_usd: z.number().optional().default(2),
+    monthly_cap_usd: z.number(),
+    preset: z.enum([
+        'hands_on',
+        'supervised',
+        'autopilot',
+        'custom'
+    ]).optional().default('hands_on'),
+    produce: z.boolean().optional().default(false),
+    publish: z.boolean().optional().default(true),
+    review_dial: z.enum([
+        'review',
+        'sample',
+        'auto'
+    ]).optional().default('review'),
+    runway_days: z.int().optional().default(7),
+    scale: z.boolean().optional().default(false),
+    updated_at: z.iso.datetime({ offset: true, local: true }),
+    updated_by: z.string()
+});
+
+/**
+ * AutopilotChange
+ *
+ * `PUT /admin/accounts/{id}/autopilot`: one control (`field`, `value`) or a `preset`.
+ */
+export const zAutopilotChange = z.object({
+    field: z.string().nullish(),
+    preset: z.string().nullish(),
+    reason: z.string().max(500).nullish(),
+    value: z.union([
+        z.boolean(),
+        z.int(),
+        z.number(),
+        z.string()
+    ]).nullish()
+});
+
+/**
+ * AutopilotEvent
+ */
+export const zAutopilotEvent = z.object({
+    account_id: z.string(),
+    actor: z.string(),
+    at: z.iso.datetime({ offset: true, local: true }),
+    field: z.string(),
+    from_value: z.string().nullable(),
+    reason: z.string().nullable(),
+    to_value: z.string()
+});
+
+/**
+ * AutopilotView
+ *
+ * `GET /admin/accounts/{id}/autopilot` and `clipforge autopilot show`.
+ */
+export const zAutopilotView = z.object({
+    autopilot: zAutopilot,
+    history: z.array(zAutopilotEvent),
+    label: z.string(),
+    waiting_on: z.record(z.string(), z.string())
+});
+
+/**
  * BackfillReport
  *
  * Result of `jobs backfill`.
@@ -143,8 +211,11 @@ export const zPlatform = z.enum([
 export const zAccountEdit = z.object({
     chat_id: z.int().nullish(),
     clear_chat: z.boolean().optional().default(false),
+    clear_publisher: z.boolean().optional().default(false),
+    facebook_page_id: z.string().regex(/^[0-9]{1,32}$/).nullish(),
     handles: z.record(z.string(), z.string()).optional(),
     hashtags: z.array(z.string()).nullish(),
+    publisher_profile: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).nullish(),
     review_tier: z.enum([
         'review',
         'sample',
@@ -163,6 +234,25 @@ export const zPlatformProfile = z.object({
     hashtags: z.array(z.string()).optional(),
     max_len: z.number().nullish(),
     min_len: z.number().nullish()
+});
+
+/**
+ * PolicyHold
+ */
+export const zPolicyHold = z.object({
+    account_id: z.string(),
+    codes: z.array(z.string()),
+    ref: z.string()
+});
+
+/**
+ * PolicyDryRun
+ *
+ * `GET /admin/policy/dry-run`: the gate over every eligible queued item; writes nothing.
+ */
+export const zPolicyDryRun = z.object({
+    checked: z.int(),
+    would_hold: z.array(zPolicyHold)
 });
 
 /**
@@ -595,7 +685,8 @@ export const zGetAccountsAccountsGetResponse = z.array(zAccount);
 export const zPostAccountAccountsPostBody = zAccountCreate;
 
 export const zPostAccountAccountsPostHeaders = z.object({
-    authorization: z.string().nullish()
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
 });
 
 /**
@@ -630,6 +721,48 @@ export const zPatchAccountAccountsAccountIdPatchPath = z.object({
  * Successful Response
  */
 export const zPatchAccountAccountsAccountIdPatchResponse = zAccount;
+
+export const zGetAutopilotAdminAccountsAccountIdAutopilotGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zGetAutopilotAdminAccountsAccountIdAutopilotGetPath = z.object({
+    account_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetAutopilotAdminAccountsAccountIdAutopilotGetResponse = zAutopilotView;
+
+export const zPutAutopilotAdminAccountsAccountIdAutopilotPutBody = zAutopilotChange;
+
+export const zPutAutopilotAdminAccountsAccountIdAutopilotPutHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+export const zPutAutopilotAdminAccountsAccountIdAutopilotPutPath = z.object({
+    account_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zPutAutopilotAdminAccountsAccountIdAutopilotPutResponse = zAutopilotView;
+
+export const zGetPolicyDryRunAdminPolicyDryRunGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zGetPolicyDryRunAdminPolicyDryRunGetQuery = z.object({
+    account: z.string().nullish()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetPolicyDryRunAdminPolicyDryRunGetResponse = zPolicyDryRun;
 
 export const zPostJobJobsPostBody = zJobInput;
 

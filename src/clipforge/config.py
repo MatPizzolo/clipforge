@@ -122,6 +122,17 @@ class Settings(BaseSettings):
     posting_account_id: str = "realtalk-clips-en"
     blueprints_dir: Path = _REPO_ROOT / "blueprints"
 
+    # S2 (publishing and autopilot). Upload-Post's key and webhook secret are optional: without
+    # them publishing is off and the webhook answers 503 (S2 spec §8)
+    upload_post_api_key: SecretStr | None = None
+    upload_post_webhook_secret: SecretStr | None = None
+    upload_post_url: str = "https://api.upload-post.com"
+    media_link_ttl_s: int = 86400  # signed media links for Upload-Post's fetch
+    recovery_window_s: int = 0  # 0 = crash recovery never re-sends, until R5 (spec §6.3)
+    upload_post_profile_limit: int = 5  # Basic's 5 profiles; account create warns past it
+    # The policy gate holds items only when on; off (S2a) it only logs (log #461, #491)
+    gate_enforce: bool = False
+
     # Limits checked in ingest, before any GPU time (ADR-15)
     max_source_duration_s: float = 3 * 3600
     max_source_bytes: int = 4_000_000_000
@@ -148,6 +159,10 @@ class Settings(BaseSettings):
     git_sha: str | None = None
 
     prices: Prices = Field(default_factory=Prices)
+
+    def owner_zone(self) -> str:
+        """Where planning, the digest and quiet hours run (R3, log #455)."""
+        return self.owner_timezone or self.posting_timezone
 
     @model_validator(mode="before")
     @classmethod

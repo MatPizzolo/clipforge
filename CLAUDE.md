@@ -51,6 +51,8 @@ uv run clipforge source add|edit|list|show|submissions   # sources live in the d
 uv run clipforge source import-toml [--dry-run]  # one-off: videos/channels.toml -> sources
 uv run clipforge posting import [--dry-run]|verify   # S1 migration (ADR-41)
 uv run clipforge jobs backfill [--dry-run]       # jobs table from metadata.json and the Dict
+uv run clipforge autopilot show|set|preset <account> ...   # per-account autopilot (ADR-48)
+uv run clipforge policy dry-run [--account <id>]  # what the policy gate would hold (exit 1 if any)
 cd web && npm run dev                          # dashboard on localhost:3000 (S3a); deploy and env: web/README.md
 ```
 
@@ -67,7 +69,7 @@ src/clipforge/
   links.py          # signed, expiring zip links (ADR-13)
   runtime.py        # Modal adapters (DictKV, ModalVolume, FunctionSpawner) + build_deps
   smoke.py          # checks for the Modal smoke job (app.py::smoke)
-  cli.py            # `clipforge run|clip|status|resume|set-webhook|posting|jobs|account|source` (thin API client)
+  cli.py            # `clipforge run|clip|status|resume|set-webhook|posting|jobs|account|autopilot|policy|source` (thin API client)
   inbox.py          # videos/ inbox for `clipforge clip`: channels.toml, channel folders, ledger, Volume paths
   api/main.py       # FastAPI job API + Telegram webhook route
   bot/              # Telegram: telegram.py (PTB sync bridge), messages, notifier, commands, webhook, context, posting (ADR-23), deeplinks (DASHBOARD_URL)
@@ -76,11 +78,15 @@ src/clipforge/
   models.py         # pydantic contracts shared by stages
   jobs.py           # DictJobStore, JobContext, cached_stage (ADR-14)
   pipeline/         # step chain (Modal-free): deps.py interfaces, steps.py, selection.py, errors.py
-  posting/          # posting queue (ADR-23/41): repo (PostingRepo: Dict/Sql/Dual), backend, actions (shared taps/commands, actors), queue rules, enqueue, slots, captions (per-platform copy), keepalive (ADR-24), daily (ADR-46), migrate (import/backfill/verify)
+  posting/          # posting queue (ADR-23/41): repo (PostingRepo: Dict/Sql/Dual), backend, actions (shared taps/commands, the brake writer), brake (brake:<scope> keys), queue rules, enqueue, slots, captions (per-platform copy, copy_for), keepalive (ADR-24), daily (ADR-46), migrate (import/backfill/verify)
+  dispatch/         # the dispatcher (ADR-27): tasks.py (registry, due from Dict state, claims, the assisted task)
+  policy/           # the policy gate (ADR-29): gate.py (pure), checks.py (gate over queued records, the dry run)
+  review/           # routing.py: review lane reasons, windows, spot checks (pure; S2)
+  actors.py         # the actor pattern (telegram:, web:, session:, cli:, system:)
   service.py        # job service: create_job, get_job_view, resume_job (API, bot and CLI use it)
   config.py         # settings from env
-  db/               # Postgres (ADR-26/41): engine (Database, 5 s statement timeout), tables, migrations, doctor, accounts/sources/jobs/posting repos
-  accounts/         # blueprints loader + account service (create/edit, the posting:schedule:<account> Dict copies)
+  db/               # Postgres (ADR-26/41): engine (Database, 5 s statement timeout), tables, migrations, doctor, accounts/sources/jobs/posting/autopilot/review repos
+  accounts/         # blueprints loader + account service (create/edit, the posting:schedule/publish:<account> Dict copies) + autopilot (ADR-48, the one writer)
   schedule.py       # slot and hashtag normalization shared by config and accounts
   sources.py        # source permission hold rules
   sanitize.py       # clean (user-facing) and redact (logs, driver errors)
