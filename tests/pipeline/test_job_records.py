@@ -142,3 +142,72 @@ def test_without_a_database_failing_reads_no_costs(
     job_id = harness.submit()
     fail_job(harness.deps, job_id, StageName.INGEST, "boom", "boom")
     resume(harness.deps, job_id)
+
+
+def test_done_wins_over_a_newer_queued_row_when_the_clock_steps_back(
+    tmp_path: Path, db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # card 017 item 9 / log #143: the WSL clock steps back by up to 1.4 s, and the `updated_at`
+    # guard used to drop the package step's DONE write, leaving the row `queued`
+    from datetime import timedelta
+
+    from clipforge.jobs import utcnow
+
+    harness = Harness.build(tmp_path)
+    harness.deps.jobs_db = JobsRepo(db)
+    job_input = JobInput.model_validate(
+        {"source_url": SOURCE_URL, "permission": "own", "options": {"n": 2}}
+    )
+    job_id = create_job(harness.deps, job_input).job_id
+    monkeypatch.setattr("clipforge.pipeline.steps.utcnow", lambda: utcnow() - timedelta(seconds=2))
+    harness.run()
+    row = JobsRepo(db).get(job_id)
+    assert row is not None and row.status is JobStatus.DONE
+
+
+def test_upsert_keeps_a_terminal_row_over_an_older_running_write(db: Database) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from clipforge.models import JobSummary
+
+    t = datetime(2026, 10, 5, 12, tzinfo=UTC)
+    job_input = JobInput.model_validate({"source_url": SOURCE_URL, "permission": "own"})
+    base = JobSummary(job_id="20261005-aaaaaaaa-0001", source_id=None, status=JobStatus.QUEUED,
+                      input=job_input, created_at=t, updated_at=t)  # fmt: skip
+    repo = JobsRepo(db)
+    assert repo.upsert(base.model_copy(update={"updated_at": t + timedelta(seconds=5)}))
+    # a terminal write stamped earlier than the queued row still lands
+    assert repo.upsert(base.model_copy(update={"status": JobStatus.DONE}))
+    # an older non-terminal write never replaces a terminal row
+    assert not repo.upsert(
+        base.model_copy(
+            update={"status": JobStatus.RUNNING, "updated_at": t - timedelta(seconds=1)}
+        )
+    )
+    got = repo.get(base.job_id)
+    assert got is not None and got.status is JobStatus.DONE
+    # a newer non-terminal write (resume) still replaces it
+    assert repo.upsert(
+        base.model_copy(
+            update={"status": JobStatus.RUNNING, "updated_at": t + timedelta(seconds=9)}
+        )
+    )
+
+
+def test_a_stale_terminal_write_never_replaces_a_newer_resume(db: Database) -> None:
+    # PR review: terminal-wins is only for clock skew, not for a failure from before a resume
+    from datetime import UTC, datetime, timedelta
+
+    from clipforge.models import JobSummary
+
+    t = datetime(2026, 10, 5, 12, tzinfo=UTC)
+    job_input = JobInput.model_validate({"source_url": SOURCE_URL, "permission": "own"})
+    resumed = t + timedelta(minutes=5)
+    base = JobSummary(job_id="20261005-aaaaaaaa-0002", source_id=None, status=JobStatus.RUNNING,
+                      input=job_input, created_at=t, updated_at=resumed)  # fmt: skip
+    repo = JobsRepo(db)
+    assert repo.upsert(base)  # resumed at t + 5 min
+    stale = base.model_copy(update={"status": JobStatus.FAILED, "updated_at": t})
+    assert not repo.upsert(stale)
+    got = repo.get(base.job_id)
+    assert got is not None and got.status is JobStatus.RUNNING

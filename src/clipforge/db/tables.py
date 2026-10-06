@@ -7,6 +7,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
@@ -22,6 +23,12 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 
 metadata = MetaData()
+# The same patterns as alembic/versions/0002_s2.py (clipforge/actors.ACTOR for the actor)
+ACTOR_CHECK = (r"actor ~ '^(telegram:[0-9]{1,20}|web:[A-Za-z0-9-]{1,39}"
+               r"|session:[a-z0-9][a-z0-9-]{0,39}|cli:[A-Za-z0-9._-]{1,32}"
+               r"|system:[a-z]([a-z-]{0,38}[a-z])?)$' and length(actor) <= 80")  # fmt: skip
+POST_STATES_SQL = ("state in ('pending', 'claimed', 'scheduled', 'retrying', 'published', "
+                   "'failed', 'final_failed', 'cancelled')")  # fmt: skip
 JSONB_ = JSON().with_variant(JSONB(), "postgresql")
 TS = DateTime(timezone=True)
 
@@ -40,6 +47,7 @@ accounts = Table(
     Column("platforms", JSONB_, nullable=False),
     Column("brand", JSONB_, nullable=False),
     Column("posting", JSONB_, nullable=False),
+    Column("publisher", JSONB_),  # PublisherProfile (S2); the accounts service writes it
     Column("created_at", TS, nullable=False),
     Column("updated_at", TS, nullable=False),
 )  # fmt: skip
@@ -49,6 +57,10 @@ posting_state = Table(
     Column("account_id", String(40), ForeignKey("accounts.id"), primary_key=True),
     Column("paused", Boolean, nullable=False),
     Column("changed_at", TS, nullable=False),
+    Column("changed_by", Text),  # the actor of the last /pause or /go (0002)
+    Column("reason", Text),
+    CheckConstraint(f"changed_by is null or ({ACTOR_CHECK.replace('actor', 'changed_by')})",
+                    name="ck_posting_state_changed_by"),
 )  # fmt: skip
 
 sources = Table(
@@ -93,6 +105,7 @@ jobs = Table(
     Column("cost_usd", Float, nullable=False),
     Column("metadata_path", Text),
     Column("build", Text),
+    Column("error", Text),  # 0002 (S3 dashboard spec §8.7); S3 fills it
     Index("ix_jobs_source_status", "source_id", "status"),
 )  # fmt: skip
 
@@ -129,6 +142,15 @@ content_items = Table(
     Column("verdict_kind", Text),
     Column("verdict_at", TS),
     Column("verdict_reason", Text),
+    # S2 review columns (0002); one writer: review/service.py
+    Column("copy", JSONB_),
+    Column("review_lane", Text),
+    Column("review_reasons", JSONB_),
+    Column("review_dial", Text),
+    Column("review_window", Text),
+    Column("gate", JSONB_),
+    Column("approved_at", TS),
+    Column("approved_by", Text),
     Index("ix_items_account", "account_id"),
     Index("ix_items_source_hash", "source_hash"),
 )  # fmt: skip
@@ -152,6 +174,20 @@ posts = Table(
     Column("posted_at", TS),
     Column("external_id", Text),
     Column("url", Text),
+    # S2 publish columns (0002); one writer: publishing/state.py (S2b)
+    Column("publisher", Text),
+    Column("state", Text, nullable=False, server_default="pending"),
+    Column("claimed_at", TS),
+    Column("scheduled_for", TS),
+    Column("handed_off_at", TS),
+    Column("request_id", Text),
+    Column("upload_job_id", Text),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("error", Text),
+    Column("copy", JSONB_),
+    CheckConstraint(POST_STATES_SQL, name="ck_posts_state"),
+    Index("ix_posts_state_scheduled", "state", "scheduled_for"),
+    Index("ix_posts_upload_job", "upload_job_id"),
 )  # fmt: skip
 
 sends = Table(
@@ -173,6 +209,8 @@ post_events = Table(
     Column("kind", Text, nullable=False),
     Column("at", TS, nullable=False),
     Column("data", JSONB_, nullable=False),
+    Column("actor", Text),  # 0002, backfilled from data.actor; NULL for system writes in S1
+    CheckConstraint(f"actor is null or ({ACTOR_CHECK})", name="ck_post_events_actor"),
     Index("ix_post_events_item", "item_id"),
 )  # fmt: skip
 
@@ -192,4 +230,88 @@ costs = Table(
     Column("usd", Float, nullable=False),
     Column("cached", Boolean, nullable=False),
     Index("ix_costs_job", "job_id"),
+)  # fmt: skip
+
+# ---- S2 (0002, S2 spec §3)
+
+autopilot = Table(
+    "autopilot", metadata,
+    Column("account_id", String(40), ForeignKey("accounts.id"), primary_key=True),
+    Column("preset", Text, nullable=False),
+    Column("produce", Boolean, nullable=False),
+    Column("review_dial", Text, nullable=False),
+    Column("publish", Boolean, nullable=False),
+    Column("scale", Boolean, nullable=False),
+    Column("runway_days", Integer, nullable=False),
+    Column("batch_line_usd", Float, nullable=False),
+    Column("monthly_cap_usd", Float, nullable=False),
+    Column("updated_by", Text, nullable=False),
+    Column("updated_at", TS, nullable=False),
+    CheckConstraint("preset in ('hands_on', 'supervised', 'autopilot', 'custom')",
+                    name="ck_autopilot_preset"),
+    CheckConstraint("review_dial in ('review', 'sample', 'auto')", name="ck_autopilot_review_dial"),
+    CheckConstraint(ACTOR_CHECK.replace("actor", "updated_by"), name="ck_autopilot_updated_by"),
+)  # fmt: skip
+
+# Append-only: a trigger rejects UPDATE and DELETE (0002). Its FK to accounts is safe because
+# accounts are never deleted
+autopilot_events = Table(
+    "autopilot_events", metadata,
+    Column("id", BigInteger, Identity(), primary_key=True),
+    Column("account_id", String(40), ForeignKey("accounts.id"), nullable=False),
+    Column("at", TS, nullable=False),
+    Column("actor", Text, nullable=False),
+    Column("field", Text, nullable=False),
+    Column("from_value", Text),
+    Column("to_value", Text, nullable=False),
+    Column("reason", Text),
+    CheckConstraint(ACTOR_CHECK, name="ck_autopilot_events_actor"),
+    Index("ix_autopilot_events_account", "account_id", "at"),
+)  # fmt: skip
+
+# One writer: dispatch/plan.py (S2b)
+slot_plans = Table(
+    "slot_plans", metadata,
+    Column("account_id", String(40), ForeignKey("accounts.id"), primary_key=True),
+    Column("slot", TS, primary_key=True),
+    Column("item_id", String(64), ForeignKey("content_items.id")),
+    Column("state", Text, nullable=False),
+    Column("planned_at", TS, nullable=False),
+    Column("updated_at", TS, nullable=False),
+    CheckConstraint("state in ('planned', 'approved', 'handed_off', 'done', 'empty', 'missed')",
+                    name="ck_slot_plans_state"),
+)  # fmt: skip
+
+webhook_deliveries = Table(
+    "webhook_deliveries", metadata,
+    Column("delivery_id", Text, primary_key=True),
+    Column("event", Text, nullable=False),
+    Column("received_at", TS, nullable=False),
+    Column("payload", JSONB_, nullable=False),
+    Column("processed_at", TS),
+)  # fmt: skip
+
+links = Table(
+    "links", metadata,
+    Column("slug", String(16), primary_key=True),
+    Column("target_url", Text, nullable=False),
+    Column("account_id", String(40), ForeignKey("accounts.id"), nullable=False),
+    Column("item_id", String(64), ForeignKey("content_items.id")),
+    Column("platform", String(16)),
+    Column("kind", Text, nullable=False),
+    Column("sub_param", Text, nullable=False),
+    Column("created_at", TS, nullable=False),
+    Column("created_by", Text, nullable=False),
+)  # fmt: skip
+
+# No IP address or user agent, ever (ADR-33)
+clicks = Table(
+    "clicks", metadata,
+    Column("id", BigInteger, Identity(), primary_key=True),
+    Column("slug", String(16), ForeignKey("links.slug"), nullable=False),
+    Column("at", TS, nullable=False),
+    Column("platform", String(16)),
+    Column("sub_id", Text, nullable=False),
+    Column("country", String(2)),
+    Index("ix_clicks_slug_at", "slug", "at"),
 )  # fmt: skip

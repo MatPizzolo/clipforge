@@ -52,6 +52,7 @@ export type Account = {
         [key in Platform]?: PlatformProfile;
     };
     posting?: PostingSchedule;
+    publisher?: PublisherProfile | null;
     /**
      * Review Tier
      */
@@ -685,6 +686,26 @@ export type Progress = {
      */
     pct: number;
     stage: StageName;
+};
+
+/**
+ * PublisherProfile
+ */
+export type PublisherProfile = {
+    /**
+     * Disconnected
+     */
+    disconnected?: {
+        [key in Platform]?: string;
+    };
+    /**
+     * Facebook Page Id
+     */
+    facebook_page_id?: string | null;
+    /**
+     * Profile
+     */
+    profile: string;
 };
 
 /**

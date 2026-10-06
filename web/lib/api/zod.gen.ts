@@ -256,6 +256,15 @@ export const zPostingSchedule = z.object({
 });
 
 /**
+ * PublisherProfile
+ */
+export const zPublisherProfile = z.object({
+    disconnected: z.record(z.string(), z.iso.datetime({ offset: true, local: true })).optional(),
+    facebook_page_id: z.string().nullish(),
+    profile: z.string()
+});
+
+/**
  * Account
  */
 export const zAccount = z.object({
@@ -277,6 +286,7 @@ export const zAccount = z.object({
     persona_id: z.string().nullish(),
     platforms: z.record(z.string(), zPlatformProfile),
     posting: zPostingSchedule.optional(),
+    publisher: zPublisherProfile.nullish(),
     review_tier: z.enum([
         'review',
         'sample',

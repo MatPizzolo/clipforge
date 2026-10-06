@@ -10,7 +10,7 @@ Models that parse LLM output ignore unknown keys; every other contract rejects t
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Annotated, Literal, Self
@@ -249,6 +249,15 @@ class ClipOrigin(Contract):
     episode_finished_at: datetime
 
 
+class PostCopy(Contract):
+    """One platform's post text (S2 spec §2)."""
+
+    title: str | None = None  # YouTube/Facebook titles; None elsewhere
+    text: str  # caption or description
+    hashtags: list[str] = Field(default_factory=list)  # without "#"
+    links: list[str] = Field(default_factory=list)
+
+
 class ContentItem(Contract):
     id: str  # "<job_id>:<clip_id>" for clips (keeps Telegram buttons valid)
     account_id: str
@@ -271,7 +280,9 @@ class ContentItem(Contract):
     parent_item_id: str | None = None
     clip: ClipOrigin | None = None
     queued_at: datetime
-    # `copy: dict[Platform, PostCopy]` arrives in S2
+    # The spec's `copy` (the column is `content_items.copy`): renamed because `copy` shadows
+    # BaseModel.copy (log #480). None: built by posting/captions.py; S3 edits write it.
+    post_copy: dict[Platform, PostCopy] | None = None
 
 
 class PostRecord(Contract):
@@ -283,6 +294,8 @@ class PostRecord(Contract):
     posted: dict[Platform, datetime] = Field(default_factory=dict)
     verdict: PostVerdict | None = None
     unavailable: bool = False
+    # publish state per platform, from `posts.state` (S2); a missing platform is "pending"
+    publish: dict[Platform, PublishState] = Field(default_factory=dict)
 
 
 class ChannelProgress(Contract):
@@ -314,10 +327,40 @@ class PostingSchedule(Contract):
     hashtags: list[str] = Field(default_factory=list)  # account-wide, added to every platform
 
 
+class PublishPath(Contract):
+    """`posting:publish:<account>` (the accounts service writes it next to the schedule copy):
+    how the dispatcher posts the account's slots (S2 spec §1.1). A separate key, not new fields
+    on the schedule copy, so S1's reader keeps validating the copy after a rollback (log #481)."""
+
+    publish_via: Literal["upload_post", "assisted"] = "assisted"
+    profile: str | None = None  # the Upload-Post profile
+
+
+class ScheduleCopy(PostingSchedule):
+    """What the dispatcher reads per account: the schedule copy plus its publish path."""
+
+    publish_via: Literal["upload_post", "assisted"] = "assisted"
+    profile: str | None = None
+
+    @classmethod
+    def of(cls, schedule: PostingSchedule, path: PublishPath | None = None) -> ScheduleCopy:
+        """The env account's schedule (dict mode) is always assisted."""
+        return cls(**schedule.model_dump(), **(path or PublishPath()).model_dump())
+
+    def schedule(self) -> PostingSchedule:
+        return PostingSchedule.model_validate(self.model_dump(exclude={"publish_via", "profile"}))
+
+
 class BrandKit(Contract):
     caption_preset: str = "default"
     cta: str | None = None
     bio_link: str | None = None
+
+
+class PublisherProfile(Contract):
+    profile: str  # the Upload-Post profile username
+    facebook_page_id: str | None = None
+    disconnected: dict[Platform, datetime] = Field(default_factory=dict)
 
 
 class Account(Contract):
@@ -336,6 +379,204 @@ class Account(Contract):
     posting: PostingSchedule = Field(default_factory=PostingSchedule)
     # no `paused`: that is runtime state in posting_state, so editing an account can never
     # pause or un-pause its queue
+    publisher: PublisherProfile | None = None  # None: not connected; assisted only (S2 §1.1)
+
+
+# ---- S2: autopilot, review routing, the gate, publishing, the brake, links (spec §2) ------
+
+ReviewDial = Literal["review", "sample", "auto"]
+Preset = Literal["hands_on", "supervised", "autopilot", "custom"]  # custom: a control overridden
+
+
+class Autopilot(Contract):
+    account_id: str
+    preset: Preset = "hands_on"
+    produce: bool = False
+    review_dial: ReviewDial = "review"
+    publish: bool = True
+    scale: bool = False
+    runway_days: int = 7
+    batch_line_usd: float = 2.0
+    monthly_cap_usd: float  # from accounts.monthly_budget_usd, else the type default (S3 §2.6)
+    updated_by: str
+    updated_at: datetime
+
+
+# The monthly cap a new account gets when it has no budget (S3 dashboard spec §2.6)
+TYPE_CAP_USD: dict[str, float] = {"clips": 5.0, "story": 10.0, "band": 10.0, "model": 10.0,
+                                  "avatar": 20.0}  # fmt: skip
+
+
+def hands_on(account: Account) -> Autopilot:
+    """What an account with no autopilot row reads as (S2 spec §3, §5.4): never more automatic
+    than Hands-on."""
+    cap = (
+        account.monthly_budget_usd if account.monthly_budget_usd > 0 else TYPE_CAP_USD[account.kind]
+    )
+    return Autopilot(account_id=account.id, monthly_cap_usd=cap, updated_by="system:migration",
+                     updated_at=datetime(1970, 1, 1, tzinfo=UTC))  # fmt: skip
+
+
+class AutopilotEvent(Contract):
+    account_id: str
+    at: datetime
+    actor: str
+    field: str
+    from_value: str | None
+    to_value: str
+    reason: str | None
+
+
+class AutopilotView(Contract):
+    """`GET /admin/accounts/{id}/autopilot` and `clipforge autopilot show`."""
+
+    autopilot: Autopilot
+    label: str  # "Hands-on", or "Hands-on, with Publish off"
+    waiting_on: dict[str, str]  # one line per control
+    history: list[AutopilotEvent]
+
+
+class AutopilotChange(Contract):
+    """`PUT /admin/accounts/{id}/autopilot`: one control (`field`, `value`) or a `preset`."""
+
+    field: str | None = None
+    value: bool | int | float | str | None = None
+    preset: str | None = None
+    reason: str | None = Field(None, max_length=500)
+
+    @model_validator(mode="after")
+    def _one(self) -> Self:
+        if (self.field is None) == (self.preset is None):
+            raise ValueError("give either field and value, or preset")
+        if self.field is not None and self.value is None:
+            raise ValueError("field needs a value")
+        return self
+
+
+class PolicyHold(Contract):
+    ref: str
+    account_id: str
+    codes: list[str]
+
+
+class PolicyDryRun(Contract):
+    """`GET /admin/policy/dry-run`: the gate over every eligible queued item; writes nothing."""
+
+    checked: int
+    would_hold: list[PolicyHold]
+
+
+class Criterion(Contract):
+    name: str
+    value: float
+    target: float
+    met: bool
+
+
+class LadderStatus(Contract):
+    account_id: str
+    rung: Preset
+    next_rung: Preset | None
+    criteria: list[Criterion]
+    ready: bool
+
+
+ReviewReason = Literal["dial", "spot_check", "format_window", "producer_window", "dub_window",
+                       "gate", "sponsored"]  # fmt: skip
+
+
+class Violation(Contract):
+    code: Literal["missing_ai_label", "missing_ad", "missing_credit", "license_unrecorded",
+                  "cross_account_duplicate", "source_held"]  # fmt: skip
+    platform: Platform | None = None
+    message: str
+
+
+class GateResult(Contract):
+    violations: list[Violation] = Field(default_factory=list)
+
+
+class Routing(Contract):
+    lane: Literal["review", "auto"]
+    reasons: list[ReviewReason]
+    dial: ReviewDial
+    window: str | None = None  # e.g. "producer:clips:3f2a…:2/5"
+    gate: GateResult
+
+
+# ADR-54: `fallback` became `final_failed`
+PublishState = Literal["pending", "claimed", "scheduled", "retrying", "published", "failed",
+                       "final_failed", "cancelled"]  # fmt: skip
+
+
+class PublishRequest(Contract):
+    item_id: str
+    profile: str
+    platforms: list[Platform]
+    media_url: str
+    post_copy: dict[Platform, PostCopy]  # the spec's `copy` (log #480)
+    scheduled_for: datetime | None
+    timezone: str
+    ai_disclosure: bool
+    sponsored: bool
+    facebook_page_id: str | None
+    key: str  # sent as Idempotency-Key and request_id (spec §6.2)
+
+
+class PublishReceipt(Contract):
+    job_id: str | None
+    request_id: str
+    accepted: list[Platform]
+    rejected: dict[Platform, str]  # platform -> error code
+
+
+class PlatformResult(Contract):
+    platform: Platform
+    state: Literal["pending", "published", "failed", "retryable"]
+    external_id: str | None = None
+    url: str | None = None
+    error: str | None = None
+
+
+class Lookup(Contract):
+    """What Upload-Post knows about a key or a job."""
+
+    found: bool  # False: status not_found and no history row
+    job_id: str | None = None
+    results: list[PlatformResult] = Field(default_factory=list)
+
+
+class SlotPlan(Contract):
+    account_id: str
+    slot: datetime
+    item_id: str | None
+    state: Literal["planned", "approved", "handed_off", "done", "empty", "missed"]
+
+
+class Brake(Contract):
+    scope: str  # "all" or an account id
+    on: bool  # /go writes on=False; the key is never deleted
+    at: datetime
+    actor: str
+    reason: str | None = None
+
+
+class Link(Contract):
+    slug: str
+    target_url: AnyHttpUrl
+    account_id: str
+    item_id: str | None = None
+    platform: Platform | None = None
+    kind: Literal["bio", "campaign", "affiliate"]
+    sub_param: str = "subid"
+
+
+class Click(Contract):
+    slug: str
+    at: datetime
+    platform: Platform | None
+    sub_id: str
+    country: str | None = None
 
 
 class SeriesFormat(Contract):

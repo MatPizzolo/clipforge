@@ -10,9 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
+from clipforge.actors import checked
+from clipforge.db.autopilot import insert_seed
 from clipforge.db.engine import Database
 from clipforge.db.tables import accounts, posting_state
-from clipforge.models import Account
+from clipforge.models import Account, Autopilot
+
+UNIQUE_VIOLATION = "23505"  # Postgres SQLSTATE
 
 
 class AccountExists(ValueError):
@@ -24,6 +28,7 @@ def _row(account: Account) -> dict[str, Any]:
     return {key: data[key] for key in (
         "id", "blueprint", "blueprint_version", "kind", "language", "niche", "review_tier",
         "persona_id", "paired_account_id", "monthly_budget_usd", "platforms", "brand", "posting",
+        "publisher",
     )}  # fmt: skip
 
 
@@ -37,7 +42,17 @@ class AccountsRepo:
     def __init__(self, db: Database) -> None:
         self.db = db
 
-    def create(self, account: Account, now: datetime) -> None:
+    def create(
+        self, account: Account, now: datetime, *, autopilot: Autopilot | None = None,
+        actor: str | None = None,
+    ) -> None:  # fmt: skip
+        """With `autopilot`, the account's first autopilot row and its seed event are inserted
+        in the same transaction (S2 spec §3), by `actor` (checked first: a bad actor is a
+        ValueError, never read as an existing account)."""
+        seed_actor = None
+        if autopilot is not None:
+            seed_actor = checked(actor or autopilot.updated_by)
+            checked(autopilot.updated_by)
         try:
             with self.db.begin() as conn:
                 conn.execute(
@@ -45,7 +60,12 @@ class AccountsRepo:
                 )
                 conn.execute(posting_state.insert().values(account_id=account.id, paused=False,
                                                            changed_at=now))  # fmt: skip
-        except IntegrityError:
+                if autopilot is not None:
+                    assert seed_actor is not None
+                    insert_seed(conn, autopilot, seed_actor, "account created", now)
+        except IntegrityError as exc:
+            if getattr(exc.orig, "sqlstate", None) != UNIQUE_VIOLATION:
+                raise  # a check or foreign-key failure is a bug, not an existing account
             raise AccountExists(f"account {account.id!r} already exists") from None
 
     def get(self, account_id: str) -> Account | None:
@@ -72,10 +92,23 @@ class AccountsRepo:
             ).scalar()
         return bool(value)
 
-    def set_paused(self, account_id: str, on: bool, now: datetime) -> None:
-        statement = insert(posting_state).values(account_id=account_id, paused=on, changed_at=now)
+    def paused_state(self, account_id: str) -> tuple[bool, datetime] | None:
+        """`(paused, changed_at)`, or None when the account has no row (the brake repair)."""
+        with self.db.begin() as conn:
+            columns = (posting_state.c.paused, posting_state.c.changed_at)
+            row = conn.execute(
+                select(*columns).where(posting_state.c.account_id == account_id)
+            ).first()
+        return None if row is None else (bool(row.paused), row.changed_at)
+
+    def set_paused(
+        self, account_id: str, on: bool, now: datetime, actor: str | None = None,
+        reason: str | None = None,
+    ) -> None:  # fmt: skip
+        values = {"paused": on, "changed_at": now, "changed_by": actor, "reason": reason}
+        statement = insert(posting_state).values(account_id=account_id, **values)
         statement = statement.on_conflict_do_update(
-            index_elements=[posting_state.c.account_id], set_={"paused": on, "changed_at": now}
+            index_elements=[posting_state.c.account_id], set_=values
         )
         with self.db.begin() as conn:
             conn.execute(statement)
