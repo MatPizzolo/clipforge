@@ -23,7 +23,7 @@ reaches the browser.
 | `CLIPFORGE_API_URL` | Vercel, `.env.local` | Deployed job API (the Modal `web` endpoint URL) |
 | `API_TOKEN` | Vercel, `.env.local` | Bearer token, same value as `API_TOKEN` in `clipforge-secrets` |
 | `AUTH_SECRET` | Vercel, `.env.local` | Session signing key: `npx auth secret`. A session ends after 7 days **without use** (each request renews it); **rotating the secret logs everyone out.** |
-| `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | Vercel, `.env.local` | GitHub OAuth app. Vercel: the production app (callback `https://<domain>/api/auth/callback/github`). Local: a second app (see below). |
+| `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | Vercel, `.env.local` | GitHub OAuth app. Vercel: the production app (callback `https://clipforge-web-brown.vercel.app/api/auth/callback/github`). Local: a second app (see below). |
 | `OWNER_EMAIL` | Vercel, `.env.local` | The one allowed GitHub account's primary, verified email |
 | `MOCK_API` | `.env.local`, CI, Vercel preview | `1` serves fixtures instead of the API. Previews always use it. The build fails if it's set in Vercel production. |
 | `AUTH_DISABLED` | `.env.local` only | `1` turns the GitHub login off for **local** testing: every request counts as the owner and a banner says so. **Never on Vercel:** previews use `MOCK_API=1`, production uses GitHub login. The build and every request fail if it's set on any Vercel environment. |
@@ -43,10 +43,15 @@ npm run dev                        # http://localhost:3000 (bound to 127.0.0.1 o
 To test locally without any OAuth app, set `AUTH_DISABLED=1` in `.env.local` (local only; see the table).
 
 GitHub login locally uses a second OAuth app (Homepage `http://localhost:3000`, callback
-`http://localhost:3000/api/auth/callback/github`); put its id and secret in `.env.local`. Without it,
-sign in with a minted cookie: run `AUTH_SECRET=<the value in .env.local> node e2e/print-cookie.mjs`
-and add the printed value as the `authjs.session-token` cookie for `localhost` in the browser's
-dev tools.
+`http://localhost:3000/api/auth/callback/github`); put its id and secret in `.env.local`.
+Without it, sign in with a minted cookie: run
+`AUTH_SECRET=<the value in .env.local> node e2e/print-cookie.mjs` and add the printed value as
+the `authjs.session-token` cookie for `localhost` in the browser's dev tools.
+
+A local production build needs `AUTH_TRUST_HOST=true` on the command line:
+`npm run build && AUTH_TRUST_HOST=true npx next start -H 127.0.0.1`. Auth.js trusts the host by
+itself only under `next dev` and on Vercel; otherwise every auth route fails with `UntrustedHost`.
+Don't put it in `.env.local` or on Vercel.
 
 ## Checks
 
@@ -58,6 +63,31 @@ uv run python scripts/export_openapi.py --check   # from the repo root: contract
 ```
 
 CI runs the same (`.github/workflows/web.yml`) on changes to `web/`, the export script or the API.
+
+## Dependencies
+
+Every version in `package.json` is exact. `npm i <pkg>` and `npx shadcn add <component>` write
+`^` ranges, so after either run, from `web/`:
+
+```bash
+node scripts/pin-versions.mjs && npm install   # rewrite each range to the installed version
+```
+
+Write the lock file with CI's npm, not your local one: some npm 11 releases (11.6.2, for one)
+drop the optional `@emnapi/*` entries that Tailwind's wasm build lists, and CI's `npm ci` then
+fails with `Missing: @emnapi/... from lock file` (log #302). CI's version is the `npm:` line of
+setup-node's "Environment details" (11.19.0 on 2026-10-06):
+
+```bash
+npx -y npm@11.19.0 install          # or `audit fix`; then check with `npx -y npm@11.19.0 ci`
+```
+
+`overrides` pins `js-yaml` to 4.3.2 (the version under `@hey-api/openapi-ts` had three
+high-severity advisories). `shadcn` is a dev dependency: the app only imports its CSS, which
+Tailwind compiles at build time. `npm audit` still reports `braces` (stack exhaustion on deeply
+nested glob patterns; no fixed release) through `shadcn` and `eslint-config-next`, both build-time
+tools that only glob the repo's own files; `npm audit --omit=dev` is clean, so nothing reaches the
+deployed app (card 004, log #300).
 
 ## API contract
 
@@ -72,7 +102,13 @@ uv run python scripts/export_openapi.py && (cd web && npm run gen)
 
 ## Deploy (Vercel Pro)
 
-The project is linked from this folder (`vercel link` inside `web/`). The repo is on GitHub. The owner
+Production: **https://clipforge-web-brown.vercel.app** (Vercel's assigned domain;
+`clipforge-web.vercel.app` was taken, log #301). A custom domain later needs a new callback in the
+production GitHub OAuth app.
+
+The project is linked from this folder (`vercel link --yes --project clipforge-web` inside `web/`;
+`.vercel/` is gitignored, so every worktree links once). **`vercel link` also pulls the project's
+Development env into `.env.local`**: check `.env.local` afterwards. The repo is on GitHub. The owner
 connects it in Vercel, with Root Directory `web`, in the Vercel steps before card 004 (owner runbook
 11 §5b). Card 004 deploys with the CLI:
 

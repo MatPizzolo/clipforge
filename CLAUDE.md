@@ -51,6 +51,7 @@ uv run clipforge source add|edit|list|show|submissions   # sources live in the d
 uv run clipforge source import-toml [--dry-run]  # one-off: videos/channels.toml -> sources
 uv run clipforge posting import [--dry-run]|verify   # S1 migration (ADR-41)
 uv run clipforge jobs backfill [--dry-run]       # jobs table from metadata.json and the Dict
+cd web && npm run dev                          # dashboard on localhost:3000 (S3a); deploy and env: web/README.md
 ```
 
 ## Layout
