@@ -18,6 +18,8 @@ from clipforge.models import (
     AssetSource,
     ClipOrigin,
     ContentItem,
+    HookResult,
+    HookStamp,
     Platform,
     PostRecord,
     PostSend,
@@ -44,8 +46,32 @@ def _item_row(item: ContentItem) -> dict[str, Any]:
         "start_s": clip.start if clip else None, "end_s": clip.end if clip else None,
         "episode": clip.episode if clip else None,
         "episode_finished_at": clip.episode_finished_at if clip else None,
-        "queued_at": item.queued_at,
+        "queued_at": item.queued_at, **_stamp_columns(item.hook_stamp),
     }  # fmt: skip
+
+
+def _stamp_columns(stamp: HookStamp | None) -> dict[str, Any]:
+    """The hook stamp's columns (0003, ADR-50), written once at insert: `hook_result` holds the
+    result plus the rotation id and the freeze. `superseded_by` is posting/actions.supersede's."""
+    if stamp is None:
+        return {}
+    # fk_items_hook_version is MATCH SIMPLE: half a key would skip the check, so both or neither
+    if (stamp.result.pattern_id is None) != (stamp.result.version is None):
+        raise ValueError("a hook stamp names both a pattern and its version, or neither")
+    result = stamp.result.model_dump(mode="json")
+    return {"hook_pattern_id": stamp.result.pattern_id, "hook_version": stamp.result.version,
+            "hook_weights": dict(stamp.weights),
+            "hook_result": {**result, "rotation_id": stamp.rotation_id,
+                            "frozen_by": stamp.frozen_by}}  # fmt: skip
+
+
+def _stamp(row: Any) -> HookStamp | None:
+    data = row._mapping.get("hook_result")
+    if data is None:
+        return None
+    result = {k: v for k, v in data.items() if k not in ("rotation_id", "frozen_by")}
+    return HookStamp(result=HookResult.model_validate(result), rotation_id=data.get("rotation_id"),
+                     weights=row.hook_weights or {}, frozen_by=data.get("frozen_by"))  # fmt: skip
 
 
 def _item(row: Any, asset_rows: list[Any]) -> ContentItem:
@@ -63,6 +89,7 @@ def _item(row: Any, asset_rows: list[Any]) -> ContentItem:
                             url=a.url, model=a.model) for a in asset_rows],
         ai_disclosure=row.ai_disclosure, sponsored=row.sponsored, cost_usd=row.cost_usd,
         parent_item_id=row.parent_item_id, clip=clip, queued_at=row.queued_at,
+        hook_stamp=_stamp(row), superseded_by=row._mapping.get("superseded_by"),
     )  # fmt: skip
 
 

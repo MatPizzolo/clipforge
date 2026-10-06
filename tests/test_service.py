@@ -360,3 +360,76 @@ def test_job_summaries_read_the_dict_once(harness: Harness) -> None:
     kv.get = counting_get  # type: ignore[method-assign]
     assert len(job_summaries(harness.deps)) == 2
     assert [k for k in gets if k.startswith("job:")] == []
+
+
+# ---- the hook rotation frozen at create (ADR-50, hooks spec §2.1)
+
+
+def _channel_input() -> JobInput:
+    from tests.posting.builders import BILLY
+
+    return JobInput(source_url="https://media.example.com/e.mp4", permission=Permission.OWN,
+                    channel=BILLY)  # fmt: skip
+
+
+def _hooks_harness(tmp_path: Path, db: Database) -> Harness:
+    from clipforge.hooks.library import HookLibrary
+    from clipforge.hooks.seeds import seed as seed_hooks
+    from tests.dbhelpers import insert_account
+    from tests.hooks.helpers import NOW
+
+    insert_account(db, ACCOUNT)
+    harness = Harness.build(tmp_path)
+    harness.deps.hooks = HookLibrary(db)
+    seed_hooks(harness.deps.hooks, [ACCOUNT], NOW)
+    return harness
+
+
+def test_create_job_freezes_the_rotation(tmp_path: Path, db: Database) -> None:
+    harness = _hooks_harness(tmp_path, db)
+    job = create_job(harness.deps, _channel_input())
+    assert job.input.hooks is not None and len(job.input.hooks.entries) == 6
+    assert job.input.hooks.account_id == ACCOUNT and job.hooks_note is None
+    assert harness.store.get(job.job_id).input.hooks == job.input.hooks
+
+
+def test_an_edit_after_create_doesnt_change_the_job(tmp_path: Path, db: Database) -> None:
+    from tests.hooks.helpers import NOW
+
+    harness = _hooks_harness(tmp_path, db)
+    assert harness.deps.hooks is not None
+    job = create_job(harness.deps, _channel_input())
+    [first, *_] = harness.deps.hooks.patterns(ACCOUNT)
+    harness.deps.hooks.set_weight(ACCOUNT, first[0].id, 5.0, "more", "web:mat", NOW)
+    assert harness.store.get(job.job_id).input.hooks == job.input.hooks
+
+
+def test_create_job_without_a_database_has_no_rotation(harness: Harness) -> None:
+    job = create_job(harness.deps, _channel_input())
+    assert job.input.hooks is None and job.hooks_note == "unavailable"
+
+
+def test_a_job_without_a_channel_has_no_rotation_and_no_note(harness: Harness) -> None:
+    job = create_job(harness.deps, JobInput(source_path="x.mp4", permission=Permission.OWN))
+    assert job.input.hooks is None and job.hooks_note is None
+
+
+def test_create_job_survives_a_database_error(
+    tmp_path: Path, db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = _hooks_harness(tmp_path, db)
+
+    def down(*args: object) -> None:
+        raise OperationalError("select", {}, Exception("connection refused"))
+
+    monkeypatch.setattr(harness.deps.hooks, "rotation_for", down)
+    job = create_job(harness.deps, _channel_input())
+    assert job.input.hooks is None and job.hooks_note == "unavailable"
+    assert job.status is JobStatus.QUEUED
+
+
+def test_a_rotation_sent_by_the_caller_is_replaced(harness: Harness) -> None:
+    from tests.hooks.builders import entry, rotation
+
+    sent = _channel_input().model_copy(update={"hooks": rotation(entry("hp_evil", 9.0))})
+    assert create_job(harness.deps, sent).input.hooks is None

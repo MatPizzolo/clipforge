@@ -10,7 +10,8 @@ import datetime as dt
 import hmac
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
@@ -37,6 +38,8 @@ from clipforge.config import Settings
 from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database, DatabaseUnavailable, is_db_error, redact
 from clipforge.db.sources import SourceExists, SourcesRepo, UnknownAccount, UnknownSource
+from clipforge.hooks.library import HookError, HookLibrary, HookNotFound
+from clipforge.hooks.seeds import seed as seed_hooks
 from clipforge.jobs import is_job_id, utcnow
 from clipforge.links import verify, with_download_url
 from clipforge.models import (
@@ -45,6 +48,19 @@ from clipforge.models import (
     AutopilotChange,
     AutopilotView,
     BackfillReport,
+    HookAccountRef,
+    HookApprove,
+    HookCreate,
+    HookDetail,
+    HookEdit,
+    HookLibraryView,
+    HookPattern,
+    HookPatternVersion,
+    HookRow,
+    HookSeedReport,
+    HookSeedRequest,
+    HookWeight,
+    HookWeightChange,
     ImportReport,
     JobInput,
     JobView,
@@ -182,6 +198,98 @@ def create_app(ctx: ApiContext) -> FastAPI:
             )
         except AccountError as exc:
             raise HTTPException(400, str(exc)) from None
+
+    # ---- the hook library (ADR-50, hooks spec §7.1). Interim mount: S3-1's `cli_router` isn't
+    # on main yet, so these sit here behind the bearer token and card 022 moves them in (#146).
+    # Every write needs a person's actor (X-Clipforge-Actor: web:<login> or cli:<user>, `person`).
+
+    def hooks() -> HookLibrary:
+        return HookLibrary(database())
+
+    def pattern_id(value: str) -> str:
+        if not re.fullmatch(r"hp_[0-9a-f]{8}", value):
+            raise HTTPException(404, "unknown pattern")
+        return value
+
+    @contextmanager
+    def hook_errors() -> Iterator[None]:
+        try:
+            yield
+        except HookNotFound as exc:
+            raise HTTPException(404, str(exc)) from None
+        except HookError as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    @app.get("/admin/accounts/{account_id}/hooks", dependencies=authorized)
+    def get_hook_library(account_id: str) -> HookLibraryView:
+        wanted, library = slug(account_id), hooks()
+        with hook_errors():
+            rows = library.patterns(wanted)
+            rotation = library.rotation_for(wanted, "clips")
+        return HookLibraryView(
+            account_id=wanted, frozen_by=rotation.frozen_by, rotating=len(rotation.entries),
+            patterns=[HookRow(pattern=p, version=v, weight=w) for p, v, w in rows],
+        )  # fmt: skip
+
+    @app.post("/admin/hooks", status_code=201, dependencies=authorized)
+    def post_hook(req: HookCreate, who: Annotated[str, Depends(person)]) -> HookPattern:
+        with hook_errors():
+            return hooks().create_draft(slug(req.account_id), req.data, who, utcnow())
+
+    @app.get("/admin/hooks/{hook_id}", dependencies=authorized)
+    def get_hook(hook_id: str) -> HookDetail:
+        with hook_errors():
+            pattern, versions = hooks().versions(pattern_id(hook_id))
+        return HookDetail(pattern=pattern, versions=versions)
+
+    @app.put("/admin/hooks/{hook_id}", dependencies=authorized)
+    def put_hook(
+        hook_id: str, req: HookEdit, who: Annotated[str, Depends(person)]
+    ) -> HookPatternVersion:
+        with hook_errors():
+            return hooks().edit(pattern_id(hook_id), req.data, req.note, who, utcnow())
+
+    @app.post("/admin/hooks/{hook_id}/approve", dependencies=authorized)
+    def approve_hook(
+        hook_id: str, req: HookApprove, who: Annotated[str, Depends(person)]
+    ) -> HookPattern:
+        with hook_errors():
+            return hooks().approve(pattern_id(hook_id), slug(req.account_id), who, utcnow(),
+                                   weight=req.weight)  # fmt: skip
+
+    @app.post("/admin/hooks/{hook_id}/retire", dependencies=authorized)
+    def retire_hook(
+        hook_id: str, req: HookAccountRef, who: Annotated[str, Depends(person)]
+    ) -> HookPattern:
+        with hook_errors():
+            return hooks().retire(pattern_id(hook_id), slug(req.account_id), who, utcnow())
+
+    @app.post("/admin/hooks/{hook_id}/share", dependencies=authorized)
+    def share_hook(hook_id: str, who: Annotated[str, Depends(person)]) -> HookPattern:
+        with hook_errors():
+            return hooks().share(pattern_id(hook_id), who, utcnow())
+
+    @app.put("/admin/hooks/{hook_id}/weight", dependencies=authorized)
+    def put_hook_weight(
+        hook_id: str, req: HookWeightChange, who: Annotated[str, Depends(person)]
+    ) -> HookWeight:
+        with hook_errors():
+            weight = hooks().set_weight(slug(req.account_id), pattern_id(hook_id), req.weight,
+                                        req.reason, who, utcnow())  # fmt: skip
+        return HookWeight(weight=weight)
+
+    @app.post("/admin/hooks/seed", dependencies=authorized)
+    def post_hook_seed(req: HookSeedRequest | None = None, dry_run: bool = False) -> HookSeedReport:
+        """Spec §4.1: six patterns per clips account without any (S3c isn't on main, so no
+        experiment is running and nothing is frozen)."""
+        library = hooks()
+        with hook_errors():
+            clips = library.clips_accounts()
+            wanted = [slug(a) for a in req.account_ids] if req and req.account_ids else clips
+            if others := [a for a in wanted if a not in clips]:
+                raise HookError(f"not a clips account: {', '.join(others)}")
+            written = seed_hooks(library, wanted, utcnow(), dry_run=dry_run)
+        return HookSeedReport(written=written, dry_run=dry_run)
 
     @app.post("/sources", status_code=201, dependencies=authorized)
     def post_source(

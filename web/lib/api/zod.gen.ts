@@ -155,6 +155,37 @@ export const zClipStatus = z.enum([
 ]);
 
 /**
+ * HookAccountRef
+ */
+export const zHookAccountRef = z.object({
+    account_id: z.string()
+});
+
+/**
+ * HookApprove
+ */
+export const zHookApprove = z.object({
+    account_id: z.string(),
+    weight: z.number().gte(0).lte(100).optional().default(1)
+});
+
+/**
+ * HookPattern
+ */
+export const zHookPattern = z.object({
+    account_id: z.string().nullable(),
+    blueprint_name: z.string().nullable(),
+    control: z.boolean().optional().default(false),
+    current_version: z.int(),
+    id: z.string(),
+    status: z.enum([
+        'draft',
+        'approved',
+        'retired'
+    ])
+});
+
+/**
  * HookPatternData
  *
  * A pattern's versioned body; an edit writes v+1.
@@ -170,6 +201,92 @@ export const zHookPatternData = z.object({
     max_words: z.int().gte(2).lte(10).optional().default(10),
     name: z.string().min(1).max(40),
     structure: z.string().min(1).max(300)
+});
+
+/**
+ * HookCreate
+ */
+export const zHookCreate = z.object({
+    account_id: z.string(),
+    data: zHookPatternData
+});
+
+/**
+ * HookEdit
+ */
+export const zHookEdit = z.object({
+    data: zHookPatternData,
+    note: z.string().max(300).nullish()
+});
+
+/**
+ * HookPatternVersion
+ */
+export const zHookPatternVersion = z.object({
+    author: z.string(),
+    created_at: z.iso.datetime({ offset: true, local: true }),
+    data: zHookPatternData,
+    n: z.int(),
+    note: z.string().nullish(),
+    pattern_id: z.string()
+});
+
+/**
+ * HookDetail
+ */
+export const zHookDetail = z.object({
+    pattern: zHookPattern,
+    versions: z.array(zHookPatternVersion)
+});
+
+/**
+ * HookRow
+ */
+export const zHookRow = z.object({
+    pattern: zHookPattern,
+    version: zHookPatternVersion,
+    weight: z.number()
+});
+
+/**
+ * HookLibraryView
+ */
+export const zHookLibraryView = z.object({
+    account_id: z.string(),
+    frozen_by: z.int().nullable(),
+    patterns: z.array(zHookRow),
+    rotating: z.int()
+});
+
+/**
+ * HookSeedReport
+ */
+export const zHookSeedReport = z.object({
+    dry_run: z.boolean(),
+    written: z.record(z.string(), z.int())
+});
+
+/**
+ * HookSeedRequest
+ */
+export const zHookSeedRequest = z.object({
+    account_ids: z.array(z.string()).nullish()
+});
+
+/**
+ * HookWeight
+ */
+export const zHookWeight = z.object({
+    weight: z.number()
+});
+
+/**
+ * HookWeightChange
+ */
+export const zHookWeightChange = z.object({
+    account_id: z.string(),
+    reason: z.string().max(300),
+    weight: z.number()
 });
 
 /**
@@ -750,6 +867,140 @@ export const zPutAutopilotAdminAccountsAccountIdAutopilotPutPath = z.object({
  * Successful Response
  */
 export const zPutAutopilotAdminAccountsAccountIdAutopilotPutResponse = zAutopilotView;
+
+export const zGetHookLibraryAdminAccountsAccountIdHooksGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zGetHookLibraryAdminAccountsAccountIdHooksGetPath = z.object({
+    account_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetHookLibraryAdminAccountsAccountIdHooksGetResponse = zHookLibraryView;
+
+export const zPostHookAdminHooksPostBody = zHookCreate;
+
+export const zPostHookAdminHooksPostHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+/**
+ * Successful Response
+ */
+export const zPostHookAdminHooksPostResponse = zHookPattern;
+
+/**
+ * Req
+ */
+export const zPostHookSeedAdminHooksSeedPostBody = zHookSeedRequest.nullable();
+
+export const zPostHookSeedAdminHooksSeedPostHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zPostHookSeedAdminHooksSeedPostQuery = z.object({
+    dry_run: z.boolean().optional().default(false)
+});
+
+/**
+ * Successful Response
+ */
+export const zPostHookSeedAdminHooksSeedPostResponse = zHookSeedReport;
+
+export const zGetHookAdminHooksHookIdGetHeaders = z.object({
+    authorization: z.string().nullish()
+});
+
+export const zGetHookAdminHooksHookIdGetPath = z.object({
+    hook_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetHookAdminHooksHookIdGetResponse = zHookDetail;
+
+export const zPutHookAdminHooksHookIdPutBody = zHookEdit;
+
+export const zPutHookAdminHooksHookIdPutHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+export const zPutHookAdminHooksHookIdPutPath = z.object({
+    hook_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zPutHookAdminHooksHookIdPutResponse = zHookPatternVersion;
+
+export const zApproveHookAdminHooksHookIdApprovePostBody = zHookApprove;
+
+export const zApproveHookAdminHooksHookIdApprovePostHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+export const zApproveHookAdminHooksHookIdApprovePostPath = z.object({
+    hook_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zApproveHookAdminHooksHookIdApprovePostResponse = zHookPattern;
+
+export const zRetireHookAdminHooksHookIdRetirePostBody = zHookAccountRef;
+
+export const zRetireHookAdminHooksHookIdRetirePostHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+export const zRetireHookAdminHooksHookIdRetirePostPath = z.object({
+    hook_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zRetireHookAdminHooksHookIdRetirePostResponse = zHookPattern;
+
+export const zShareHookAdminHooksHookIdSharePostHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+export const zShareHookAdminHooksHookIdSharePostPath = z.object({
+    hook_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zShareHookAdminHooksHookIdSharePostResponse = zHookPattern;
+
+export const zPutHookWeightAdminHooksHookIdWeightPutBody = zHookWeightChange;
+
+export const zPutHookWeightAdminHooksHookIdWeightPutHeaders = z.object({
+    authorization: z.string().nullish(),
+    'x-clipforge-actor': z.string().nullish()
+});
+
+export const zPutHookWeightAdminHooksHookIdWeightPutPath = z.object({
+    hook_id: z.string()
+});
+
+/**
+ * Successful Response
+ */
+export const zPutHookWeightAdminHooksHookIdWeightPutResponse = zHookWeight;
 
 export const zGetPolicyDryRunAdminPolicyDryRunGetHeaders = z.object({
     authorization: z.string().nullish()

@@ -136,3 +136,56 @@ def test_record_reads_the_publish_state(db: Database) -> None:
                           " where platform = 'tiktok'"))  # fmt: skip
     record = repo.get(it.id)
     assert record is not None and record.publish == {Platform.TIKTOK: "scheduled"}
+
+
+def test_stamp_columns_round_trip(db: Database) -> None:  # 0003, ADR-50
+    from sqlalchemy import text
+
+    from clipforge.hooks.library import HookLibrary
+    from clipforge.hooks.rotation import control_stamp
+    from clipforge.hooks.seeds import seed as seed_hooks
+    from clipforge.models import LEGACY_PLATFORMS
+    from tests.hooks.helpers import NOW
+    from tests.posting.builders import item
+
+    repo = _repo(db)
+    library = HookLibrary(db)
+    seed_hooks(library, ["realtalk-clips-en"], NOW)
+    stamp = control_stamp(library.rotation_for("realtalk-clips-en", "clips"), "A title")
+    assert stamp is not None
+    it = item().model_copy(update={"hook_stamp": stamp})
+    repo.add(it, list(LEGACY_PLATFORMS))
+    found = repo.get(it.id)
+    assert found is not None and found.item.hook_stamp == stamp
+    assert found.item.superseded_by is None
+    with db.begin() as conn:
+        row = conn.execute(text("select hook_pattern_id, hook_version from content_items")).one()
+    assert tuple(row) == (stamp.result.pattern_id, 1)
+
+
+def test_items_without_a_stamp_read_as_none(db: Database) -> None:
+    from clipforge.models import LEGACY_PLATFORMS
+    from tests.posting.builders import item
+
+    repo = _repo(db)
+    repo.add(item(), list(LEGACY_PLATFORMS))
+    found = repo.get(item().id)
+    assert found is not None and found.item.hook_stamp is None
+
+
+def test_a_half_stamp_is_refused(db: Database) -> None:
+    # fk_items_hook_version is MATCH SIMPLE: a pattern without a version would skip the check
+    import pytest
+
+    from clipforge.models import LEGACY_PLATFORMS, HookResult, HookStamp
+    from tests.posting.builders import item
+
+    repo = _repo(db)
+    half = HookStamp(result=HookResult(pattern_id="hp_0000000a", version=None, text="t"),
+                     rotation_id=None)  # fmt: skip
+    with pytest.raises(ValueError, match="both"):
+        repo.add(item().model_copy(update={"hook_stamp": half}), list(LEGACY_PLATFORMS))
+    assert repo.get(item().id) is None
+    manual = HookStamp(result=HookResult(pattern_id=None, version=None, text="t", manual=True),
+                       rotation_id=None)  # fmt: skip
+    assert repo.add(item().model_copy(update={"hook_stamp": manual}), list(LEGACY_PLATFORMS))

@@ -48,6 +48,7 @@ uv run --env-file .env alembic upgrade head      # migrate Neon (DATABASE_URL_UN
 uv run modal run src/clipforge/app.py::db_doctor # read-only: revision, pooled host, schedule copies
 uv run clipforge account create|edit|list        # studio accounts (blueprints/)
 uv run clipforge source add|edit|list|show|submissions   # sources live in the database (option B)
+uv run clipforge hooks list|show|add|edit|approve|retire|share|weight|seed|stats   # the hook library (ADR-50; stats in HK-2)
 uv run clipforge source import-toml [--dry-run]  # one-off: videos/channels.toml -> sources
 uv run clipforge posting import [--dry-run]|verify   # S1 migration (ADR-41)
 uv run clipforge jobs backfill [--dry-run]       # jobs table from metadata.json and the Dict
@@ -89,6 +90,7 @@ src/clipforge/
   accounts/         # blueprints loader + account service (create/edit, the posting:schedule/publish:<account> Dict copies) + autopilot (ADR-48, the one writer)
   schedule.py       # slot and hashtag normalization shared by config and accounts
   sources.py        # source permission hold rules
+  hooks/            # hook library (ADR-50, Modal-free): library (the one writer, SqlHookFreezer), rotation (pure pick), seeds, freezer (S3c's protocol)
   sanitize.py       # clean (user-facing) and redact (logs, driver errors)
   ops.py            # ops alerts to the owner chat (ADR-45)
 prompts/            # versioned prompts, loaded by filename

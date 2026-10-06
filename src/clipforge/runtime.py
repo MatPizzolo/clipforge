@@ -16,6 +16,7 @@ from clipforge.bot.telegram import TelegramClient, TelegramSender
 from clipforge.config import Settings
 from clipforge.db.engine import Database
 from clipforge.db.jobs import JobsRepo
+from clipforge.hooks.library import HookLibrary
 from clipforge.jobs import DictJobStore, JobContext, Stored
 from clipforge.models import (
     ClipOptions,
@@ -170,6 +171,8 @@ def build_deps(
         version=producer_version(settings),
         build=settings.git_sha or None,
         ops=ops,
+        hooks=HookLibrary(db) if db is not None else None,
+        hook_variants=settings.hook_variants,
     )
 
 

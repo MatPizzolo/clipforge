@@ -958,3 +958,88 @@ def test_an_unusable_os_user_is_a_clear_error(
     monkeypatch.setattr("clipforge.cli.getpass.getuser", lambda: "@@@")
     assert main(["account", "list"], http=_api({}), settings=make_settings(tmp_path)) == 2
     assert "can't record who ran this" in capsys.readouterr().err
+
+
+# ---- clipforge hooks (ADR-50; the /admin hooks routes)
+
+_HOOK_DATA = {"name": "Highlight title", "structure": "Ship the clip's own title unchanged",
+              "examples": {}, "fits": ["clips"], "max_words": 8, "frame_brief": None}  # fmt: skip
+
+
+def _hook_row(pid: str = "hp_0000000a", control: bool = True) -> dict[str, object]:
+    return {
+        "pattern": {"id": pid, "account_id": "realtalk-clips-en", "blueprint_name": None,
+                    "status": "approved", "current_version": 1, "control": control},
+        "version": {"pattern_id": pid, "n": 1, "data": _HOOK_DATA, "author": "system:migration",
+                    "note": None, "created_at": "2026-10-03T09:00:00Z"},
+        "weight": 1.0,
+    }  # fmt: skip
+
+
+def test_hooks_list_prints_weights(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    view = {"account_id": "realtalk-clips-en", "frozen_by": None, "rotating": 6,
+            "patterns": [_hook_row()]}  # fmt: skip
+    http = _api({("GET", "/admin/accounts/realtalk-clips-en/hooks"): view})
+    assert main(["hooks", "list", "realtalk-clips-en"], http=http,
+                settings=make_settings(tmp_path)) == 0  # fmt: skip
+    out = capsys.readouterr().out
+    assert "Highlight title" in out and "weight 1" in out and "control" in out
+    assert "6 rotating" in out
+
+
+def test_hooks_list_says_nothing_rotates(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    view = {"account_id": "realtalk-clips-en", "frozen_by": 12, "rotating": 0, "patterns": []}
+    http = _api({("GET", "/admin/accounts/realtalk-clips-en/hooks"): view})
+    main(["hooks", "list", "realtalk-clips-en"], http=http, settings=make_settings(tmp_path))
+    out = capsys.readouterr().out
+    assert "0 rotating, frozen by experiment 12 (nothing rotates" in out
+
+
+def test_hooks_seed_dry_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    seen: list[httpx.Request] = []
+    http = _api({("POST", "/admin/hooks/seed"): {"written": {"realtalk-clips-en": 6},
+                                                 "dry_run": True}}, seen)  # fmt: skip
+    assert main(["hooks", "seed", "--dry-run"], http=http, settings=make_settings(tmp_path)) == 0
+    assert "realtalk-clips-en: 6 patterns (dry run)" in capsys.readouterr().out
+    assert seen[0].url.params["dry_run"] == "true"
+    assert json.loads(seen[0].content) == {"account_ids": None}
+
+
+def test_hooks_add_sends_examples_and_the_cli_actor(tmp_path: Path) -> None:
+    seen: list[httpx.Request] = []
+    created = _hook_row(control=False)["pattern"]
+    http = _api({("POST", "/admin/hooks"): created}, seen)
+    argv = ["hooks", "add", "realtalk-clips-en", "--name", "Cold open", "--structure", "Start",
+            "--example", "en=AND THEN HE QUIT", "--max-words", "6"]  # fmt: skip
+    assert main(argv, http=http, settings=make_settings(tmp_path)) == 0
+    body = json.loads(seen[0].content)
+    assert body["data"]["examples"] == {"en": "AND THEN HE QUIT"} and body["data"]["max_words"] == 6
+    assert seen[0].headers["X-Clipforge-Actor"].startswith("cli:")
+
+
+def test_hooks_add_rejects_a_bad_example(tmp_path: Path) -> None:
+    argv = ["hooks", "add", "realtalk-clips-en", "--name", "n", "--structure", "s",
+            "--example", "no-equals"]  # fmt: skip
+    assert main(argv, http=_api({}), settings=make_settings(tmp_path)) == 2
+
+
+def test_hooks_weight_needs_a_reason(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        main(["hooks", "weight", "hp_0000000a", "2", "--account", "realtalk-clips-en"],
+             http=_api({}), settings=make_settings(tmp_path))  # fmt: skip
+
+
+def test_hooks_edit_keeps_the_rest_of_the_current_version(tmp_path: Path) -> None:
+    seen: list[httpx.Request] = []
+    row = _hook_row()
+    detail = {"pattern": row["pattern"], "versions": [row["version"]]}
+    new = {**row["version"], "n": 2}  # type: ignore[dict-item]
+    http = _api({("GET", "/admin/hooks/hp_0000000a"): detail,
+                 ("PUT", "/admin/hooks/hp_0000000a"): new}, seen)  # fmt: skip
+    argv = ["hooks", "edit", "hp_0000000a", "--structure", "Sharper", "--note", "tighter"]
+    assert main(argv, http=http, settings=make_settings(tmp_path)) == 0
+    body = json.loads(seen[-1].content)
+    assert body["note"] == "tighter" and body["data"]["structure"] == "Sharper"
+    assert body["data"]["name"] == "Highlight title"

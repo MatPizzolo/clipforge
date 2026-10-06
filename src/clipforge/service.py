@@ -7,6 +7,7 @@ from collections.abc import Callable
 from datetime import date, datetime
 from math import ceil
 from pathlib import Path
+from typing import Literal
 
 from clipforge.accounts.service import env_account
 from clipforge.config import Settings
@@ -46,11 +47,37 @@ def create_job(deps: Deps, job_input: JobInput) -> Job:
     """Save a queued job and spawn its first step."""
     seed = str(job_input.source_url or job_input.telegram_file_id or job_input.source_path)
     now = utcnow()
-    job = Job(job_id=new_job_id(seed, now), input=job_input, created_at=now, updated_at=now)
+    job_input, note = _freeze_hooks(deps, job_input)
+    job = Job(job_id=new_job_id(seed, now), input=job_input, created_at=now, updated_at=now,
+              hooks_note=note)  # fmt: skip
     deps.store.save(job)
     deps.spawner.spawn(Step.INGEST, job.job_id)
     record_job(deps, job)
     return job
+
+
+def _freeze_hooks(
+    deps: Deps, job_input: JobInput
+) -> tuple[JobInput, Literal["unavailable"] | None]:
+    """Freeze the account's hook rotation on a channel job (ADR-50, hooks spec §2.1), so an
+    edit mid-job never changes it. Best-effort: no database, no account or any error leaves
+    the job without one, and it runs as before (the note lands in metadata.json). A rotation
+    sent by the caller is never kept: only the library's own is frozen."""
+    job_input = job_input.model_copy(update={"hooks": None})
+    if job_input.channel is None:
+        return job_input, None
+    if deps.hooks is None or deps.posting is None:
+        return job_input, "unavailable"
+    account_id: str | None = None
+    try:
+        source = deps.posting.source(job_input.channel.slug)
+        account_id = source.account_id if source else deps.posting.default_account_id
+        rotation = deps.hooks.rotation_for(account_id, "clips")
+    except Exception as exc:
+        log.warning("hook rotation unavailable for %s: %s", account_id or job_input.channel.slug,
+                    redact(exc))  # fmt: skip
+        return job_input, "unavailable"
+    return job_input.model_copy(update={"hooks": rotation}), None
 
 
 def get_job_view(
@@ -235,7 +262,8 @@ def rebuild_posting(deps: Deps, now: datetime) -> int:
                 created_at=summary.created_at,
                 updated_at=summary.finished_at or summary.updated_at,
             )  # fmt: skip
-            added += enqueue_job(posting, job, clips, now, deps.version)
+            added += enqueue_job(posting, job, clips, now, deps.version,
+                                 flag_on=deps.hook_variants)  # fmt: skip
         except Exception as exc:  # files cleaned, old schema: never stops the rest
             log.warning(
                 "rebuild: skipping job %s: %s",

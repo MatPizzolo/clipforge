@@ -557,6 +557,115 @@ export type HttpValidationError = {
 };
 
 /**
+ * HookAccountRef
+ */
+export type HookAccountRef = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+};
+
+/**
+ * HookApprove
+ */
+export type HookApprove = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Weight
+     */
+    weight?: number;
+};
+
+/**
+ * HookCreate
+ */
+export type HookCreate = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    data: HookPatternData;
+};
+
+/**
+ * HookDetail
+ */
+export type HookDetail = {
+    pattern: HookPattern;
+    /**
+     * Versions
+     */
+    versions: Array<HookPatternVersion>;
+};
+
+/**
+ * HookEdit
+ */
+export type HookEdit = {
+    data: HookPatternData;
+    /**
+     * Note
+     */
+    note?: string | null;
+};
+
+/**
+ * HookLibraryView
+ */
+export type HookLibraryView = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Frozen By
+     */
+    frozen_by: number | null;
+    /**
+     * Patterns
+     */
+    patterns: Array<HookRow>;
+    /**
+     * Rotating
+     */
+    rotating: number;
+};
+
+/**
+ * HookPattern
+ */
+export type HookPattern = {
+    /**
+     * Account Id
+     */
+    account_id: string | null;
+    /**
+     * Blueprint Name
+     */
+    blueprint_name: string | null;
+    /**
+     * Control
+     */
+    control?: boolean;
+    /**
+     * Current Version
+     */
+    current_version: number;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Status
+     */
+    status: 'draft' | 'approved' | 'retired';
+};
+
+/**
  * HookPatternData
  *
  * A pattern's versioned body; an edit writes v+1.
@@ -591,6 +700,33 @@ export type HookPatternData = {
 };
 
 /**
+ * HookPatternVersion
+ */
+export type HookPatternVersion = {
+    /**
+     * Author
+     */
+    author: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    data: HookPatternData;
+    /**
+     * N
+     */
+    n: number;
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * Pattern Id
+     */
+    pattern_id: string;
+};
+
+/**
  * HookRotation
  *
  * The account's rotation, frozen on the job at create_job (spec §2.1).
@@ -608,6 +744,72 @@ export type HookRotation = {
      * Frozen By
      */
     frozen_by?: number | null;
+};
+
+/**
+ * HookRow
+ */
+export type HookRow = {
+    pattern: HookPattern;
+    version: HookPatternVersion;
+    /**
+     * Weight
+     */
+    weight: number;
+};
+
+/**
+ * HookSeedReport
+ */
+export type HookSeedReport = {
+    /**
+     * Dry Run
+     */
+    dry_run: boolean;
+    /**
+     * Written
+     */
+    written: {
+        [key: string]: number;
+    };
+};
+
+/**
+ * HookSeedRequest
+ */
+export type HookSeedRequest = {
+    /**
+     * Account Ids
+     */
+    account_ids?: Array<string> | null;
+};
+
+/**
+ * HookWeight
+ */
+export type HookWeight = {
+    /**
+     * Weight
+     */
+    weight: number;
+};
+
+/**
+ * HookWeightChange
+ */
+export type HookWeightChange = {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Weight
+     */
+    weight: number;
 };
 
 /**
@@ -1489,6 +1691,352 @@ export type PutAutopilotAdminAccountsAccountIdAutopilotPutResponses = {
 };
 
 export type PutAutopilotAdminAccountsAccountIdAutopilotPutResponse = PutAutopilotAdminAccountsAccountIdAutopilotPutResponses[keyof PutAutopilotAdminAccountsAccountIdAutopilotPutResponses];
+
+export type GetHookLibraryAdminAccountsAccountIdHooksGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: string;
+    };
+    query?: never;
+    url: '/admin/accounts/{account_id}/hooks';
+};
+
+export type GetHookLibraryAdminAccountsAccountIdHooksGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetHookLibraryAdminAccountsAccountIdHooksGetError = GetHookLibraryAdminAccountsAccountIdHooksGetErrors[keyof GetHookLibraryAdminAccountsAccountIdHooksGetErrors];
+
+export type GetHookLibraryAdminAccountsAccountIdHooksGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: HookLibraryView;
+};
+
+export type GetHookLibraryAdminAccountsAccountIdHooksGetResponse = GetHookLibraryAdminAccountsAccountIdHooksGetResponses[keyof GetHookLibraryAdminAccountsAccountIdHooksGetResponses];
+
+export type PostHookAdminHooksPostData = {
+    body: HookCreate;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/admin/hooks';
+};
+
+export type PostHookAdminHooksPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostHookAdminHooksPostError = PostHookAdminHooksPostErrors[keyof PostHookAdminHooksPostErrors];
+
+export type PostHookAdminHooksPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: HookPattern;
+};
+
+export type PostHookAdminHooksPostResponse = PostHookAdminHooksPostResponses[keyof PostHookAdminHooksPostResponses];
+
+export type PostHookSeedAdminHooksSeedPostData = {
+    /**
+     * Req
+     */
+    body?: HookSeedRequest | null;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Dry Run
+         */
+        dry_run?: boolean;
+    };
+    url: '/admin/hooks/seed';
+};
+
+export type PostHookSeedAdminHooksSeedPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostHookSeedAdminHooksSeedPostError = PostHookSeedAdminHooksSeedPostErrors[keyof PostHookSeedAdminHooksSeedPostErrors];
+
+export type PostHookSeedAdminHooksSeedPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: HookSeedReport;
+};
+
+export type PostHookSeedAdminHooksSeedPostResponse = PostHookSeedAdminHooksSeedPostResponses[keyof PostHookSeedAdminHooksSeedPostResponses];
+
+export type GetHookAdminHooksHookIdGetData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+    };
+    path: {
+        /**
+         * Hook Id
+         */
+        hook_id: string;
+    };
+    query?: never;
+    url: '/admin/hooks/{hook_id}';
+};
+
+export type GetHookAdminHooksHookIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetHookAdminHooksHookIdGetError = GetHookAdminHooksHookIdGetErrors[keyof GetHookAdminHooksHookIdGetErrors];
+
+export type GetHookAdminHooksHookIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: HookDetail;
+};
+
+export type GetHookAdminHooksHookIdGetResponse = GetHookAdminHooksHookIdGetResponses[keyof GetHookAdminHooksHookIdGetResponses];
+
+export type PutHookAdminHooksHookIdPutData = {
+    body: HookEdit;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path: {
+        /**
+         * Hook Id
+         */
+        hook_id: string;
+    };
+    query?: never;
+    url: '/admin/hooks/{hook_id}';
+};
+
+export type PutHookAdminHooksHookIdPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutHookAdminHooksHookIdPutError = PutHookAdminHooksHookIdPutErrors[keyof PutHookAdminHooksHookIdPutErrors];
+
+export type PutHookAdminHooksHookIdPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: HookPatternVersion;
+};
+
+export type PutHookAdminHooksHookIdPutResponse = PutHookAdminHooksHookIdPutResponses[keyof PutHookAdminHooksHookIdPutResponses];
+
+export type ApproveHookAdminHooksHookIdApprovePostData = {
+    body: HookApprove;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path: {
+        /**
+         * Hook Id
+         */
+        hook_id: string;
+    };
+    query?: never;
+    url: '/admin/hooks/{hook_id}/approve';
+};
+
+export type ApproveHookAdminHooksHookIdApprovePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ApproveHookAdminHooksHookIdApprovePostError = ApproveHookAdminHooksHookIdApprovePostErrors[keyof ApproveHookAdminHooksHookIdApprovePostErrors];
+
+export type ApproveHookAdminHooksHookIdApprovePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: HookPattern;
+};
+
+export type ApproveHookAdminHooksHookIdApprovePostResponse = ApproveHookAdminHooksHookIdApprovePostResponses[keyof ApproveHookAdminHooksHookIdApprovePostResponses];
+
+export type RetireHookAdminHooksHookIdRetirePostData = {
+    body: HookAccountRef;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path: {
+        /**
+         * Hook Id
+         */
+        hook_id: string;
+    };
+    query?: never;
+    url: '/admin/hooks/{hook_id}/retire';
+};
+
+export type RetireHookAdminHooksHookIdRetirePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RetireHookAdminHooksHookIdRetirePostError = RetireHookAdminHooksHookIdRetirePostErrors[keyof RetireHookAdminHooksHookIdRetirePostErrors];
+
+export type RetireHookAdminHooksHookIdRetirePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: HookPattern;
+};
+
+export type RetireHookAdminHooksHookIdRetirePostResponse = RetireHookAdminHooksHookIdRetirePostResponses[keyof RetireHookAdminHooksHookIdRetirePostResponses];
+
+export type ShareHookAdminHooksHookIdSharePostData = {
+    body?: never;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path: {
+        /**
+         * Hook Id
+         */
+        hook_id: string;
+    };
+    query?: never;
+    url: '/admin/hooks/{hook_id}/share';
+};
+
+export type ShareHookAdminHooksHookIdSharePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ShareHookAdminHooksHookIdSharePostError = ShareHookAdminHooksHookIdSharePostErrors[keyof ShareHookAdminHooksHookIdSharePostErrors];
+
+export type ShareHookAdminHooksHookIdSharePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: HookPattern;
+};
+
+export type ShareHookAdminHooksHookIdSharePostResponse = ShareHookAdminHooksHookIdSharePostResponses[keyof ShareHookAdminHooksHookIdSharePostResponses];
+
+export type PutHookWeightAdminHooksHookIdWeightPutData = {
+    body: HookWeightChange;
+    headers?: {
+        /**
+         * Authorization
+         */
+        authorization?: string | null;
+        /**
+         * X-Clipforge-Actor
+         */
+        'x-clipforge-actor'?: string | null;
+    };
+    path: {
+        /**
+         * Hook Id
+         */
+        hook_id: string;
+    };
+    query?: never;
+    url: '/admin/hooks/{hook_id}/weight';
+};
+
+export type PutHookWeightAdminHooksHookIdWeightPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutHookWeightAdminHooksHookIdWeightPutError = PutHookWeightAdminHooksHookIdWeightPutErrors[keyof PutHookWeightAdminHooksHookIdWeightPutErrors];
+
+export type PutHookWeightAdminHooksHookIdWeightPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: HookWeight;
+};
+
+export type PutHookWeightAdminHooksHookIdWeightPutResponse = PutHookWeightAdminHooksHookIdWeightPutResponses[keyof PutHookWeightAdminHooksHookIdWeightPutResponses];
 
 export type GetPolicyDryRunAdminPolicyDryRunGetData = {
     body?: never;
