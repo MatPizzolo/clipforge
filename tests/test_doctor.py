@@ -56,7 +56,8 @@ def test_timezone_check_fails_on_a_tzdata_folder() -> None:
 def test_configured_zones_reads_the_raw_values(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The raw POSTING_TIMEZONE, not config.Settings' fallback, which hides a bad value."""
+    """The raw values, not config.Settings' fallback, which hides a bad value. POSTING_TIMEZONE
+    is checked only while `.env` sets it (deploy.py's blackout, card 040)."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("POSTING_TIMEZONE", raising=False)
     monkeypatch.delenv("OWNER_TIMEZONE", raising=False)
@@ -64,3 +65,6 @@ def test_configured_zones_reads_the_raw_values(
     assert configured_zones() == ["Mars/Olympus", "UTC"]
     monkeypatch.setenv("OWNER_TIMEZONE", "Europe/Madrid")
     assert configured_zones() == ["Mars/Olympus", "Europe/Madrid", "UTC"]
+    (tmp_path / ".env").write_text("OWNER_TIMEZONE=\n")  # deploy.py's key gone from .env
+    monkeypatch.delenv("OWNER_TIMEZONE")
+    assert configured_zones() == ["UTC"]

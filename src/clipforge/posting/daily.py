@@ -1,10 +1,11 @@
 """The daily reconcile (ADR-46): `posting_keepalive` became `posting_daily`, same cron slot.
 
-Until ADR-24 retires (Task 23), the Dict still holds the queue, so it is touched and
-snapshotted every day. With a database wired it also runs `posting verify`, backfills missing
-`jobs` rows, rewrites the schedule copies (A3), and snapshots the posting and source tables.
-Rebuild always runs. Every part is idempotent and guarded: one failing part is reported (and
-alerted, ADR-45) and the rest still run. Modal-free.
+S1 Task 23 (card 040) retired its Dict parts (the keep-alive touch, the Dict snapshot and the
+Dict-versus-Postgres verify) with the Dict posting store. With a database wired it repairs the
+brakes, backfills missing `jobs` rows, rewrites the schedule copies (A3), prunes old webhook
+deliveries and snapshots the posting and source tables; rebuild runs unless the outage flag is
+set. Every part is idempotent and guarded: one failing part is reported (and alerted, ADR-45)
+and the rest still run. Modal-free.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from sqlalchemy import select, text
 
 from clipforge.accounts.service import sync_schedules
 from clipforge.db.accounts import AccountsRepo
+from clipforge.db.backfill import backfill_jobs
 from clipforge.db.engine import Database, redact
 from clipforge.db.tables import (
     accounts,
@@ -40,8 +42,8 @@ from clipforge.db.tables import (
 from clipforge.ops import OpsAlerts
 from clipforge.pipeline.deps import KV
 from clipforge.pipeline.steps import Deps
-from clipforge.posting import brake, keepalive
-from clipforge.posting.migrate import backfill_jobs
+from clipforge.posting import brake
+from clipforge.posting.outage import outage_since, set_outage
 from clipforge.posting.repo import PostingRepo
 
 log = logging.getLogger(__name__)
@@ -55,9 +57,9 @@ DELIVERIES_KEPT = timedelta(days=30)  # the webhook replay guard (S2 spec §3)
 # for taps and ticks; one daily run gets this instead (migration review I1)
 BATCH_TIMEOUT = "1min"
 DB_SNAPSHOT_PREFIX = "db-"
-# A rebuild after a longer gap could re-queue clips whose posted/verdict keys expired (PR
-# review 3); the owner restores first (ADR-24 runbook)
-MAX_GAP_DAYS = 2  # never matches keepalive's "????-??-??.json" restore glob
+# A longer gap since the newest table snapshot sets the outage flag (#217, card 040): the owner
+# looks at /status and the queue, then /go clears it
+MAX_GAP_DAYS = 2
 
 
 def snapshot_tables(db: Database, root: Path, now: datetime, keep: int = 14) -> tuple[Path, int]:
@@ -81,18 +83,20 @@ def snapshot_tables(db: Database, root: Path, now: datetime, keep: int = 14) -> 
     return path, sum(len(rows) for rows in data.values())
 
 
-def _newest_dict_snapshot(root: Path) -> date | None:
+def _newest_db_snapshot(root: Path) -> date | None:
+    """The date of the newest `db-<date>.json` (the old Dict snapshots, `<date>.json`, left
+    from before card 040, don't count)."""
     folder = root / "posting" / "snapshots"
     days = []
-    for path in folder.glob("????-??-??.json"):
+    for path in folder.glob(f"{DB_SNAPSHOT_PREFIX}????-??-??.json"):
         try:
-            days.append(date.fromisoformat(path.stem))
+            days.append(date.fromisoformat(path.stem.removeprefix(DB_SNAPSHOT_PREFIX)))
         except ValueError:
             continue
     return max(days, default=None)
 
 
-def run_daily(deps: Deps, db: Database | None, account_id: str, now: datetime) -> list[str]:
+def run_daily(deps: Deps, db: Database | None, now: datetime) -> list[str]:
     """Run every part; returns one summary line per part (for the cron log)."""
     from clipforge.service import rebuild_posting  # service imports posting code
 
@@ -111,25 +115,22 @@ def run_daily(deps: Deps, db: Database | None, account_id: str, now: datetime) -
                 deps.ops.alert(f"posting_daily: {name} failed: {redact(exc)}", "daily", name,
                                now=now)  # fmt: skip
 
-    last = _newest_dict_snapshot(deps.root)  # before today's run writes one
-    part("touch", lambda: f"{keepalive.touch(kv)} keys")
-    part("dict snapshot", lambda: _saved(keepalive.snapshot(kv, deps.root, now), "keys"))
+    last = _newest_db_snapshot(deps.root)  # before today's run writes one
     if db is not None:
-        part("verify", lambda: _verify(deps, db, account_id, now))
         part("brakes", lambda: _brakes(deps, db, now))
         part("jobs backfill", lambda: _backfill(deps, db))
         part("schedules", lambda: f"{sync_schedules(AccountsRepo(db), kv)} accounts")
         part("deliveries", lambda: f"{prune_deliveries(db, now - DELIVERIES_KEPT)} pruned")
     if last is not None and (now.astimezone(UTC).date() - last).days > MAX_GAP_DAYS:
-        keepalive.set_outage(kv, last.isoformat())  # sticky until /go or a restore
-    since = keepalive.outage_since(kv)
+        set_outage(kv, last.isoformat())  # sticky until /go
+    since = outage_since(kv)
     if since is not None:
-        lines.append(f"rebuild: skipped (outage: no posting snapshot since {since})")
+        lines.append(f"rebuild: skipped (outage: no table snapshot since {since})")
         if deps.ops is not None:
-            deps.ops.alert(f"posting_daily hadn't run since {since}: Dict keys may have expired, "
-                           "so rebuild and the posting slots are stopped. Restore from that "
-                           f"snapshot (clipforge status --restore {since}), check /status, then "
-                           "/go.", "daily", "outage", now=now)  # fmt: skip
+            deps.ops.alert(f"No posting table snapshot since {since} (posting_daily stopped, or "
+                           "its db snapshot keeps failing), so rebuild and the posting slots "
+                           "are stopped. Check /status and the queue, then send /go to "
+                           "resume.", "daily", "outage", now=now)  # fmt: skip
     else:
         part("rebuild", lambda: f"{rebuild_posting(deps, now)} clips queued")
     if db is not None:
@@ -142,18 +143,6 @@ def _saved(result: tuple[Path, int], unit: str) -> str:
     return f"{count} {unit} -> {path.name}"
 
 
-def _verify(deps: Deps, db: Database, account_id: str, now: datetime) -> str:
-    report = keepalive.verify_daily(deps.store.kv, db, account_id)
-    if report is None:
-        raise RuntimeError("posting verify could not run (see the log)")
-    if report.differences and deps.ops is not None:
-        first = "\n".join(report.first[:3])
-        deps.ops.alert(f"posting verify: {report.differences} differences between the Dict and "
-                       f"Postgres for {account_id}.\n{first}", "verify", account_id,
-                       now=now)  # fmt: skip
-    return f"{report.differences} differences"
-
-
 def _backfill(deps: Deps, db: Database) -> str:
     report = backfill_jobs(deps.store.kv, deps.root, db, dry_run=False)
     if report.failed:
@@ -163,7 +152,7 @@ def _backfill(deps: Deps, db: Database) -> str:
 
 def _brakes(deps: Deps, db: Database, now: datetime) -> str:
     if deps.posting is None:
-        # rows are written through the Posting repo (Dual: Postgres and the Dict mirror) only
+        # rows are written through the Posting repo only
         return "skipped (posting is not configured in this container)"
     lines = repair_brakes(deps.store.kv, db, now, ops=deps.ops, repo=deps.posting.repo)
     return "; ".join(lines) or "in step"

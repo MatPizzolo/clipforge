@@ -58,13 +58,12 @@ GOOD = deploy.Facts(
     ci="success",
     slots=DEFAULT,
     timezone="America/New_York",
-    state_reads="dict",
     now=ny(30, 12, 0),
 )
 
 
-def failed(facts: object, rollout_step: str | None = None) -> list[str]:
-    return [c.name for c in deploy.evaluate(facts, rollout_step) if not c.ok]
+def failed(facts: object) -> list[str]:
+    return [c.name for c in deploy.evaluate(facts) if not c.ok]
 
 
 def test_all_checks_pass_on_a_clean_green_main() -> None:
@@ -72,7 +71,7 @@ def test_all_checks_pass_on_a_clean_green_main() -> None:
 
 
 def test_refuses_off_main_and_says_where() -> None:
-    checks = deploy.evaluate(replace(GOOD, branch="x0/tooling"), None)
+    checks = deploy.evaluate(replace(GOOD, branch="x0/tooling"))
     branch = next(c for c in checks if c.name == "branch")
     assert not branch.ok
     assert branch.detail == "on x0/tooling"
@@ -87,18 +86,40 @@ def test_refuses_off_main_and_says_where() -> None:
         ({"ci": "in_progress"}, "CI green"),
         ({"ci": "none"}, "CI green"),
         ({"now": ny(30, 21, 45)}, "outside the blackout"),
-        ({"state_reads": "postgres"}, "STATE_READS"),
     ],
 )
 def test_each_rule_refuses(change: dict[str, object], name: str) -> None:
     assert failed(replace(GOOD, **change)) == [name]
 
 
-def test_rollout_step_allows_postgres_reads_only() -> None:
-    assert failed(replace(GOOD, state_reads="postgres"), "4c.7") == []
-    assert failed(replace(GOOD, state_reads="postgres", now=ny(30, 21, 45)), "4c.7") == [
-        "outside the blackout"
-    ]
+def test_no_check_looks_at_state_reads_any_more() -> None:
+    # card 040 (S1 Task 23): postgres is permanent, STATE_READS is gone from the app
+    assert [c.name for c in deploy.evaluate(GOOD)] == [
+        "branch", "clean tree", "equal to origin/main", "CI green", ".env settings",
+        "outside the blackout", HEAD,
+    ]  # fmt: skip
+    assert deploy.ENV_KEYS == ("POSTING_SLOTS", "POSTING_TIMEZONE")
+
+
+def test_dry_run_passes_without_a_rollout_step(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(deploy, "gather", lambda: GOOD)
+    monkeypatch.setattr(deploy.os, "chdir", lambda path: None)
+    assert deploy.main(["--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "dry run: would deploy aaaaaaa" in out and "STATE_READS" not in out
+
+
+def test_a_leftover_rollout_step_is_refused_with_the_reason(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(deploy, "gather", lambda: pytest.fail("must not gather"))
+    with pytest.raises(SystemExit) as raised:
+        deploy.main(["--dry-run", "--rollout-step", "4c.7"])
+    assert raised.value.code == 2
+    err = capsys.readouterr().err
+    assert "--rollout-step was retired" in err and "Traceback" not in err
 
 
 def fake_run(stdout: str, code: int = 0) -> object:
@@ -126,7 +147,7 @@ def test_reason_is_required_to_deploy() -> None:
         deploy.main([])
 
 
-FULL_ENV = "POSTING_SLOTS=8:00,21:30\nPOSTING_TIMEZONE=America/New_York\nSTATE_READS=dict\n"
+FULL_ENV = "POSTING_SLOTS=8:00,21:30\nPOSTING_TIMEZONE=America/New_York\n"
 
 
 def test_env_settings_read_from_the_file(tmp_path: Path) -> None:
@@ -135,10 +156,14 @@ def test_env_settings_read_from_the_file(tmp_path: Path) -> None:
     assert env.problems == ()
     assert env.slots == ["08:00", "21:30"]
     assert env.timezone == "America/New_York"
-    assert env.state_reads == "dict"
 
 
-@pytest.mark.parametrize("key", ["POSTING_SLOTS", "POSTING_TIMEZONE", "STATE_READS"])
+def test_a_leftover_state_reads_in_env_is_ignored(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text(FULL_ENV + "STATE_READS=sql\n")
+    assert deploy.read_env_settings(tmp_path / ".env").problems == ()
+
+
+@pytest.mark.parametrize("key", ["POSTING_SLOTS", "POSTING_TIMEZONE"])
 def test_a_missing_env_key_refuses_and_names_the_line(
     tmp_path: Path, key: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -153,33 +178,26 @@ def test_a_missing_env_key_refuses_and_names_the_line(
         GOOD,
         slots=env.slots,
         timezone=env.timezone,
-        state_reads=env.state_reads,
         env_problems=env.problems,
     )
-    checks = {c.name: c for c in deploy.evaluate(facts, None)}
+    checks = {c.name: c for c in deploy.evaluate(facts)}
     assert not checks[".env settings"].ok
     assert f"{key}= is missing" in checks[".env settings"].detail
-    blocked = "STATE_READS" if key == "STATE_READS" else "outside the blackout"
-    assert not checks[blocked].ok
-    assert "unknown" in checks[blocked].detail
+    assert not checks["outside the blackout"].ok
+    assert "unknown" in checks["outside the blackout"].detail
 
 
 def test_no_env_file_refuses_every_key(tmp_path: Path) -> None:
     env = deploy.read_env_settings(tmp_path / ".env")
-    assert len(env.problems) == 3
-    assert env.slots is None and env.state_reads is None
+    assert len(env.problems) == 2
+    assert env.slots is None and env.timezone is None
 
 
 def test_invalid_env_values_refuse(tmp_path: Path) -> None:
-    (tmp_path / ".env").write_text(
-        "POSTING_SLOTS=25:00\nPOSTING_TIMEZONE=America/New_York\nSTATE_READS=sql\n"
-    )
+    (tmp_path / ".env").write_text("POSTING_SLOTS=25:00\nPOSTING_TIMEZONE=America/New_York\n")
     env = deploy.read_env_settings(tmp_path / ".env")
     assert env.slots is None
-    assert env.problems == (
-        "POSTING_SLOTS in .env: slots must be HH:MM, e.g. 08:00",
-        "STATE_READS in .env must be dict or postgres, not 'sql'",
-    )
+    assert env.problems == ("POSTING_SLOTS in .env: slots must be HH:MM, e.g. 08:00",)
 
 
 # --- the migration head (card 008, action 1) ---------------------------------------------
@@ -188,7 +206,7 @@ HEAD = "database at the migration head"
 
 
 def migration(facts: object) -> object:
-    return next(c for c in deploy.evaluate(facts, None) if c.name == HEAD)
+    return next(c for c in deploy.evaluate(facts) if c.name == HEAD)
 
 
 def test_migration_check_is_off_by_default_and_says_why() -> None:

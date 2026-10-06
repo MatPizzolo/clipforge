@@ -25,15 +25,17 @@ from clipforge.models import Brake, PostingSchedule, ScheduleCopy
 from clipforge.ops import OpsAlerts
 from clipforge.pipeline.deps import MemoryKV
 from clipforge.posting import brake
-from clipforge.posting.backend import Posting, build_posting
-from clipforge.posting.keepalive import OUTAGE_KEY
+from clipforge.posting.backend import NO_DATABASE, Posting, build_posting
+from clipforge.posting.outage import OUTAGE_KEY
 from clipforge.posting.queue import pick_next
 from clipforge.posting.repo import PostingClaims
 from clipforge.posting.slots import current_slot
 from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
 from tests.bot.helpers import dispatch_ctx
+from tests.dbhelpers import make_account
 from tests.pipeline.harness import Harness
 from tests.posting.builders import run_channel_job
+from tests.posting.memory import memory_posting
 
 NOW = datetime(2026, 10, 2, 12, 2, tzinfo=UTC)
 RT = "realtalk-clips-en"
@@ -164,17 +166,18 @@ NY = ZoneInfo("America/New_York")
 AT_8 = datetime(2026, 9, 29, 8, 1, tzinfo=NY)
 
 
-def _dict_only(harness: Harness) -> BotContext:
-    """Production before S1's rollout: no DATABASE_URL, STATE_READS=dict, the env account from
-    the POSTING_* settings, built with build_posting(settings, kv, None) as posting_tick was."""
+def _one_account(harness: Harness) -> BotContext:
+    """One account with a posting chat and an 08:00 slot over the in-memory queue (the env
+    account posting_tick served before card 040 retired the POSTING_* settings)."""
     run_channel_job(harness)
-    settings = make_settings(harness.root, posting_chat_id=ALLOWED_USER, posting_slots="08:00")
-    harness.deps.posting = build_posting(settings, harness.deps.store.kv, None)
+    settings = make_settings(harness.root)
+    account = make_account(chat_id=ALLOWED_USER, slots=["08:00"])
+    harness.deps.posting = memory_posting(harness.deps.store.kv, account)
     return BotContext(settings, FakeSender(), harness.deps)
 
 
-def test_no_database_sends_the_env_accounts_slot_like_posting_tick(harness: Harness) -> None:
-    ctx = _dict_only(harness)
+def test_the_assisted_task_sends_the_slot_like_posting_tick(harness: Harness) -> None:
+    ctx = _one_account(harness)
     posting = ctx.deps.posting
     assert posting is not None
     records = posting.repo.records(RT)
@@ -200,37 +203,37 @@ def test_no_database_sends_the_env_accounts_slot_like_posting_tick(harness: Harn
 
 def test_a_posting_problem_alerts_and_sends_nothing(harness: Harness) -> None:
     run_channel_job(harness)
-    settings = make_settings(harness.root, posting_chat_id=ALLOWED_USER, posting_slots="9am")
-    assert settings.posting_problem is not None
-    harness.deps.posting = build_posting(settings, harness.deps.store.kv, None)
-    harness.deps.posting.problem = settings.posting_problem
+    settings = make_settings(harness.root)
+    problem = "slots: slots must be HH:MM, e.g. 08:00"
+    harness.deps.posting = memory_posting(harness.deps.store.kv,
+                                          make_account(chat_id=ALLOWED_USER), problem)  # fmt: skip
     alerts = FakeSender()
     harness.deps.ops = OpsAlerts(harness.deps.store.kv, alerts, ALLOWED_USER, "UTC")
     ctx = BotContext(settings, FakeSender(), harness.deps)
-    assert tick(dispatch_ctx(ctx), AT_8) == [f"off: {settings.posting_problem}"]
-    assert alerts.messages[-1][1] == f"⚠️ Posting is off: {settings.posting_problem}"
+    assert tick(dispatch_ctx(ctx), AT_8) == [f"off: {problem}"]
+    assert alerts.messages[-1][1] == f"⚠️ Posting is off: {problem}"
 
 
-def test_postgres_mode_without_a_database_is_off_and_alerts(tmp_path: Path) -> None:
+def test_without_a_database_posting_is_off_and_alerts(tmp_path: Path) -> None:
     deps = Harness.build(tmp_path).deps
-    settings = make_settings(tmp_path, state_reads="postgres")
+    settings = make_settings(tmp_path)
     deps.posting = build_posting(settings, deps.store.kv, None)
     alerts = FakeSender()
     deps.ops = OpsAlerts(deps.store.kv, alerts, ALLOWED_USER, "UTC")
     lines = tick(dispatch_ctx(BotContext(settings, FakeSender(), deps)), AT_8)
-    assert lines == ["off: DATABASE_URL is not configured"]
+    assert lines == [f"off: {NO_DATABASE}"]
     assert alerts.messages[-1][1] == "⚠️ Posting is off: DATABASE_URL is not configured"
 
 
 def test_an_outage_sends_nothing(harness: Harness) -> None:
-    ctx = _dict_only(harness)
+    ctx = _one_account(harness)
     ctx.deps.store.kv.put(OUTAGE_KEY, "2026-09-25")
     assert tick(dispatch_ctx(ctx), AT_8)[0].startswith("outage since 2026-09-25")
     assert isinstance(ctx.sender, FakeSender) and ctx.sender.videos == []
 
 
 def test_without_a_telegram_token_nothing_is_sent(harness: Harness) -> None:
-    ctx = dispatch_ctx(_dict_only(harness))
+    ctx = dispatch_ctx(_one_account(harness))
     ctx.bot = None
     assert tick(ctx, AT_8)[0].endswith(": no Telegram token")
 

@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import datetime
 from math import ceil
 from pathlib import Path
 
-from clipforge.accounts.service import env_account
-from clipforge.config import Settings
 from clipforge.db.engine import is_db_error
 from clipforge.db.jobs import JobsRepo
 from clipforge.jobs import DictJobStore, merged_cost, new_job_id, utcnow
@@ -32,9 +30,10 @@ from clipforge.models import (
     StageName,
 )
 from clipforge.pipeline.steps import Deps, Step, record_job, resume, summary_of
-from clipforge.posting import keepalive, queue
+from clipforge.posting import queue
 from clipforge.posting.backend import Posting, posting_of
 from clipforge.posting.enqueue import ClipFacts, enqueue_job
+from clipforge.posting.outage import outage_since
 from clipforge.posting.slots import next_slot
 from clipforge.sanitize import redact
 from clipforge.sources import hold_reason
@@ -198,14 +197,13 @@ def job_summaries(deps: Deps) -> list[JobSummary]:
 
 
 class PostingOutage(Exception):
-    """A rebuild while the outage flag is set: expired posted/verdict keys could re-queue clips
-    (decision log #217). The message says how to clear it."""
+    """A rebuild while the outage flag is set (decision log #217): posting_daily stopped for days,
+    so the owner looks first. The message says how to clear it."""
 
     def __init__(self, since: str) -> None:
         super().__init__(
-            f"Outage: posting_daily didn't run since {since}, so Dict keys may have expired and "
-            f"rebuild is stopped. Restore from that snapshot (clipforge status --restore {since}), "
-            "check /status, then /go; rebuild after that."
+            f"Outage: no posting table snapshot since {since}, so rebuild is stopped. Check "
+            "/status and the queue, then send /go to clear it; rebuild after that."
         )
         self.since = since
 
@@ -216,7 +214,7 @@ def rebuild_posting(deps: Deps, now: datetime) -> int:
     posting = deps.posting
     if posting is None:
         return 0
-    since = keepalive.outage_since(deps.store.kv)
+    since = outage_since(deps.store.kv)
     if since is not None:
         raise PostingOutage(since)
     added = 0
@@ -244,14 +242,6 @@ def rebuild_posting(deps: Deps, now: datetime) -> int:
                 exc_info=not is_db_error(exc),
             )
     return added
-
-
-def restore_posting(deps: Deps, day: date | None = None) -> int:
-    """Put back posting keys that expired from the Dict, from the Volume snapshot of `day`
-    (default: the newest)."""
-    restored = keepalive.restore(deps.store.kv, deps.root, day)
-    keepalive.clear_outage(deps.store.kv)  # the owner restored: posting can resume
-    return restored
 
 
 _EPISODE_RANK = {JobStatus.DONE: 2, JobStatus.RUNNING: 1, JobStatus.QUEUED: 1, JobStatus.FAILED: 0}
@@ -332,26 +322,19 @@ def _account_view(
     )  # fmt: skip
 
 
-def posting_overview(deps: Deps, settings: Settings, now: datetime) -> PostingOverview:
+def posting_overview(deps: Deps, now: datetime) -> PostingOverview:
     """Per account, per channel: episodes by job status (a re-cut counts once, by its best job)
     and clips by posting status; plus how long the queue lasts (spec §9). The top-level fields
     are account #1's, so existing clients keep working."""
     posting = posting_of(deps)
-    # Dict mode reads the POSTING_* settings as they are now (the one env account).
-    accounts = (
-        [env_account(settings)]
-        if settings.state_reads == "dict"
-        else sorted(posting.accounts(), key=lambda a: a.id)
-    )
+    accounts = sorted(posting.accounts(), key=lambda a: a.id)
     summaries = job_summaries(deps)
     source = posting.source_lookup()
     views = [_account_view(posting, a, summaries, source, now) for a in accounts]
     top = next((v for v in views if v.account_id == posting.default_account_id), None)
-    problem = posting.problem or (
-        settings.posting_problem if settings.state_reads == "dict" else None
-    )
+    problem = posting.problem
     posted_total = sum(v.posted_total for v in views)
-    outage = keepalive.outage_since(deps.store.kv)
+    outage = outage_since(deps.store.kv)
     if top is None:
         return PostingOverview(
             enabled=False, paused=False, channels=[], waiting=0, days_left=0, per_day=0,

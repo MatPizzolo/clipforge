@@ -31,7 +31,7 @@ def uncovered(source: Source, platforms: Iterable[Platform]) -> list[Platform]:
 
 
 def hold_reason(source: Source | None, platforms: Iterable[Platform], now: datetime) -> str | None:
-    """Why an item due on `platforms` is held, or None. No source row (dict mode) holds nothing."""
+    """Why an item due on `platforms` is held, or None. No source row holds nothing."""
     if source is None:
         return None
     problem = source_problem(source, now)

@@ -6,22 +6,21 @@ from datetime import timedelta
 
 import pytest
 
-from clipforge.accounts.service import env_account
 from clipforge.bot import messages
 from clipforge.bot.posting import fresh_keyboard
 from clipforge.bot.webhook import MAX_UPLOAD_BYTES, BotContext, handle_update
 from clipforge.jobs import utcnow
 from clipforge.models import LEGACY_PLATFORMS, Platform, PostStatus, RejectReason, TelegramTarget
 from clipforge.pipeline.deps import SpawnCall
-from clipforge.posting.backend import dict_posting
 from clipforge.posting.queue import status
-from clipforge.posting.repo import DictPostingRepo
 from clipforge.posting.slots import next_slot
+from clipforge.schedule import DEFAULT_SLOTS
 from tests.bot.fakes import ALLOWED_USER, CHAT, FakeSender, callback, make_settings, update, video
 from tests.bot.helpers import tick
 from tests.dbhelpers import make_account
 from tests.pipeline.harness import Harness
 from tests.posting.builders import ACCOUNT, run_channel_job
+from tests.posting.memory import memory_posting, memory_repo
 
 URL = "https://media.example.com/ep.mp4"
 Bot = tuple[BotContext, FakeSender]
@@ -151,19 +150,22 @@ def test_resume_of_a_failed_job_respawns(harness: Harness, bot: Bot) -> None:
     assert harness.spawner.queue[-1] == SpawnCall("transcribe", job_id, None)
 
 
+POSTING_ACCOUNT = make_account(chat_id=ALLOWED_USER, slots=DEFAULT_SLOTS)
+
+
 @pytest.fixture
 def posting(harness: Harness) -> Bot:
     run_channel_job(harness)
     sender = FakeSender()
-    settings = make_settings(harness.root, posting_chat_id=ALLOWED_USER)
-    harness.deps.posting = dict_posting(harness.deps.store.kv, env_account(settings))
+    settings = make_settings(harness.root)
+    harness.deps.posting = memory_posting(harness.deps.store.kv, POSTING_ACCOUNT)
     return BotContext(settings, sender, harness.deps), sender
 
 
 def _sent(ctx: BotContext) -> tuple[str, int]:
     """Send one clip with /next; return its ref and its text message id."""
     handle_update(update(90, text="/next", user_id=ALLOWED_USER), ctx)
-    store = DictPostingRepo(ctx.deps.store.kv, ACCOUNT)
+    store = memory_repo(ctx.deps.store.kv)
     record = next(r for r in store.records(ACCOUNT) if r.sends)
     return record.item.id, record.sends[-1].message_id
 
@@ -179,7 +181,7 @@ def test_toggle_and_undo_update_the_buttons(posting: Bot) -> None:
     assert sender.keyboards[message_id] == fresh_keyboard(ref, list(LEGACY_PLATFORMS))
     for n, action in enumerate(["tt", "ig", "yt"], start=3):
         handle_update(callback(n, f"p:{action}:{ref}", message_id=message_id), ctx)
-    record = DictPostingRepo(ctx.deps.store.kv, ACCOUNT).get(ref)
+    record = memory_repo(ctx.deps.store.kv).get(ref)
     assert record is not None and status(record) is PostStatus.POSTED
     assert sender.keyboards[message_id] == [[("Posted everywhere ✓", f"p:noop:{ref}")]]
 
@@ -189,7 +191,7 @@ def test_skip_sends_the_next_clip(posting: Bot) -> None:
     ref, message_id = _sent(ctx)
     handle_update(callback(1, f"p:skip:{ref}", message_id=message_id), ctx)
     assert len(sender.videos) == 2  # the next one went out right away
-    record = DictPostingRepo(ctx.deps.store.kv, ACCOUNT).get(ref)
+    record = memory_repo(ctx.deps.store.kv).get(ref)
     assert record is not None and status(record) is PostStatus.SKIPPED
 
 
@@ -198,7 +200,7 @@ def test_reject_then_reason(posting: Bot) -> None:
     ref, message_id = _sent(ctx)
     handle_update(callback(1, f"p:rej:{ref}", message_id=message_id), ctx)
     handle_update(callback(2, f"p:why:bad_crop:{ref}", message_id=message_id), ctx)
-    record = DictPostingRepo(ctx.deps.store.kv, ACCOUNT).get(ref)
+    record = memory_repo(ctx.deps.store.kv).get(ref)
     assert record is not None and record.verdict is not None
     assert record.verdict.reason is RejectReason.BAD_CROP
     assert sender.keyboards[message_id] == [[("Rejected · Bad crop", f"p:noop:{ref}")]]
@@ -216,7 +218,7 @@ def test_taps_outside_the_posting_chat_or_from_strangers_do_nothing(posting: Bot
     ref, message_id = _sent(ctx)
     handle_update(callback(1, f"p:tt:{ref}", message_id=message_id, chat_id=CHAT), ctx)
     handle_update(callback(2, f"p:tt:{ref}", message_id=message_id, user_id=999), ctx)
-    record = DictPostingRepo(ctx.deps.store.kv, ACCOUNT).get(ref)
+    record = memory_repo(ctx.deps.store.kv).get(ref)
     assert record is not None and record.posted == {}
     assert sender.answers == [("cb1", "")]  # the stranger gets nothing at all
 
@@ -226,7 +228,7 @@ def test_duplicate_tap_is_handled_once(posting: Bot) -> None:
     ref, message_id = _sent(ctx)
     handle_update(callback(1, f"p:tt:{ref}", message_id=message_id), ctx)
     handle_update(callback(1, f"p:tt:{ref}", message_id=message_id), ctx)  # redelivered
-    record = DictPostingRepo(ctx.deps.store.kv, ACCOUNT).get(ref)
+    record = memory_repo(ctx.deps.store.kv).get(ref)
     assert record is not None and set(record.posted) == {Platform.TIKTOK}
 
 
@@ -237,13 +239,13 @@ def test_status_pause_go_commands(posting: Bot) -> None:
     handle_update(update(2, text="/pause", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.PAUSED
     # at a slot: the tick computes the slot before it reads the pause (card 002 A3)
-    slot = next_slot(env_account(ctx.settings).posting, utcnow())
+    slot = next_slot(POSTING_ACCOUNT.posting, utcnow())
     assert slot is not None
     # the dispatcher skips a braked account before reading anything (S2 §6.7)
     assert tick(ctx, slot + timedelta(minutes=1)) == f"{ACCOUNT}: braked"
     handle_update(update(3, text="/go", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.RESUMED
-    assert not DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
+    assert not memory_repo(ctx.deps.store.kv).paused(ACCOUNT)
 
 
 def test_double_skip_sends_one_clip(posting: Bot) -> None:
@@ -262,7 +264,7 @@ def test_stale_taps_on_a_rejected_clip_change_nothing(posting: Bot) -> None:
     videos = len(sender.videos)
     for n, action in enumerate(["rej", "skip", "tt"], start=3):
         handle_update(callback(n, f"p:{action}:{ref}", message_id=message_id), ctx)
-    record = DictPostingRepo(ctx.deps.store.kv, ACCOUNT).get(ref)
+    record = memory_repo(ctx.deps.store.kv).get(ref)
     assert record is not None and record.verdict is not None
     assert record.verdict.kind == "rejected"
     assert record.verdict.reason is RejectReason.BAD_CROP
@@ -275,26 +277,26 @@ def test_pause_with_an_unknown_account_names_the_known_ones(posting: Bot) -> Non
     ctx, sender = posting
     handle_update(update(1, text="/pause nope", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.unknown_account("nope", [ACCOUNT])
-    assert not DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
+    assert not memory_repo(ctx.deps.store.kv).paused(ACCOUNT)
 
 
 def test_pause_without_an_account_pauses_every_posting_account(posting: Bot) -> None:
     ctx, sender = posting
     handle_update(update(1, text="/pause", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.PAUSED
-    assert DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
+    assert memory_repo(ctx.deps.store.kv).paused(ACCOUNT)
     # /pause with no account is the fleet brake (S2 §6.7): /go <account> doesn't lift it
     handle_update(update(2, text=f"/go {ACCOUNT}", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == f"{ACCOUNT}: {messages.STILL_BRAKED}"
-    assert DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
+    assert memory_repo(ctx.deps.store.kv).paused(ACCOUNT)
     handle_update(update(3, text="/go all", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.RESUMED
-    assert not DictPostingRepo(ctx.deps.store.kv, ACCOUNT).paused(ACCOUNT)
+    assert not memory_repo(ctx.deps.store.kv).paused(ACCOUNT)
 
 
 def _posting_off(harness: Harness) -> Bot:
     settings = make_settings(harness.root)
-    harness.deps.posting = dict_posting(harness.deps.store.kv, make_account(chat_id=None))
+    harness.deps.posting = memory_posting(harness.deps.store.kv, make_account(chat_id=None))
     return BotContext(settings, FakeSender(), harness.deps), harness.deps.posting  # type: ignore[return-value]
 
 
@@ -302,7 +304,7 @@ def test_pause_and_go_with_posting_off_still_set_the_default_flag(harness: Harne
     ctx, _ = _posting_off(harness)
     sender = ctx.sender
     assert isinstance(sender, FakeSender)
-    repo = DictPostingRepo(ctx.deps.store.kv, ACCOUNT)
+    repo = memory_repo(ctx.deps.store.kv)
     handle_update(update(1, text="/pause", user_id=ALLOWED_USER), ctx)
     assert sender.messages[-1][1] == messages.PAUSED
     assert repo.paused(ACCOUNT)

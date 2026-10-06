@@ -4,10 +4,9 @@ It refuses, with every reason, unless all of these hold:
 - on `main`, the tree clean (except deploy lines already added to docs/ops/deploys.md) and equal
   to `origin/main`;
 - the latest CI run for that commit is green;
-- POSTING_SLOTS, POSTING_TIMEZONE and STATE_READS are set explicitly in `.env` (kept identical to
-  the `clipforge-secrets` values; config.py's defaults are never used for these checks);
+- POSTING_SLOTS and POSTING_TIMEZONE are set explicitly in `.env` (the blackout's slots; read
+  only here and by CI's repository variables since S1 Task 23 removed them from the app, card 040);
 - now is outside the blackout: each posting slot until 30 minutes after it (decision log #108);
-- STATE_READS is `dict`, unless the operator passes `--rollout-step 4c.7`;
 - with `DEPLOY_DB_CHECK=on` in `.env` (from rollout step 4c.2, when production uses the
   database), the database's `alembic_version` equals the newest revision in `alembic/versions/`,
   read in a READ ONLY transaction through `DATABASE_URL_UNPOOLED` (card 008). Off, the default,
@@ -32,10 +31,14 @@ ROOT = Path(__file__).resolve().parent.parent
 DEPLOY_LOG = "docs/ops/deploys.md"
 BLACKOUT = timedelta(minutes=30)
 CI_WORKFLOW = "ci.yml"
-ENV_KEYS = ("POSTING_SLOTS", "POSTING_TIMEZONE", "STATE_READS")
+ENV_KEYS = ("POSTING_SLOTS", "POSTING_TIMEZONE")
 DB_CHECK_KEY = "DEPLOY_DB_CHECK"
 DB_URL_KEY = "DATABASE_URL_UNPOOLED"
 MIGRATE = "run `uv run alembic upgrade head` first (runbook 4c.1)"
+ROLLOUT_RETIRED = (
+    "--rollout-step was retired with STATE_READS (card 040, S1 Task 23): deploy without it. "
+    "Rolling back to before card 040? Check out that commit, whose deploy.py still takes it."
+)
 
 
 def _slots_on(day: date, slots: Sequence[str], zone: ZoneInfo) -> list[datetime]:
@@ -93,7 +96,6 @@ class Facts:
     ci: str  # "success", "failure", "in_progress", "none", ...
     slots: list[str] | None  # None: missing or invalid in .env (see env_problems)
     timezone: str | None
-    state_reads: str | None
     now: datetime
     env_problems: tuple[str, ...] = ()
     migration: MigrationHead = DB_CHECK_OFF
@@ -103,12 +105,11 @@ class Facts:
 class EnvSettings:
     slots: list[str] | None
     timezone: str | None
-    state_reads: str | None
     problems: tuple[str, ...]
 
 
 def read_env_settings(path: Path) -> EnvSettings:
-    """The three keys the checks need, from `.env` itself: no process env, no defaults."""
+    """The keys the checks need, from `.env` itself: no process env, no defaults."""
     from dotenv import dotenv_values
 
     from clipforge.schedule import normalize_slots, schedule_problem
@@ -131,15 +132,7 @@ def read_env_settings(path: Path) -> EnvSettings:
             slots, timezone = candidate, raw["POSTING_TIMEZONE"]
         else:
             problems.append(f"POSTING_{problem[0].upper()} in .env: {problem[1]}")
-    state_reads: str | None = None
-    if raw["STATE_READS"]:
-        if raw["STATE_READS"] in ("dict", "postgres"):
-            state_reads = raw["STATE_READS"]
-        else:
-            problems.append(
-                f"STATE_READS in .env must be dict or postgres, not {raw['STATE_READS']!r}"
-            )
-    return EnvSettings(slots, timezone, state_reads, tuple(problems))
+    return EnvSettings(slots, timezone, tuple(problems))
 
 
 def code_heads(root: Path = ROOT) -> list[str]:
@@ -221,7 +214,7 @@ def migration_check(head: MigrationHead) -> Check:
     return Check(name, True, f"database and code at {head.code}")
 
 
-def evaluate(facts: Facts, rollout_step: str | None) -> list[Check]:
+def evaluate(facts: Facts) -> list[Check]:
     checks = [
         Check("branch", facts.branch == "main", f"on {facts.branch or '(detached)'}"),
         Check(
@@ -256,18 +249,6 @@ def evaluate(facts: Facts, rollout_step: str | None) -> list[Check]:
             until = (slot + BLACKOUT).strftime("%H:%M")
             detail = f"now {local} is inside the {slot:%H:%M} slot's blackout (until {until})"
         checks.append(Check("outside the blackout", slot is None, detail))
-    if facts.state_reads is None:
-        checks.append(Check("STATE_READS", False, "unknown: not set in .env"))
-    elif rollout_step == "4c.7":
-        checks.append(Check("STATE_READS", True, f"{facts.state_reads} (rollout step 4c.7)"))
-    else:
-        checks.append(
-            Check(
-                "STATE_READS",
-                facts.state_reads == "dict",
-                f"{facts.state_reads} (only `dict` without --rollout-step 4c.7)",
-            )
-        )
     checks.append(migration_check(facts.migration))
     return checks
 
@@ -316,7 +297,6 @@ def gather(run: Runner = _run) -> Facts:
         ci=ci_conclusion(run, head),
         slots=env.slots,
         timezone=env.timezone,
-        state_reads=env.state_reads,
         now=datetime.now(UTC),
         env_problems=env.problems,
         migration=read_migration_head(ROOT / ".env"),
@@ -355,16 +335,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Deploy the clipforge Modal app, with checks.")
     parser.add_argument("--dry-run", action="store_true", help="print the checks, deploy nothing")
     parser.add_argument("--reason", help="why (goes into docs/ops/deploys.md); required to deploy")
-    parser.add_argument(
-        "--rollout-step", choices=["4c.7"], help="allow STATE_READS other than dict (runbook 4c.7)"
-    )
+    # retired (card 040): still parsed, so an old command line gets the reason with the usage
+    parser.add_argument("--rollout-step", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.rollout_step is not None:
+        parser.error(ROLLOUT_RETIRED)
     if not args.dry_run and not (args.reason or "").strip():
         parser.error("--reason is required (or use --dry-run)")
 
     os.chdir(ROOT)
     facts = gather()
-    checks = evaluate(facts, args.rollout_step)
+    checks = evaluate(facts)
     for check in checks:
         print(f"{'ok  ' if check.ok else 'FAIL'} {check.name}: {check.detail}")
     failed = [c.name for c in checks if not c.ok]

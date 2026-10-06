@@ -184,31 +184,8 @@ class RejectReason(StrEnum):
     OTHER = "other"
 
 
-class PostItem(Contract):
-    """Legacy Dict format of a queued clip (ADR-23). Only posting/repo.py (DictPostingRepo)
-    reads or writes it; removed when ADR-24 retires (spec §9.3)."""
-
-    job_id: str
-    clip_id: str
-    channel: ChannelRef
-    source_hash: str
-    start: float  # source time
-    end: float
-    score: float
-    title: str
-    hook: str
-    video_path: str  # rendered clip, relative to JOBS_ROOT
-    episode: str  # JobInput.source_label, or the job id
-    episode_finished_at: datetime
-    queued_at: datetime
-
-    @property
-    def ref(self) -> str:
-        return f"{self.job_id}:{self.clip_id}"
-
-
 class PostSend(Contract):
-    """`post:<ref>:sent:<n>`: one delivery to the phone (n = 1, then 2 after a skip...)."""
+    """One delivery to the phone (n = 1, then 2 after a skip...); a `sends` row."""
 
     n: int = Field(ge=1)
     at: datetime
@@ -217,14 +194,8 @@ class PostSend(Contract):
     video_message_id: int
 
 
-class PostMark(Contract):
-    """`post:<ref>:posted:<platform>`: the owner confirmed this platform."""
-
-    at: datetime
-
-
 class PostVerdict(Contract):
-    """`post:<ref>:verdict`."""
+    """Skipped or rejected (the `posts` row's verdict columns)."""
 
     kind: Literal["skipped", "rejected"]
     at: datetime
@@ -344,7 +315,7 @@ class ScheduleCopy(PostingSchedule):
 
     @classmethod
     def of(cls, schedule: PostingSchedule, path: PublishPath | None = None) -> ScheduleCopy:
-        """The env account's schedule (dict mode) is always assisted."""
+        """Without a publish path the schedule is assisted (S2 spec §1.1)."""
         return cls(**schedule.model_dump(), **(path or PublishPath()).model_dump())
 
     def schedule(self) -> PostingSchedule:
@@ -676,7 +647,7 @@ class SourceEvent(Contract):
 # What the dashboard shows for posting (card 002 A5): off = no posting chat; problem = posting
 # is misconfigured; paused = /pause; waiting = the pause rule (PAUSE_AFTER sent clips with no
 # tap) holds the slots; on = clips go out at the next slot.
-# outage = posting_daily found it hadn't run for days; nothing is sent until /go or a restore
+# outage = posting_daily found it hadn't run for days; nothing is sent until /go
 PostingState = Literal["off", "problem", "paused", "waiting", "on", "outage"]
 
 
@@ -698,22 +669,8 @@ class AccountPosting(Contract):
     last_sent_at: datetime | None = None
 
 
-class ImportReport(Contract):
-    """Result of `posting import` (Dict queue -> Postgres, spec §5.5)."""
-
-    dry_run: bool
-    dict_items: int = 0
-    from_snapshot: int = 0  # keys filled in from the newest Volume snapshot
-    by_status: dict[PostStatus, int] = Field(default_factory=dict)
-    imported: int = 0
-    already: int = 0
-    missing_source: list[str] = Field(default_factory=list)
-    failed: list[str] = Field(default_factory=list)
-    paused: bool = False
-
-
 class BackfillReport(Contract):
-    """Result of `jobs backfill`."""
+    """Result of `posting_daily`'s jobs backfill (`db/backfill.py`)."""
 
     dry_run: bool
     from_metadata: int = 0
@@ -722,27 +679,17 @@ class BackfillReport(Contract):
     failed: list[str] = Field(default_factory=list)
 
 
-class VerifyReport(Contract):
-    """Dict versus Postgres for one account."""
-
-    account_id: str
-    dict_items: int = 0
-    postgres_items: int = 0
-    differences: int = 0
-    first: list[str] = Field(default_factory=list)
-
-
 class PostingOverview(Contract):
     """What `/status`, `GET /posting` and `clipforge status` show (spec §9)."""
 
-    enabled: bool  # POSTING_CHAT_ID is set
+    enabled: bool  # account #1 has a posting chat
     paused: bool
     channels: list[ChannelProgress]
     waiting: int  # queued + skipped: clips that will still be sent
     days_left: int
     per_day: int
     next_slot: datetime | None
-    problem: str | None = None  # why posting is off despite POSTING_CHAT_ID (a config mistake)
+    problem: str | None = None  # why posting is off (no database, a config mistake)
     accounts: list[AccountPosting] = Field(default_factory=list)
     # additive (card 002 A5, #49): account #1's state ("problem" wins), and posted clips summed
     # over every account

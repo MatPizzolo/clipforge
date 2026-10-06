@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from clipforge.accounts.service import env_account, publish_schedule
+from clipforge.accounts.service import publish_schedule
 from clipforge.bot import messages
 from clipforge.bot.context import BotContext
 from clipforge.bot.posting import (
@@ -39,14 +39,14 @@ from clipforge.models import (
     Source,
     SourcePermission,
 )
-from clipforge.posting.backend import build_posting, dict_posting
-from clipforge.posting.repo import DictPostingRepo
+from clipforge.posting.backend import build_posting
 from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
-from tests.bot.helpers import dict_ctx, tick, two_account_ctx
+from tests.bot.helpers import memory_ctx, tick, two_account_ctx
 from tests.conftest import TALKING_HEAD, requires_ffmpeg
 from tests.dbhelpers import make_account
 from tests.pipeline.harness import Harness
 from tests.posting.builders import ACCOUNT, JOB, T0, item, record, run_channel_job, send
+from tests.posting.memory import MemoryPostingRepo, memory_posting, memory_repo
 
 REF = f"{JOB}:clip_01"
 THREE = list(LEGACY_PLATFORMS)
@@ -133,8 +133,9 @@ def at(hour: int, minute: int = 1, days: int = 0) -> datetime:
 @pytest.fixture
 def ctx(harness: Harness) -> BotContext:
     run_channel_job(harness)  # 3 queued clips with real files
-    settings = make_settings(harness.root, posting_chat_id=ALLOWED_USER, posting_slots=SLOTS)
-    harness.deps.posting = dict_posting(harness.deps.store.kv, env_account(settings))
+    settings = make_settings(harness.root)
+    account = make_account(chat_id=ALLOWED_USER, slots=SLOTS)
+    harness.deps.posting = memory_posting(harness.deps.store.kv, account)
     return BotContext(settings, FakeSender(), harness.deps)
 
 
@@ -143,8 +144,8 @@ def _sender(ctx: BotContext) -> FakeSender:
     return ctx.sender
 
 
-def _store(ctx: BotContext) -> DictPostingRepo:
-    return DictPostingRepo(ctx.deps.store.kv, ACCOUNT)
+def _store(ctx: BotContext) -> MemoryPostingRepo:
+    return memory_repo(ctx.deps.store.kv)
 
 
 @requires_ffmpeg
@@ -185,7 +186,7 @@ def test_missed_slot_is_dropped_and_off_and_paused(ctx: BotContext) -> None:
     assert tick(ctx, at(8, 31)) == f"{ACCOUNT}: no slot"
     _store(ctx).set_paused(ACCOUNT, True, at(7))
     assert tick(ctx, at(12)) == f"{ACCOUNT}: paused"
-    ctx.deps.posting = dict_posting(ctx.deps.store.kv, env_account(make_settings(ctx.deps.root)))
+    ctx.deps.posting = memory_posting(ctx.deps.store.kv, make_account())
     assert tick(ctx, at(12)) == "off"  # no posting chat: no account to serve
     assert _sender(ctx).videos == []
 
@@ -233,13 +234,12 @@ def test_send_next_ignores_slots_and_reports_empty(ctx: BotContext) -> None:
 
 
 def test_resend_numbering_survives_a_lost_send_key(ctx: BotContext) -> None:
-    """A clip whose sent:1 key was lost (bad value) but has sent:2 is numbered 3 next, never a
-    duplicate 2 that would be silently dropped (Plan B review M4)."""
+    """A clip with send 2 but no send 1 (a key lost from the old Dict store) is numbered 3 next,
+    never a duplicate 2 that would be silently dropped (Plan B review M4)."""
     store = _store(ctx)
     for r in store.records(ACCOUNT):
         store.set_verdict(r.item.id, PostVerdict(kind="rejected", at=at(7, days=-3)))
     target = store.records(ACCOUNT)[0].item
-    ctx.deps.store.kv.delete(f"post:{target.id}:verdict")
     store.add_send(target.id, send(2, at(7, days=-3)))
     store.set_verdict(target.id, PostVerdict(kind="skipped", at=at(7, days=-2)))
     assert send_next(ctx, at(9)) == ""
@@ -285,15 +285,15 @@ def test_lost_race_deletes_the_duplicate_delivery(
     ctx: BotContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A tick and /next (or two Skips) picked the same clip; the other caller recorded it first."""
-    real_add = DictPostingRepo.add_send
+    real_add = MemoryPostingRepo.add_send
 
     def other_caller_first(
-        self: DictPostingRepo, ref: str, sent: PostSend, chat_id: int | None = None
+        self: MemoryPostingRepo, ref: str, sent: PostSend, chat_id: int | None = None
     ) -> bool:
         real_add(self, ref, sent.model_copy(update={"message_id": 900, "video_message_id": 899}))
         return real_add(self, ref, sent)
 
-    monkeypatch.setattr(DictPostingRepo, "add_send", other_caller_first)
+    monkeypatch.setattr(MemoryPostingRepo, "add_send", other_caller_first)
     assert send_next(ctx, at(9)) == ""
     sender = _sender(ctx)
     assert len(sender.videos) == 1  # no second clip sent
@@ -465,7 +465,7 @@ def test_expired_or_narrowed_permission_holds_at_the_tick(tmp_path: Path, db: Da
 
 
 def test_tap_redraws_every_message_of_a_resent_clip(tmp_path: Path) -> None:
-    ctx = dict_ctx(tmp_path)
+    ctx = memory_ctx(tmp_path)
     repo = ctx.deps.posting.repo  # type: ignore[union-attr]
     repo.add(item(), list(LEGACY_PLATFORMS))
     repo.add_send(REF, send(1, message_id=100))
@@ -494,7 +494,7 @@ def test_tap_from_another_accounts_chat_changes_nothing(tmp_path: Path, db: Data
 def test_save_failure_is_answered_not_raised(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    ctx = dict_ctx(tmp_path)
+    ctx = memory_ctx(tmp_path)
     repo = ctx.deps.posting.repo  # type: ignore[union-attr]
     repo.add(item(), list(LEGACY_PLATFORMS))
     repo.toggle_posted = lambda *a: (_ for _ in ()).throw(RuntimeError("down"))  # type: ignore[method-assign]
@@ -537,14 +537,16 @@ def test_tick_without_a_due_slot_never_reads_the_database(tmp_path: Path, db: Da
     assert tick(ctx, noon) == "founder-tapes-en: no slot; realtalk-clips-en: no slot"
 
 
-def test_postgres_mode_hashtags_come_from_the_account(tmp_path: Path, db: Database) -> None:
+def test_hashtags_come_from_the_account(
+    tmp_path: Path, db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
     ctx = two_account_ctx(tmp_path, db)
     realtalk = AccountsRepo(db).get("realtalk-clips-en")
     assert realtalk is not None
     AccountsRepo(db).update(realtalk.model_copy(update={"posting": realtalk.posting.model_copy(
         update={"hashtags": ["fromaccount"]})}), T0)  # fmt: skip
-    env = make_settings(tmp_path, state_reads="postgres", posting_chat_id=ALLOWED_USER,
-                        posting_slots=["08:00"], posting_hashtags="fromenv")  # fmt: skip
+    monkeypatch.setenv("POSTING_HASHTAGS", "fromenv")  # retired by card 040: never read
+    env = make_settings(tmp_path)
     ctx.deps.posting = build_posting(env, ctx.deps.store.kv, db)
     result = tick(ctx, datetime(2026, 9, 29, 8, 1, tzinfo=ZoneInfo("America/New_York")))
     assert "realtalk-clips-en: sent" in result
@@ -579,9 +581,9 @@ def test_tick_alerts_on_an_account_error_and_on_missing_schedule_copies(
     assert any("no schedule copies" in t for _, t, _ in alerts.messages)
 
 
-def test_tick_alerts_when_postgres_mode_has_no_database(tmp_path: Path) -> None:
+def test_tick_alerts_without_a_database(tmp_path: Path) -> None:
     deps = Harness.build(tmp_path).deps
-    settings = make_settings(tmp_path, state_reads="postgres")
+    settings = make_settings(tmp_path)
     deps.posting = build_posting(settings, deps.store.kv, None)
     ctx = BotContext(settings, FakeSender(), deps)
     alerts = _with_ops(ctx)
@@ -589,28 +591,14 @@ def test_tick_alerts_when_postgres_mode_has_no_database(tmp_path: Path) -> None:
     assert alerts.messages[-1][1] == "⚠️ Posting is off: DATABASE_URL is not configured"
 
 
-def test_a_bad_state_reads_turns_the_tick_off_with_an_alert(tmp_path: Path) -> None:
-    # card 039: a typo in STATE_READS stops posting, never the app
-    harness = Harness.build(tmp_path)
-    settings = make_settings(tmp_path, state_reads="postgress", posting_chat_id=ALLOWED_USER)
-    harness.deps.posting = build_posting(settings, harness.store.kv, None)
-    ctx = BotContext(settings, FakeSender(), harness.deps)
-    alerts = _with_ops(ctx)
-    assert tick(ctx, at(8)).startswith("off: STATE_READS must be dict or postgres")
-    assert _sender(ctx).videos == []
-    assert alerts.messages[-1][1] == (
-        "⚠️ Posting is off: STATE_READS must be dict or postgres, got 'postgress'"
-    )
-
-
 def test_the_tick_sends_nothing_during_an_outage_and_go_clears_it(ctx: BotContext) -> None:
-    # coordinator's G review: the outage flag stops the slots until the owner restores or /go
+    # coordinator's G review: the outage flag stops the slots until the owner sends /go
     from clipforge.bot.webhook import handle_update
-    from clipforge.posting.keepalive import OUTAGE_KEY, outage_since
+    from clipforge.posting.outage import OUTAGE_KEY, outage_since
     from tests.bot.fakes import update
 
     ctx.deps.store.kv.put(OUTAGE_KEY, "2026-09-25")
-    assert tick(ctx, at(8)) == "outage since 2026-09-25: restore, check /status, then /go"
+    assert tick(ctx, at(8)) == "outage since 2026-09-25: check /status, then /go"
     assert _sender(ctx).videos == []
     handle_update(update(1, text="/go", user_id=ALLOWED_USER), ctx)
     assert outage_since(ctx.deps.store.kv) is None

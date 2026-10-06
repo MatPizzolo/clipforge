@@ -193,8 +193,9 @@ def summary_of(
 def record_job(
     deps: Deps, job: Job, *, costs: list[StageCost] | None = None, metadata_path: str | None = None
 ) -> None:
-    """Best-effort durable row (spec §7): metadata.json stays the record, and `jobs backfill`
-    repairs a missed write, so a database error never fails or retries a step."""
+    """Best-effort durable row (spec §7): metadata.json stays the record, and
+    `posting_daily`'s backfill repairs a missed write, so a database error never fails or
+    retries a step."""
     if deps.jobs_db is None:
         return
     try:
@@ -449,8 +450,8 @@ def package_step(deps: Deps, job_id: str) -> None:
         # Queue before saving DONE too: a retry that sees DONE returns without queueing.
         _enqueue_posts(deps, job, rendered)
         deps.store.save(job)
-        # After the DONE save: the jobs row is a best-effort mirror (`jobs backfill` recreates
-        # it), so a slow or down database never delays the DONE status.
+        # After the DONE save: the jobs row is a best-effort mirror (`posting_daily`'s backfill
+        # recreates it), so a slow or down database never delays the DONE status.
         record_job_with_costs(deps, job, stored.value.metadata_path)
 
     _guarded(deps, Step.PACKAGE, job_id, body)

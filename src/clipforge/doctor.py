@@ -76,16 +76,18 @@ def local_checks() -> list[Check]:
 
 
 class _ZoneSettings(BaseSettings):
-    """The raw time-zone settings: config.Settings falls back to defaults on a bad value
-    (posting turns off), which would hide the failure this check is for."""
+    """The raw time-zone settings: config.Settings ignores a bad OWNER_TIMEZONE, which would
+    hide the failure this check is for. POSTING_TIMEZONE is read only by `scripts/deploy.py`'s
+    blackout since S1 Task 23 (card 040), so it is checked when `.env` still sets it."""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-    posting_timezone: str = "America/New_York"
+    posting_timezone: str = ""
     owner_timezone: str = ""
 
 
 def configured_zones() -> list[str]:
-    """POSTING_TIMEZONE, OWNER_TIMEZONE (if set) and UTC, from the environment and `.env`."""
+    """POSTING_TIMEZONE and OWNER_TIMEZONE (each if set) and UTC, from the environment and
+    `.env`."""
     zones = _ZoneSettings()
     names = [zones.posting_timezone.strip(), zones.owner_timezone.strip(), "UTC"]
     return [name for name in names if name]

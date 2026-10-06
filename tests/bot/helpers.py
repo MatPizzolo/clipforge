@@ -1,4 +1,5 @@
-"""Shared bot test contexts: the Dict posting store (today) and two accounts on Postgres."""
+"""Shared bot test contexts: one account over the in-memory posting repo, and two accounts on
+Postgres."""
 
 from __future__ import annotations
 
@@ -10,20 +11,21 @@ from clipforge.accounts.service import publish_schedule
 from clipforge.bot.context import BotContext
 from clipforge.db.engine import Database
 from clipforge.models import LEGACY_PLATFORMS
-from clipforge.posting.backend import build_posting, dict_posting
+from clipforge.posting.backend import build_posting
 from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
 from tests.dbhelpers import BILLY_SOURCE, make_account, seed
 from tests.pipeline.harness import Harness
 from tests.posting.builders import JOB, item
+from tests.posting.memory import memory_posting
 
 if TYPE_CHECKING:
     from clipforge.dispatch.tasks import DispatchCtx
 
 
-def dict_ctx(tmp_path: Path) -> BotContext:
-    """Today's setup: the Dict posting store, account #1 with a posting chat."""
+def memory_ctx(tmp_path: Path) -> BotContext:
+    """One account with a posting chat over the in-memory repo, no database."""
     deps = Harness.build(tmp_path).deps
-    deps.posting = dict_posting(deps.store.kv, make_account(chat_id=ALLOWED_USER))
+    deps.posting = memory_posting(deps.store.kv, make_account(chat_id=ALLOWED_USER))
     return BotContext(make_settings(tmp_path), FakeSender(), deps)
 
 
@@ -35,7 +37,7 @@ def two_account_ctx(tmp_path: Path, db: Database, founder_chat: int = ALLOWED_US
     seed(db, *accounts,
          sources=[BILLY_SOURCE, BILLY_SOURCE.model_copy(
              update={"id": "founder-src", "account_id": "founder-tapes-en"})])  # fmt: skip
-    settings = make_settings(tmp_path, state_reads="postgres")
+    settings = make_settings(tmp_path)
     deps = Harness.build(tmp_path).deps
     for account in accounts:  # as the accounts service does on create (card 002 A3)
         publish_schedule(deps.store.kv, account)

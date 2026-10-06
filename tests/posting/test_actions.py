@@ -75,7 +75,7 @@ def test_a_dashboard_action_records_the_web_actor_and_redraws_telegram(
     tmp_path: Path, db: Database
 ) -> None:
     ctx = two_account_ctx(tmp_path, db)
-    ctx = BotContext(make_settings(tmp_path, state_reads="postgres", dashboard_url=DASH),
+    ctx = BotContext(make_settings(tmp_path, dashboard_url=DASH),
                      ctx.sender, ctx.deps)  # fmt: skip
     mid = _sent(ctx)
     posting = _posting(ctx)

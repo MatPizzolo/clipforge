@@ -148,11 +148,6 @@
             ],
             "title": "Language",
             "type": "string"
-          },
-          "posting_from_env": {
-            "default": false,
-            "title": "Posting From Env",
-            "type": "boolean"
           }
         },
         "required": [
@@ -615,43 +610,6 @@
         "title": "AutopilotView",
         "type": "object"
       },
-      "BackfillReport": {
-        "additionalProperties": false,
-        "description": "Result of `jobs backfill`.",
-        "properties": {
-          "dry_run": {
-            "title": "Dry Run",
-            "type": "boolean"
-          },
-          "failed": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Failed",
-            "type": "array"
-          },
-          "from_dict": {
-            "default": 0,
-            "title": "From Dict",
-            "type": "integer"
-          },
-          "from_metadata": {
-            "default": 0,
-            "title": "From Metadata",
-            "type": "integer"
-          },
-          "written": {
-            "default": 0,
-            "title": "Written",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "dry_run"
-        ],
-        "title": "BackfillReport",
-        "type": "object"
-      },
       "BrandKit": {
         "additionalProperties": false,
         "properties": {
@@ -1012,70 +970,6 @@
           }
         },
         "title": "HTTPValidationError",
-        "type": "object"
-      },
-      "ImportReport": {
-        "additionalProperties": false,
-        "description": "Result of `posting import` (Dict queue -> Postgres, spec \u00a75.5).",
-        "properties": {
-          "already": {
-            "default": 0,
-            "title": "Already",
-            "type": "integer"
-          },
-          "by_status": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "propertyNames": {
-              "$ref": "#/components/schemas/PostStatus"
-            },
-            "title": "By Status",
-            "type": "object"
-          },
-          "dict_items": {
-            "default": 0,
-            "title": "Dict Items",
-            "type": "integer"
-          },
-          "dry_run": {
-            "title": "Dry Run",
-            "type": "boolean"
-          },
-          "failed": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Failed",
-            "type": "array"
-          },
-          "from_snapshot": {
-            "default": 0,
-            "title": "From Snapshot",
-            "type": "integer"
-          },
-          "imported": {
-            "default": 0,
-            "title": "Imported",
-            "type": "integer"
-          },
-          "missing_source": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Missing Source",
-            "type": "array"
-          },
-          "paused": {
-            "default": false,
-            "title": "Paused",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "dry_run"
-        ],
-        "title": "ImportReport",
         "type": "object"
       },
       "JobError": {
@@ -2076,43 +1970,6 @@
         ],
         "title": "ValidationError",
         "type": "object"
-      },
-      "VerifyReport": {
-        "additionalProperties": false,
-        "description": "Dict versus Postgres for one account.",
-        "properties": {
-          "account_id": {
-            "title": "Account Id",
-            "type": "string"
-          },
-          "dict_items": {
-            "default": 0,
-            "title": "Dict Items",
-            "type": "integer"
-          },
-          "differences": {
-            "default": 0,
-            "title": "Differences",
-            "type": "integer"
-          },
-          "first": {
-            "items": {
-              "type": "string"
-            },
-            "title": "First",
-            "type": "array"
-          },
-          "postgres_items": {
-            "default": 0,
-            "title": "Postgres Items",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "account_id"
-        ],
-        "title": "VerifyReport",
-        "type": "object"
       }
     }
   },
@@ -2617,62 +2474,6 @@
         "summary": "Post Job"
       }
     },
-    "/jobs/backfill": {
-      "post": {
-        "operationId": "post_jobs_backfill_jobs_backfill_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "dry_run",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Dry Run",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackfillReport"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Post Jobs Backfill"
-      }
-    },
     "/jobs/{job_id}": {
       "get": {
         "operationId": "get_job_jobs__job_id__get",
@@ -2884,62 +2685,6 @@
         "summary": "Get Posting"
       }
     },
-    "/posting/import": {
-      "post": {
-        "operationId": "post_posting_import_posting_import_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "dry_run",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Dry Run",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ImportReport"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Post Posting Import"
-      }
-    },
     "/posting/rebuild": {
       "post": {
         "operationId": "post_posting_rebuild_posting_rebuild_post",
@@ -2988,118 +2733,6 @@
           }
         },
         "summary": "Post Posting Rebuild"
-      }
-    },
-    "/posting/restore": {
-      "post": {
-        "operationId": "post_posting_restore_posting_restore_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "date",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Date"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
-                  "title": "Response Post Posting Restore Posting Restore Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Post Posting Restore"
-      }
-    },
-    "/posting/verify": {
-      "get": {
-        "operationId": "get_posting_verify_posting_verify_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VerifyReport"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Posting Verify"
       }
     },
     "/sources": {

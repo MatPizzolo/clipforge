@@ -1,4 +1,5 @@
-"""What posting needs, bundled per STATE_READS mode (spec §5.1, ADR-41)."""
+"""What posting needs, bundled (spec §5.1, ADR-41): the Postgres repo, the Dict claims and the
+schedule copies. Postgres only since S1 Task 23 (card 040)."""
 
 from __future__ import annotations
 
@@ -6,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from clipforge.accounts.service import env_account, read_schedules
+from clipforge.accounts.service import read_schedules
 from clipforge.config import Settings
 from clipforge.db.accounts import AccountsRepo
 from clipforge.db.engine import Database, DatabaseUnavailable
@@ -14,7 +15,7 @@ from clipforge.db.posting import SqlPostingRepo
 from clipforge.db.sources import SourcesRepo
 from clipforge.models import Account, ScheduleCopy, Source
 from clipforge.pipeline.deps import KV
-from clipforge.posting.repo import DictPostingRepo, DualPostingRepo, PostingClaims, PostingRepo
+from clipforge.posting.repo import PostingClaims, PostingRepo
 
 if TYPE_CHECKING:
     from clipforge.pipeline.steps import Deps
@@ -58,9 +59,8 @@ class Posting:
         return found.get
 
     def all_schedules(self) -> dict[str, ScheduleCopy]:
-        """Every account's schedule and publish path, without touching Postgres in postgres
-        mode (the Dict copies the accounts service writes). In dict mode the env account's,
-        always assisted (S2 spec §4.1)."""
+        """Every account's schedule and publish path, without touching Postgres (the Dict copies
+        the accounts service writes, #203)."""
         if self.schedules is not None:
             return self.schedules()
         return {a.id: ScheduleCopy.of(a.posting) for a in self.accounts()}
@@ -89,27 +89,13 @@ def posting_of(deps: Deps) -> Posting:
     return deps.posting
 
 
-def dict_posting(kv: KV, account: Account, problem: str | None = None) -> Posting:
-    return Posting(DictPostingRepo(kv, account.id), PostingClaims(kv), lambda: [account],
-                   _no_source, account.id, problem=problem)  # fmt: skip
-
-
 def build_posting(settings: Settings, kv: KV, db: Database | None) -> Posting:
     claims = PostingClaims(kv)
     default = settings.posting_account_id
-    # A bad STATE_READS reads the Dict (settings set `dict`) with posting off and alerted
-    problem = settings.state_reads_problem
     if db is None:
-        if settings.state_reads == "postgres":
-            return Posting(cast(PostingRepo, _Unavailable(NO_DATABASE)), claims, lambda: [],
-                           _no_source, default, requires_source=True, problem=NO_DATABASE)  # fmt: skip  # noqa: E501
-        return dict_posting(kv, env_account(settings), problem)
-    dict_repo, sql = DictPostingRepo(kv, default), SqlPostingRepo(db)
+        return Posting(cast(PostingRepo, _Unavailable(NO_DATABASE)), claims, lambda: [],
+                       _no_source, default, requires_source=True, problem=NO_DATABASE)  # fmt: skip
     sources = SourcesRepo(db)
-    if settings.state_reads == "postgres":
-        return Posting(DualPostingRepo(sql, dict_repo), claims, AccountsRepo(db).list,
-                       sources.get, default, requires_source=True,
-                       schedules=lambda: read_schedules(kv), all_sources=sources.list)  # fmt: skip
-    env = env_account(settings)
-    return Posting(DualPostingRepo(dict_repo, sql), claims, lambda: [env], sources.get, default,
-                   problem=problem, all_sources=sources.list)  # fmt: skip
+    return Posting(SqlPostingRepo(db), claims, AccountsRepo(db).list, sources.get, default,
+                   requires_source=True, schedules=lambda: read_schedules(kv),
+                   all_sources=sources.list)  # fmt: skip

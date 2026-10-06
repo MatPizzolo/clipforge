@@ -22,7 +22,8 @@ from clipforge.models import (
 )
 from clipforge.pipeline.deps import MemoryKV, SpawnCall
 from clipforge.pipeline.steps import JobNotResumable, fail_job, resume
-from clipforge.posting.repo import DictPostingRepo
+from clipforge.posting.backend import NO_DATABASE
+from clipforge.schedule import DEFAULT_SLOTS
 from clipforge.service import (
     create_job,
     get_job_view,
@@ -30,12 +31,14 @@ from clipforge.service import (
     posting_overview,
     resume_job,
 )
-from tests.bot.fakes import ALLOWED_USER, make_settings
+from tests.bot.fakes import ALLOWED_USER
 from tests.bot.helpers import two_account_ctx
+from tests.dbhelpers import make_account
 from tests.pipeline.fakes import FakeStages
 from tests.pipeline.harness import Harness
 from tests.posting.builders import ACCOUNT, JOB
 from tests.posting.builders import run_channel_job as channel_job
+from tests.posting.memory import memory_posting
 from tests.test_models import ALL_SAMPLES, JobMetadata
 
 
@@ -86,16 +89,23 @@ def test_resume_job_returns_the_view(tmp_path: Path) -> None:
         resume_job(h.deps, h.submit())
 
 
+def _chat(harness: Harness, chat: int | None = ALLOWED_USER, problem: str | None = None) -> None:
+    """Account #1 with (or without) a posting chat on the six default slots, over the same
+    in-memory queue (what the POSTING_* settings described before card 040)."""
+    account = make_account(chat_id=chat, slots=DEFAULT_SLOTS)
+    harness.deps.posting = memory_posting(harness.store.kv, account, problem)
+
+
 def test_posting_overview_counts(harness: Harness) -> None:
     channel_job(harness)
-    store = DictPostingRepo(harness.store.kv, ACCOUNT)
+    store = harness.queue()
     first, second, _third = sorted(store.records(ACCOUNT), key=lambda r: r.item.id)
     at = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
     for platform in LEGACY_PLATFORMS:
         store.toggle_posted(first.item.id, platform, at)
     store.set_verdict(second.item.id, PostVerdict(kind="rejected", at=at))
-    settings = make_settings(harness.root, posting_chat_id=ALLOWED_USER)
-    view = posting_overview(harness.deps, settings, at)
+    _chat(harness)
+    view = posting_overview(harness.deps, at)
     [channel] = view.channels
     assert channel.slug == "billy-garton"
     assert (channel.episodes_clipped, channel.episodes_failed) == (1, 0)
@@ -106,21 +116,22 @@ def test_posting_overview_counts(harness: Harness) -> None:
         True, False, 1, 6, 1
     )  # fmt: skip
     assert view.next_slot is not None and view.next_slot > at
-    off = posting_overview(harness.deps, make_settings(harness.root), at + timedelta(days=1))
+    _chat(harness, None)
+    off = posting_overview(harness.deps, at + timedelta(days=1))
     assert off.enabled is False
 
 
-def test_posting_overview_reports_the_config_problem(harness: Harness) -> None:
-    settings = make_settings(harness.root, posting_chat_id=ALLOWED_USER, posting_slots="9am")
-    view = posting_overview(harness.deps, settings, datetime(2026, 9, 29, tzinfo=UTC))
-    assert view.enabled is False and view.problem is not None and "HH:MM" in view.problem
+def test_posting_overview_reports_the_posting_problem(harness: Harness) -> None:
+    _chat(harness, problem=NO_DATABASE)
+    view = posting_overview(harness.deps, datetime(2026, 9, 29, tzinfo=UTC))
+    assert view.problem == NO_DATABASE and view.state == "problem"
 
 
 def test_overview_has_every_account_and_keeps_top_level_fields(
     tmp_path: Path, db: Database
 ) -> None:
     ctx = two_account_ctx(tmp_path, db)
-    view = posting_overview(ctx.deps, ctx.settings, datetime(2026, 9, 29, 12, 0, tzinfo=UTC))
+    view = posting_overview(ctx.deps, datetime(2026, 9, 29, 12, 0, tzinfo=UTC))
     assert [a.account_id for a in view.accounts] == ["founder-tapes-en", "realtalk-clips-en"]
     realtalk = view.accounts[1]
     assert view.waiting == realtalk.waiting == 1 and view.per_day == realtalk.per_day == 1
@@ -205,7 +216,7 @@ def test_overview_state_posted_total_unanswered_and_last_send(tmp_path: Path, db
     posting = ctx.deps.posting
     assert posting is not None
     noon = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
-    view = posting_overview(ctx.deps, ctx.settings, noon)
+    view = posting_overview(ctx.deps, noon)
     assert (view.state, view.posted_total) == ("on", 0)
     assert view.accounts[1].unanswered == 0 and view.accounts[1].last_sent_at is None
 
@@ -214,13 +225,13 @@ def test_overview_state_posted_total_unanswered_and_last_send(tmp_path: Path, db
     posting.repo.add_send(
         ref, PostSend(n=1, at=sent_at, slot=None, message_id=5, video_message_id=4), ALLOWED_USER
     )
-    realtalk = posting_overview(ctx.deps, ctx.settings, noon).accounts[1]
+    realtalk = posting_overview(ctx.deps, noon).accounts[1]
     assert (realtalk.unanswered, realtalk.last_sent_at, realtalk.state) == (1, sent_at, "on")
 
     for platform in LEGACY_PLATFORMS:
         posting.repo.set_posted(ref, platform, True, sent_at)
     posting.repo.set_paused("founder-tapes-en", True, sent_at)
-    view = posting_overview(ctx.deps, ctx.settings, noon)
+    view = posting_overview(ctx.deps, noon)
     founder, realtalk = view.accounts
     assert (view.posted_total, realtalk.posted_total, realtalk.unanswered) == (1, 1, 0)
     assert (founder.state, realtalk.state, view.state) == ("paused", "on", "on")
@@ -228,18 +239,19 @@ def test_overview_state_posted_total_unanswered_and_last_send(tmp_path: Path, db
 
 def test_overview_state_waiting_off_and_problem(harness: Harness) -> None:
     channel_job(harness)
-    store = DictPostingRepo(harness.store.kv, ACCOUNT)
+    store = harness.queue()
     at = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
     first, second, _ = sorted(store.records(ACCOUNT), key=lambda r: r.item.id)
     for n, record in enumerate((first, second), start=1):
         store.add_send(
             record.item.id, PostSend(n=1, at=at, slot=None, message_id=n, video_message_id=n)
         )
-    on = make_settings(harness.root, posting_chat_id=ALLOWED_USER)
-    assert posting_overview(harness.deps, on, at).state == "waiting"  # the pause rule holds
-    assert posting_overview(harness.deps, make_settings(harness.root), at).state == "off"
-    broken = make_settings(harness.root, posting_chat_id=ALLOWED_USER, posting_slots="9am")
-    assert posting_overview(harness.deps, broken, at).state == "problem"
+    _chat(harness)
+    assert posting_overview(harness.deps, at).state == "waiting"  # the pause rule holds
+    _chat(harness, None)
+    assert posting_overview(harness.deps, at).state == "off"
+    _chat(harness, problem=NO_DATABASE)
+    assert posting_overview(harness.deps, at).state == "problem"
 
 
 def test_job_summaries_take_a_newer_dict_record_over_its_row(tmp_path: Path, db: Database) -> None:
@@ -278,21 +290,21 @@ def test_a_row_without_cost_rows_takes_the_breakdown_from_metadata(
     assert all(c.stage is not StageName.PACKAGE for c in view.cost.stages)
 
 
-def test_restore_clears_the_outage_and_status_shows_it(harness: Harness) -> None:
+def test_status_shows_the_outage_until_it_is_cleared(harness: Harness) -> None:
     from clipforge.bot.messages import posting_overview_text
-    from clipforge.posting.keepalive import OUTAGE_KEY, outage_since
-    from clipforge.service import restore_posting
+    from clipforge.posting.outage import OUTAGE_KEY, clear_outage
 
     channel_job(harness)
     harness.store.kv.put(OUTAGE_KEY, "2026-09-25")
-    settings = make_settings(harness.root, posting_chat_id=ALLOWED_USER)
+    _chat(harness)
     at = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
-    view = posting_overview(harness.deps, settings, at)
+    view = posting_overview(harness.deps, at)
     assert (view.state, view.outage_since) == ("outage", "2026-09-25")
-    assert "posting_daily didn't run since 2026-09-25" in posting_overview_text(view)
-    restore_posting(harness.deps)
-    assert outage_since(harness.store.kv) is None
-    assert posting_overview(harness.deps, settings, at).state == "on"
+    text = posting_overview_text(view)
+    assert "no posting table snapshot since 2026-09-25" in text and "/go" in text
+    assert "restore" not in text.lower()
+    clear_outage(harness.store.kv)  # what /go does
+    assert posting_overview(harness.deps, at).state == "on"
 
 
 # ---- card 039: the overview's reads don't grow with the number of jobs and clips
@@ -325,7 +337,7 @@ def _overview_selects(ctx: BotContext, db: Database, extra: int) -> int:
 
     event.listen(db.engine, "before_cursor_execute", capture)
     try:
-        view = posting_overview(ctx.deps, ctx.settings, datetime(2026, 9, 29, 12, tzinfo=UTC))
+        view = posting_overview(ctx.deps, datetime(2026, 9, 29, 12, tzinfo=UTC))
     finally:
         event.remove(db.engine, "before_cursor_execute", capture)
     assert view.accounts[1].waiting == 1 + extra

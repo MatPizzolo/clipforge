@@ -1,4 +1,5 @@
-"""One behavior for every PostingRepo (spec §9.1): Dict, Sql and both Dual directions."""
+"""One behavior for every PostingRepo (spec §9.1): Sql, and the in-memory fake the fast tests
+use (card 040 retired the Dict and Dual repos)."""
 
 from __future__ import annotations
 
@@ -8,13 +9,12 @@ from datetime import timedelta
 import pytest
 
 from clipforge.models import LEGACY_PLATFORMS, Platform, PostVerdict, RejectReason
-from clipforge.pipeline.deps import MemoryKV
-from clipforge.posting.repo import DictPostingRepo, PostingRepo
+from clipforge.posting.repo import PostingRepo
 from tests.posting.builders import ACCOUNT, T0, item, send
+from tests.posting.memory import MemoryPostingRepo
 
 PLATFORMS = list(LEGACY_PLATFORMS)
 Factory = Callable[[pytest.FixtureRequest], PostingRepo]
-FACTORIES: dict[str, Factory] = {"dict": lambda request: DictPostingRepo(MemoryKV(), ACCOUNT)}
 
 
 def _sql(request: pytest.FixtureRequest) -> PostingRepo:
@@ -26,21 +26,7 @@ def _sql(request: pytest.FixtureRequest) -> PostingRepo:
     return SqlPostingRepo(db)
 
 
-FACTORIES["sql"] = _sql
-
-
-def _dual(primary: str) -> Factory:
-    def build(request: pytest.FixtureRequest) -> PostingRepo:
-        from clipforge.posting.repo import DualPostingRepo
-
-        sql, dict_ = _sql(request), DictPostingRepo(MemoryKV(), ACCOUNT)
-        return DualPostingRepo(sql, dict_) if primary == "sql" else DualPostingRepo(dict_, sql)
-
-    return build
-
-
-FACTORIES["dual-sql"] = _dual("sql")
-FACTORIES["dual-dict"] = _dual("dict")
+FACTORIES: dict[str, Factory] = {"memory": lambda request: MemoryPostingRepo(), "sql": _sql}
 
 
 @pytest.fixture(params=sorted(FACTORIES))

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from clipforge.bot.messages import posting_overview_text
+from clipforge.bot.messages import POSTING_OFF, posting_overview_text
 from clipforge.models import AccountPosting, ChannelProgress, PostingOverview, PostStatus
 
 
@@ -32,7 +32,7 @@ def test_posting_overview_text_off_paused_and_empty() -> None:
                           per_day=6, next_slot=None)  # fmt: skip
     assert posting_overview_text(off, "UTC").splitlines() == [
         "No channel clips yet. Add videos to videos/<channel>/ and run `clipforge clip`.",
-        "Posting is off (set POSTING_CHAT_ID).",
+        POSTING_OFF,
     ]
     paused = off.model_copy(update={"enabled": True, "paused": True})
     assert posting_overview_text(paused, "UTC").splitlines()[-1] == "Paused. Send /go to restart."
@@ -41,9 +41,9 @@ def test_posting_overview_text_off_paused_and_empty() -> None:
 def test_posting_overview_text_names_a_config_problem() -> None:
     view = PostingOverview(enabled=False, paused=False, channels=[], waiting=0, days_left=0,
                            per_day=6, next_slot=None,
-                           problem="POSTING_SLOTS: slots must be HH:MM, e.g. 08:00")  # fmt: skip
+                           problem="DATABASE_URL is not configured")  # fmt: skip
     assert posting_overview_text(view, "UTC").splitlines()[-1] == (
-        "Posting is off: POSTING_SLOTS: slots must be HH:MM, e.g. 08:00"
+        "Posting is off: DATABASE_URL is not configured"
     )
 
 

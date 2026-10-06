@@ -3,9 +3,8 @@
 Telegram's taps and commands call these, and S3's admin endpoint will too, so one backend
 writes each change. Every write carries an actor (`telegram:<user id>`, `web:<login>`,
 `session:<name>` or `cli:<os user>`), which Postgres keeps in `post_events.data.actor`
-(S3c D3). A database error becomes `ActionFailed(STORE_UNAVAILABLE)`: the primary store
-raised before writing, and the Dual mirror only runs after a primary success, so nothing
-changed.
+(S3c D3). A database error becomes `ActionFailed(STORE_UNAVAILABLE)`: Postgres raised before
+the write committed, so nothing changed.
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ from clipforge.models import Account, Brake, Platform, PostVerdict, RejectReason
 from clipforge.pipeline.deps import KV
 from clipforge.posting import brake
 from clipforge.posting.backend import Posting, posting_of
-from clipforge.posting.keepalive import clear_outage
+from clipforge.posting.outage import clear_outage
 from clipforge.posting.repo import PostingRepo
 
 log = logging.getLogger(__name__)
@@ -206,7 +205,7 @@ def _known(posting: Posting, accounts: list[Account]) -> set[str]:
     known = {a.id for a in accounts}
     try:
         known |= set(posting.all_schedules())
-    except Exception as exc:  # dict mode without settings: posting accounts only
+    except Exception as exc:  # the Dict unreadable: posting accounts only
         log.warning("posting: reading the schedule copies failed: %s", redact(exc))
     return known
 

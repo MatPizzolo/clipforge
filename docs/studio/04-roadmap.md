@@ -71,7 +71,7 @@ Built by card 002 (PR #5), deployed Dict-only on 2026-10-02, and rolled out by *
 - [x] Ops alerts for silent failures and the daily reconcile `posting_daily` (ADR-45, ADR-46).
 - [x] Task 21 split: 21a (blueprints mounted, a read-only `db_doctor` Modal check, `.env.example`) before 21b (the database wired into `build_deps`, deployed only at rollout step 4c.2).
 - [x] Rollout rule: only realtalk.clipsdaily is created and hand-posted until S2; founder.tapes and hombre.en.construccion are created just before S2 (#106, refined by #135 and ADR-48).
-- [ ] ADR-24 retires (Task 23): after 7 days in a row on Postgres with `posting_daily: verify` at 0 differences (from 2026-10-06), a later session removes the Dict copy of the queue and `posting_daily`'s Dict touch, snapshot and verify.
+- [x] ADR-24 retires (Task 23, card 040): after 2 days in a row on Postgres with `posting_daily: verify` at 0 differences (log #154), the Dict copy of the queue, `STATE_READS`, the `POSTING_*` settings and `posting_daily`'s Dict touch, snapshot and verify are removed.
 - **Exit:** everything from S0 works the same, but state lives in Postgres and any number of accounts can be defined.
 
 ## S2: Publishing: Upload-Post, review tiers, policy gate

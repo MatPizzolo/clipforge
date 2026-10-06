@@ -92,8 +92,8 @@ def _reply_for(message: Message, target: TelegramTarget, ctx: BotContext) -> str
         case JobCommand(name="resume", job_id=job_id):
             return _resume(ctx, job_id)
         case PostingCommand(name="overview"):
-            view = posting_overview(ctx.deps, ctx.settings, utcnow())
-            return posting_overview_text(view, ctx.settings.posting_timezone)
+            view = posting_overview(ctx.deps, utcnow())
+            return posting_overview_text(view, ctx.settings.owner_zone())
         case PostingCommand(name="next", account=account):
             return actions.send_next(ctx, utcnow(), account)
         case PostingCommand(name="pause" | "go" as name, account=account):

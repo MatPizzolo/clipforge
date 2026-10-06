@@ -6,7 +6,6 @@ and the Telegram bridge uses `asyncio.run`, which needs a thread without a runni
 
 from __future__ import annotations
 
-import datetime as dt
 import hmac
 import logging
 import re
@@ -44,8 +43,6 @@ from clipforge.models import (
     Account,
     AutopilotChange,
     AutopilotView,
-    BackfillReport,
-    ImportReport,
     JobInput,
     JobView,
     PolicyDryRun,
@@ -53,11 +50,9 @@ from clipforge.models import (
     Source,
     SourceEvent,
     Submission,
-    VerifyReport,
 )
 from clipforge.pipeline.steps import Deps, JobNotResumable
 from clipforge.policy.checks import dry_run
-from clipforge.posting import migrate
 from clipforge.posting.backend import posting_of
 from clipforge.service import (
     PostingOutage,
@@ -65,7 +60,6 @@ from clipforge.service import (
     get_job_view,
     posting_overview,
     rebuild_posting,
-    restore_posting,
     resume_job,
 )
 
@@ -251,19 +245,13 @@ def create_app(ctx: ApiContext) -> FastAPI:
     def post_job(job_input: JobInput) -> dict[str, str]:
         return {"job_id": create_job(ctx.deps(), job_input).job_id}
 
-    @app.post("/jobs/backfill", dependencies=authorized)
-    def post_jobs_backfill(dry_run: bool = False) -> BackfillReport:
-        deps = ctx.deps()
-        reload(deps)
-        return migrate.backfill_jobs(deps.store.kv, deps.root, database(), dry_run)
-
     @app.get("/jobs/{job_id}", dependencies=authorized)
     def get_job(job_id: str) -> JobView:
         return view(job_id)
 
     @app.get("/posting", dependencies=authorized)
     def get_posting() -> PostingOverview:
-        return posting_overview(ctx.deps(), settings, utcnow())
+        return posting_overview(ctx.deps(), utcnow())
 
     @app.post("/posting/rebuild", dependencies=authorized)
     def post_posting_rebuild() -> dict[str, int]:
@@ -273,30 +261,6 @@ def create_app(ctx: ApiContext) -> FastAPI:
             return {"added": rebuild_posting(deps, utcnow())}
         except PostingOutage as exc:
             raise HTTPException(409, str(exc)) from None
-
-    @app.post("/posting/import", dependencies=authorized)
-    def post_posting_import(dry_run: bool = False) -> ImportReport:
-        deps = ctx.deps()
-        reload(deps)
-        return migrate.import_posting(
-            deps.store.kv, deps.root, database(), settings.posting_account_id, dry_run
-        )
-
-    @app.get("/posting/verify", dependencies=authorized)
-    def get_posting_verify() -> VerifyReport:
-        return migrate.verify_posting(ctx.deps().store.kv, database(), settings.posting_account_id)
-
-    @app.post("/posting/restore", dependencies=authorized)
-    def post_posting_restore(date: str | None = None) -> dict[str, int]:
-        day = None
-        if date is not None:
-            try:
-                day = dt.date.fromisoformat(date)
-            except ValueError:
-                raise HTTPException(400, "date must be YYYY-MM-DD") from None
-        deps = ctx.deps()
-        reload(deps)
-        return {"restored": restore_posting(deps, day)}
 
     @app.post("/jobs/{job_id}/resume", dependencies=authorized)
     def post_resume(job_id: str) -> JobView:

@@ -6,26 +6,21 @@ Secrets are `SecretStr` so they never show up in reprs or logs (CLAUDE.md rule 8
 from __future__ import annotations
 
 import logging
-import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from clipforge.models import Permission
-from clipforge.schedule import (
-    DEFAULT_SLOTS,
-    normalize_hashtags,
-    normalize_slots,
-    schedule_problem,
-)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 log = logging.getLogger(__name__)
-_WORD = re.compile(r"[A-Za-z_ -]{1,20}")
+# Quiet hours and planning when OWNER_TIMEZONE is unset (it fell back to POSTING_TIMEZONE, whose
+# default this was, until S1 Task 23, card 040)
+DEFAULT_OWNER_ZONE = "America/New_York"
 
 
 class TokenPrice(BaseModel):
@@ -67,6 +62,8 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         env_ignore_empty=True,
+        # Unknown keys are ignored, never an error: S1 Task 23 (card 040) removed STATE_READS and
+        # the POSTING_* settings, and a key still left in the secret must not stop the app (#226)
         extra="ignore",
     )
 
@@ -94,29 +91,16 @@ class Settings(BaseSettings):
     default_clip_len: Annotated[tuple[float, float], NoDecode] = (30.0, 60.0)
     default_permission: Permission = Permission.OWN
 
-    # Posting assistant (ADR-23): off until POSTING_CHAT_ID is set
-    posting_chat_id: int | None = None
-    posting_timezone: str = "America/New_York"  # the audience's time zone
-    posting_slots: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: list(DEFAULT_SLOTS)
-    )
-    posting_hashtags: Annotated[list[str], NoDecode] = []  # without "#"
-    # Why posting is off despite POSTING_CHAT_ID (set by the check below; not an env value)
-    posting_problem: str | None = None
-
     # The dashboard (ADR-38, ADR-44): bot messages get URL buttons to its pages (08 §2b).
     # Unset or invalid = no buttons; never an error, since every step loads these settings.
     dashboard_url: str | None = None
-    # The owner's time zone for ops-alert quiet hours (ADR-45); unset = POSTING_TIMEZONE
+    # The owner's time zone for ops-alert quiet hours (ADR-45); unset = DEFAULT_OWNER_ZONE
     owner_timezone: str | None = None
 
-    # Durable state (ADR-26, S1): Neon's pooled URL; reads come from `state_reads` (ADR-41)
+    # Durable state (ADR-26, S1): Neon's pooled URL. Every account holds its own posting
+    # schedule there (ADR-41); without it posting is off
     database_url: SecretStr | None = None
-    state_reads: Literal["dict", "postgres"] = "dict"
-    # Why STATE_READS was ignored (set by the check below; not an env value). A typo there
-    # read as `dict` with posting off, never a crash (card 039)
-    state_reads_problem: str | None = None
-    # The account the Dict queue and the POSTING_* settings belong to (dict mode, seeding)
+    # Account #1: the posting overview's top-level fields and the default for /next and /pause
     posting_account_id: str = "realtalk-clips-en"
     blueprints_dir: Path = _REPO_ROOT / "blueprints"
 
@@ -160,28 +144,7 @@ class Settings(BaseSettings):
 
     def owner_zone(self) -> str:
         """Where planning, the digest and quiet hours run (R3, log #455)."""
-        return self.owner_timezone or self.posting_timezone
-
-    @model_validator(mode="before")
-    @classmethod
-    def _check_state_reads(cls, data: object) -> object:
-        """An unknown STATE_READS reads the Dict, which every posting action still writes
-        until S1 Task 23 (ADR-41), and turns posting off; a crash here would stop every
-        container (rollout 2026-10-05, card 039)."""
-        if not isinstance(data, dict):
-            return data
-        data = {k: v for k, v in data.items() if k != "state_reads_problem"}  # never from env
-        raw = data.get("state_reads")
-        if not isinstance(raw, str):
-            return data
-        value = raw.strip().lower()
-        if value in ("dict", "postgres"):
-            return {**data, "state_reads": value}
-        # a mangled secret line can hold a URL or token: echo only what looks like a word
-        shown = repr(raw) if _WORD.fullmatch(raw) else f"a value of {len(raw)} characters"
-        problem = f"STATE_READS must be dict or postgres, got {shown}"
-        log.warning("%s; reading the Dict, posting is off", problem)
-        return {**data, "state_reads": "dict", "state_reads_problem": problem}
+        return self.owner_timezone or DEFAULT_OWNER_ZONE
 
     @field_validator("telegram_allowed_user_ids", mode="before")
     @classmethod
@@ -214,13 +177,6 @@ class Settings(BaseSettings):
             raise ValueError("clip length must satisfy 0 < min < max")
         return value
 
-    @field_validator("posting_slots", "posting_hashtags", mode="before")
-    @classmethod
-    def _split_list(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [part.strip() for part in value.split(",") if part.strip()]
-        return value
-
     @field_validator("dashboard_url", mode="before")
     @classmethod
     def _dashboard_url(cls, value: object) -> object:
@@ -245,50 +201,6 @@ class Settings(BaseSettings):
             log.warning("OWNER_TIMEZONE ignored: not a time zone")
             return None
         return value.strip()
-
-    @field_validator("posting_chat_id", mode="before")
-    @classmethod
-    def _empty_chat_is_off(cls, value: object) -> object:
-        return None if isinstance(value, str) and not value.strip() else value
-
-    @field_validator("posting_slots", mode="after")
-    @classmethod
-    def _pad_slots(cls, value: list[str]) -> list[str]:
-        return normalize_slots(value)
-
-    @field_validator("posting_hashtags", mode="after")
-    @classmethod
-    def _strip_hash(cls, value: list[str]) -> list[str]:
-        return normalize_hashtags(value)
-
-    @model_validator(mode="after")
-    def _check_posting(self) -> Self:
-        """A posting mistake turns posting off (with the reason in /status), never the app:
-        every Modal step and the CLI load these settings (spec §10)."""
-        problem = _posting_problem(self)
-        if problem is not None:
-            log.warning("posting is off: %s", problem)
-            self.posting_problem = problem
-            self.posting_chat_id = None
-            self.posting_timezone = "America/New_York"
-            self.posting_slots = list(DEFAULT_SLOTS)
-            self.posting_hashtags = []
-        return self
-
-
-def _posting_problem(settings: Settings) -> str | None:
-    if settings.state_reads_problem is not None:
-        return settings.state_reads_problem
-    problem = schedule_problem(
-        settings.posting_timezone, settings.posting_slots, settings.posting_hashtags
-    )
-    if problem is not None:
-        field, message = problem
-        return f"POSTING_{field.upper()}: {message}"
-    chat = settings.posting_chat_id
-    if chat is not None and chat not in settings.telegram_allowed_user_ids:
-        return "POSTING_CHAT_ID must be one of TELEGRAM_ALLOWED_USER_IDS"
-    return None
 
 
 @lru_cache(maxsize=1)

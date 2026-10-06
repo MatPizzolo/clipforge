@@ -11,9 +11,8 @@ from clipforge.db.engine import Database
 from clipforge.db.jobs import JobsRepo
 from clipforge.jobs import utcnow
 from clipforge.models import ContentItem, Job, JobInput, JobStatus, Platform
-from clipforge.posting import keepalive
 from clipforge.posting.backend import build_posting
-from clipforge.posting.repo import DictPostingRepo
+from clipforge.posting.outage import clear_outage, set_outage
 from clipforge.service import PostingOutage, create_job, rebuild_posting
 from tests.bot.fakes import make_settings
 from tests.dbhelpers import BILLY_SOURCE, make_account, seed
@@ -24,7 +23,7 @@ from tests.posting.builders import run_channel_job as channel_job
 
 def test_channel_job_clips_are_queued(harness: Harness) -> None:
     job_id = channel_job(harness)
-    records = DictPostingRepo(harness.store.kv, ACCOUNT).records(ACCOUNT)
+    records = harness.queue().records(ACCOUNT)
     assert len(records) == 3
     assert {r.item.clip.job_id for r in records if r.item.clip} == {job_id}
     assert all(r.item.source_id == BILLY.slug and r.item.credits == [BILLY.name] for r in records)
@@ -35,7 +34,7 @@ def test_channel_job_clips_are_queued(harness: Harness) -> None:
 
 def test_job_without_channel_is_not_queued(harness: Harness) -> None:
     channel_job(harness, channel=None)
-    assert DictPostingRepo(harness.store.kv, ACCOUNT).records(ACCOUNT) == []
+    assert harness.queue().records(ACCOUNT) == []
 
 
 def test_enqueue_failure_never_fails_the_job(
@@ -56,7 +55,7 @@ def test_rebuild_queues_old_channel_jobs_once(
     monkeypatch.setattr("clipforge.pipeline.steps.enqueue_job", lambda *a, **k: 0)  # "old" job
     channel_job(harness)
     monkeypatch.undo()
-    assert DictPostingRepo(harness.store.kv, ACCOUNT).records(ACCOUNT) == []
+    assert harness.queue().records(ACCOUNT) == []
     assert rebuild_posting(harness.deps, utcnow()) == 3
     assert rebuild_posting(harness.deps, utcnow()) == 0
 
@@ -68,13 +67,13 @@ def test_rebuild_refuses_during_an_outage(
     monkeypatch.setattr("clipforge.pipeline.steps.enqueue_job", lambda *a, **k: 0)  # "old" job
     channel_job(harness)
     monkeypatch.undo()
-    keepalive.set_outage(harness.store.kv, "2026-09-20")
+    set_outage(harness.store.kv, "2026-09-20")
     with pytest.raises(PostingOutage) as raised:
         rebuild_posting(harness.deps, utcnow())
     assert "2026-09-20" in str(raised.value)
-    assert "clipforge status --restore 2026-09-20" in str(raised.value)
-    assert DictPostingRepo(harness.store.kv, ACCOUNT).records(ACCOUNT) == []  # nothing queued
-    keepalive.clear_outage(harness.store.kv)  # /go or a restore
+    assert "/go" in str(raised.value) and "restore" not in str(raised.value)
+    assert harness.queue().records(ACCOUNT) == []  # nothing queued
+    clear_outage(harness.store.kv)  # what /go does
     assert rebuild_posting(harness.deps, utcnow()) == 3
 
 
@@ -97,7 +96,7 @@ def test_crash_right_after_done_still_queues(
 
     monkeypatch.setattr(harness.store, "save", save_then_die)
     channel_job(harness)
-    assert crashed and len(DictPostingRepo(harness.store.kv, ACCOUNT).records(ACCOUNT)) == 3
+    assert crashed and len(harness.queue().records(ACCOUNT)) == 3
 
 
 def test_rebuild_skips_a_broken_job_and_continues(
@@ -109,9 +108,7 @@ def test_rebuild_skips_a_broken_job_and_continues(
     monkeypatch.undo()
     (harness.root / broken / "output" / "metadata.json").unlink()  # e.g. the Volume was cleaned
     assert rebuild_posting(harness.deps, utcnow()) == 3
-    assert {
-        r.item.id.split(":")[0] for r in DictPostingRepo(harness.store.kv, ACCOUNT).records(ACCOUNT)
-    } == {other}
+    assert {r.item.id.split(":")[0] for r in harness.queue().records(ACCOUNT)} == {other}
 
 
 def run_channel_job_for(harness: Harness, label: str, url: str) -> str:
@@ -160,9 +157,7 @@ def test_rebuild_reads_jobs_table_and_metadata_even_after_dict_keys_expire(
     seed(db, make_account(), sources=[BILLY_SOURCE])
     harness = Harness.build(tmp_path)
     harness.deps.jobs_db = JobsRepo(db)
-    harness.deps.posting = build_posting(
-        make_settings(tmp_path, state_reads="postgres"), harness.store.kv, db
-    )
+    harness.deps.posting = build_posting(make_settings(tmp_path), harness.store.kv, db)
     run_id = channel_job(harness)
     assert run_id
     queued = len(harness.deps.posting.repo.records("realtalk-clips-en"))

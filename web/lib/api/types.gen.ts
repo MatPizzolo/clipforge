@@ -79,10 +79,6 @@ export type AccountCreate = {
      * Language
      */
     language: 'en' | 'es';
-    /**
-     * Posting From Env
-     */
-    posting_from_env?: boolean;
 };
 
 /**
@@ -327,34 +323,6 @@ export type AutopilotView = {
 };
 
 /**
- * BackfillReport
- *
- * Result of `jobs backfill`.
- */
-export type BackfillReport = {
-    /**
-     * Dry Run
-     */
-    dry_run: boolean;
-    /**
-     * Failed
-     */
-    failed?: Array<string>;
-    /**
-     * From Dict
-     */
-    from_dict?: number;
-    /**
-     * From Metadata
-     */
-    from_metadata?: number;
-    /**
-     * Written
-     */
-    written?: number;
-};
-
-/**
  * BrandKit
  */
 export type BrandKit = {
@@ -554,52 +522,6 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
-};
-
-/**
- * ImportReport
- *
- * Result of `posting import` (Dict queue -> Postgres, spec §5.5).
- */
-export type ImportReport = {
-    /**
-     * Already
-     */
-    already?: number;
-    /**
-     * By Status
-     */
-    by_status?: {
-        [key in PostStatus]?: number;
-    };
-    /**
-     * Dict Items
-     */
-    dict_items?: number;
-    /**
-     * Dry Run
-     */
-    dry_run: boolean;
-    /**
-     * Failed
-     */
-    failed?: Array<string>;
-    /**
-     * From Snapshot
-     */
-    from_snapshot?: number;
-    /**
-     * Imported
-     */
-    imported?: number;
-    /**
-     * Missing Source
-     */
-    missing_source?: Array<string>;
-    /**
-     * Paused
-     */
-    paused?: boolean;
 };
 
 /**
@@ -1122,34 +1044,6 @@ export type ValidationError = {
 };
 
 /**
- * VerifyReport
- *
- * Dict versus Postgres for one account.
- */
-export type VerifyReport = {
-    /**
-     * Account Id
-     */
-    account_id: string;
-    /**
-     * Dict Items
-     */
-    dict_items?: number;
-    /**
-     * Differences
-     */
-    differences?: number;
-    /**
-     * First
-     */
-    first?: Array<string>;
-    /**
-     * Postgres Items
-     */
-    postgres_items?: number;
-};
-
-/**
  * CostSummary
  */
 export type CostSummaryWritable = {
@@ -1483,42 +1377,6 @@ export type PostJobJobsPostResponses = {
 
 export type PostJobJobsPostResponse = PostJobJobsPostResponses[keyof PostJobJobsPostResponses];
 
-export type PostJobsBackfillJobsBackfillPostData = {
-    body?: never;
-    headers?: {
-        /**
-         * Authorization
-         */
-        authorization?: string | null;
-    };
-    path?: never;
-    query?: {
-        /**
-         * Dry Run
-         */
-        dry_run?: boolean;
-    };
-    url: '/jobs/backfill';
-};
-
-export type PostJobsBackfillJobsBackfillPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostJobsBackfillJobsBackfillPostError = PostJobsBackfillJobsBackfillPostErrors[keyof PostJobsBackfillJobsBackfillPostErrors];
-
-export type PostJobsBackfillJobsBackfillPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: BackfillReport;
-};
-
-export type PostJobsBackfillJobsBackfillPostResponse = PostJobsBackfillJobsBackfillPostResponses[keyof PostJobsBackfillJobsBackfillPostResponses];
-
 export type GetJobJobsJobIdGetData = {
     body?: never;
     headers?: {
@@ -1659,42 +1517,6 @@ export type GetPostingPostingGetResponses = {
 
 export type GetPostingPostingGetResponse = GetPostingPostingGetResponses[keyof GetPostingPostingGetResponses];
 
-export type PostPostingImportPostingImportPostData = {
-    body?: never;
-    headers?: {
-        /**
-         * Authorization
-         */
-        authorization?: string | null;
-    };
-    path?: never;
-    query?: {
-        /**
-         * Dry Run
-         */
-        dry_run?: boolean;
-    };
-    url: '/posting/import';
-};
-
-export type PostPostingImportPostingImportPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostPostingImportPostingImportPostError = PostPostingImportPostingImportPostErrors[keyof PostPostingImportPostingImportPostErrors];
-
-export type PostPostingImportPostingImportPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: ImportReport;
-};
-
-export type PostPostingImportPostingImportPostResponse = PostPostingImportPostingImportPostResponses[keyof PostPostingImportPostingImportPostResponses];
-
 export type PostPostingRebuildPostingRebuildPostData = {
     body?: never;
     headers?: {
@@ -1729,77 +1551,6 @@ export type PostPostingRebuildPostingRebuildPostResponses = {
 };
 
 export type PostPostingRebuildPostingRebuildPostResponse = PostPostingRebuildPostingRebuildPostResponses[keyof PostPostingRebuildPostingRebuildPostResponses];
-
-export type PostPostingRestorePostingRestorePostData = {
-    body?: never;
-    headers?: {
-        /**
-         * Authorization
-         */
-        authorization?: string | null;
-    };
-    path?: never;
-    query?: {
-        /**
-         * Date
-         */
-        date?: string | null;
-    };
-    url: '/posting/restore';
-};
-
-export type PostPostingRestorePostingRestorePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostPostingRestorePostingRestorePostError = PostPostingRestorePostingRestorePostErrors[keyof PostPostingRestorePostingRestorePostErrors];
-
-export type PostPostingRestorePostingRestorePostResponses = {
-    /**
-     * Response Post Posting Restore Posting Restore Post
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: number;
-    };
-};
-
-export type PostPostingRestorePostingRestorePostResponse = PostPostingRestorePostingRestorePostResponses[keyof PostPostingRestorePostingRestorePostResponses];
-
-export type GetPostingVerifyPostingVerifyGetData = {
-    body?: never;
-    headers?: {
-        /**
-         * Authorization
-         */
-        authorization?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/posting/verify';
-};
-
-export type GetPostingVerifyPostingVerifyGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetPostingVerifyPostingVerifyGetError = GetPostingVerifyPostingVerifyGetErrors[keyof GetPostingVerifyPostingVerifyGetErrors];
-
-export type GetPostingVerifyPostingVerifyGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: VerifyReport;
-};
-
-export type GetPostingVerifyPostingVerifyGetResponse = GetPostingVerifyPostingVerifyGetResponses[keyof GetPostingVerifyPostingVerifyGetResponses];
 
 export type GetSourcesSourcesGetData = {
     body?: never;

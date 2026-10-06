@@ -41,33 +41,6 @@ def _events(db: Database, ref: str) -> list[str]:
         return [r.kind for r in rows]
 
 
-def test_import_round_trips_and_is_idempotent(db: Database) -> None:
-    from clipforge.models import Platform, PostVerdict
-    from tests.posting.builders import T0, item, record, send
-
-    repo = _repo(db)
-    it = item()
-    rec = record(
-        it, sends=[send(1)], posted=[Platform.TIKTOK],
-        verdict=PostVerdict(kind="skipped", at=T0),
-    )  # fmt: skip
-    assert repo.import_record(rec, chat_id=5) is True
-    assert repo.get(it.id) == rec
-    assert repo.import_record(rec, chat_id=5) is False
-    assert repo.get(it.id) == rec
-    assert _events(db, it.id) == ["imported"]
-
-
-def test_import_without_assets_or_platforms(db: Database) -> None:
-    from tests.posting.builders import item, record
-
-    repo = _repo(db)
-    it = item().model_copy(update={"assets": []})
-    assert repo.import_record(record(it, platforms=[]), chat_id=None) is True
-    got = repo.get(it.id)
-    assert got is not None and got.item.assets == [] and got.platforms == []
-
-
 def test_mark_unavailable_logs_once(db: Database) -> None:
     from tests.posting.builders import T0, item
 

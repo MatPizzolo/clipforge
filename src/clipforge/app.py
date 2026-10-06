@@ -306,16 +306,16 @@ def dispatch_task(name: str, key: str) -> None:
     secrets=[secrets],
 )
 def posting_daily() -> None:
-    """The daily reconcile (ADR-46, was posting_keepalive): keep the Dict's posting keys alive
-    and snapshot them (ADR-24), verify against Postgres, backfill job rows, rewrite the schedule
-    copies, rebuild the queue and snapshot the posting tables."""
+    """The daily reconcile (ADR-46, was posting_keepalive): repair the brakes, backfill job
+    rows, rewrite the schedule copies, rebuild the queue and snapshot the posting tables (its
+    Dict parts retired with S1 Task 23, card 040)."""
     from clipforge.jobs import utcnow
     from clipforge.posting.daily import run_daily
 
     deps = _service_deps()
     try:
         deps.volume.reload()
-        lines = run_daily(deps, _database(), get_settings().posting_account_id, utcnow())
+        lines = run_daily(deps, _database(), utcnow())
         deps.volume.commit()
     except Exception as exc:
         if deps.ops is not None:

@@ -1,4 +1,4 @@
-"""Posting schedule rules shared by the POSTING_* settings and account schedules (spec §6.2)."""
+"""Posting schedule rules for account schedules and `scripts/deploy.py`'s blackout (spec §6.2)."""
 
 from __future__ import annotations
 

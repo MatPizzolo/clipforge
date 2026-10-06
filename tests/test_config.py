@@ -4,7 +4,6 @@ import pytest
 from pydantic import ValidationError
 
 from clipforge.config import Prices, Settings
-from tests.bot.fakes import ALLOWED_USER, make_settings
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -13,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in (
         "DATABASE_URL",
-        "STATE_READS",
+        "OWNER_TIMEZONE",
         "ANTHROPIC_API_KEY",
         "TELEGRAM_BOT_TOKEN",
         "TELEGRAM_ALLOWED_USER_IDS",
@@ -116,98 +115,48 @@ def test_reframe_settings() -> None:
     assert (s.models_dir / "face_detection_yunet_2023mar.onnx").is_file()
 
 
-def test_posting_settings_parse_env_strings(tmp_path: Path) -> None:
-    s = make_settings(
-        tmp_path, posting_chat_id=ALLOWED_USER, posting_slots="09:00, 18:30",
-        posting_hashtags="mindset,growth", posting_timezone="Europe/Madrid",
-    )  # fmt: skip
-    assert s.posting_slots == ["09:00", "18:30"]
-    assert s.posting_hashtags == ["mindset", "growth"]
-
-
-def test_posting_settings_are_normalized(tmp_path: Path) -> None:
-    s = make_settings(tmp_path, posting_slots="8:00, 18:30", posting_hashtags="#mindset,growth")
-    assert s.posting_slots == ["08:00", "18:30"]
-    assert s.posting_hashtags == ["mindset", "growth"]
-
-
-@pytest.mark.parametrize(
-    ("overrides", "problem"),
-    [
-        ({"posting_timezone": "Mars/Olympus"}, "time zone"),
-        ({"posting_timezone": "America"}, "time zone"),  # a tzdata folder: IsADirectoryError
-        ({"posting_slots": "9am"}, "HH:MM"),
-        ({"posting_slots": "18:00,09:00"}, "in order"),
-        ({"posting_slots": ""}, "slots"),
-        ({"posting_hashtags": "mind set"}, "hashtags"),
-        ({"posting_chat_id": 999}, "TELEGRAM_ALLOWED_USER_IDS"),  # not an allowed user
-    ],
-)
-def test_bad_posting_settings_turn_posting_off_not_the_app(
-    tmp_path: Path, overrides: dict[str, object], problem: str
-) -> None:
-    # a posting typo in the Modal secret must not stop every pipeline step from starting
-    s = make_settings(tmp_path, **{"posting_chat_id": ALLOWED_USER, **overrides})
-    assert s.posting_chat_id is None
-    assert s.posting_problem is not None and problem in s.posting_problem
-    assert s.posting_slots and s.posting_timezone  # safe defaults for the slot code
-
-
-def test_empty_posting_chat_id_means_off(tmp_path: Path) -> None:
-    # `.env.example` ships `POSTING_CHAT_ID=`; copying it as-is must not break the settings
-    assert make_settings(tmp_path, posting_chat_id="").posting_chat_id is None
-
-
-def test_database_and_state_settings(tmp_path: Path) -> None:
+def test_database_settings(tmp_path: Path) -> None:
     settings = Settings(
         _env_file=None,
         jobs_root=tmp_path,
         database_url="postgresql://u:s3cr3tpw@host.neon.tech/db?sslmode=require",
-        state_reads="postgres",
     )
-    assert settings.state_reads == "postgres"
     assert settings.database_url is not None
     assert "s3cr3tpw" not in repr(settings)
     assert settings.posting_account_id == "realtalk-clips-en"
     assert (settings.blueprints_dir / "realtalk-clips.toml").name == "realtalk-clips.toml"
-    defaults = Settings(_env_file=None, jobs_root=tmp_path)
-    assert defaults.state_reads == "dict" and defaults.database_url is None
+    assert Settings(_env_file=None, jobs_root=tmp_path).database_url is None
 
 
-@pytest.mark.parametrize("value", ["postgress", "sql", "Postgres "])
-def test_a_bad_state_reads_turns_posting_off_not_the_app(tmp_path: Path, value: str) -> None:
-    # card 039 / rollout 010: `STATE_READS=postgress` failed every container for 5 minutes
-    s = make_settings(tmp_path, posting_chat_id=ALLOWED_USER, state_reads=value)
-    if value.strip().lower() == "postgres":  # case and spaces are forgiven
-        assert s.state_reads == "postgres" and s.state_reads_problem is None
-        return
-    assert s.state_reads == "dict"  # the Dict is still written on every action (ADR-41)
-    assert s.state_reads_problem == f"STATE_READS must be dict or postgres, got {value!r}"
-    assert s.posting_problem == s.state_reads_problem
-    assert s.posting_chat_id is None
+RETIRED = {  # card 040 (S1 Task 23) removed these settings; the secret may still hold them
+    "STATE_READS": "postgress",
+    "POSTING_CHAT_ID": "999",
+    "POSTING_TIMEZONE": "Mars/Olympus",
+    "POSTING_SLOTS": "9am",
+    "POSTING_HASHTAGS": "mind set",
+    "STATE_READS_PROBLEM": "forged",
+    "POSTING_PROBLEM": "forged",
+}
 
 
-def test_a_bad_state_reads_from_the_environment(
+def test_leftover_retired_keys_never_break_settings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("STATE_READS", "postgress")
+    # the #226 rule: a stale key in clipforge-secrets can't take the app down. Even bad values
+    # (the ones that used to turn posting off) are ignored now
+    for name, value in RETIRED.items():
+        monkeypatch.setenv(name, value)
     s = Settings(_env_file=None, jobs_root=tmp_path)  # type: ignore[call-arg]
-    assert s.state_reads == "dict"
-    assert s.state_reads_problem is not None and "postgress" in s.state_reads_problem
+    for name in RETIRED:
+        assert not hasattr(s, name.lower())
+    assert s.owner_zone() == "America/New_York"  # POSTING_TIMEZONE no longer feeds it
 
 
-def test_a_mangled_state_reads_is_not_echoed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # security review: a missing newline can put a connection string in the value
-    monkeypatch.setenv("STATE_READS", "postgres DATABASE_URL=postgresql://u:pw@host/db")
-    monkeypatch.setenv("STATE_READS_PROBLEM", "forged")
-    s = Settings(_env_file=None, jobs_root=tmp_path)  # type: ignore[call-arg]
-    expected = "STATE_READS must be dict or postgres, got a value of 47 characters"
-    assert s.state_reads_problem == expected
-    monkeypatch.setenv("STATE_READS", "dict")
-    fine = Settings(_env_file=None, jobs_root=tmp_path)  # type: ignore[call-arg]
-    assert fine.state_reads_problem is None
+def test_leftover_retired_keys_in_an_env_file(tmp_path: Path) -> None:
+    env = tmp_path / ".env"
+    env.write_text("".join(f"{k}={v}\n" for k, v in RETIRED.items()) + "API_URL=https://a.b\n")
+    s = Settings(_env_file=env, jobs_root=tmp_path)  # type: ignore[call-arg]
+    assert s.api_url == "https://a.b" and not hasattr(s, "state_reads")
 
 
 def test_dashboard_url_is_optional_and_never_breaks_settings(tmp_path: Path) -> None:
@@ -236,8 +185,6 @@ def test_s2_settings_defaults() -> None:
     assert not hasattr(s, "review_batch")
 
 
-def test_owner_zone_falls_back_to_posting_timezone() -> None:
-    assert (
-        Settings(_env_file=None, posting_timezone="Europe/Madrid").owner_zone() == "Europe/Madrid"
-    )
+def test_owner_zone_defaults_to_new_york() -> None:
+    assert Settings(_env_file=None).owner_zone() == "America/New_York"
     assert Settings(_env_file=None, owner_timezone="UTC").owner_zone() == "UTC"

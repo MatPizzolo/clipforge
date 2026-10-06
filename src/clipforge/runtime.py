@@ -32,7 +32,6 @@ from clipforge.ops import ops_alerts
 from clipforge.pipeline.deps import KV, Notifier, NullNotifier, Spawner, StageRunner, Volume
 from clipforge.pipeline.steps import Deps, Step
 from clipforge.posting.backend import build_posting
-from clipforge.posting.repo import DualPostingRepo
 from clipforge.stages.runner import producer_version
 
 if TYPE_CHECKING:
@@ -154,10 +153,6 @@ def build_deps(
     root = settings.jobs_root
     ops = ops_alerts(kv, sender, settings)
     posting = build_posting(settings, kv, db)
-    if ops is not None and isinstance(posting.repo, DualPostingRepo):
-        posting.repo.on_failure = lambda action, error: ops.alert(
-            f"Posting mirror write ({action}) failed: {error}. `clipforge posting verify` "
-            "shows the drift.", "mirror", action)  # fmt: skip
     return Deps(
         store=store,
         volume=volume,
@@ -181,7 +176,7 @@ def build_dispatch_ctx(
     db: Callable[[], Database | None],
 ) -> DispatchCtx:
     """The dispatcher's context (ADR-27): the same `Posting` and ops alerts `posting_tick` used
-    (built by `build_deps`), so with no DATABASE_URL the env account posts exactly as before."""
+    (built by `build_deps`); with no DATABASE_URL posting is off (`Posting.problem`)."""
     from clipforge.bot.context import BotContext
     from clipforge.dispatch.tasks import DispatchCtx
     from clipforge.posting.backend import posting_of

@@ -9,8 +9,7 @@ export const zAccountCreate = z.object({
     blueprint: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
     handle: z.string().regex(/^[A-Za-z0-9._]{1,30}$/),
     id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).nullish(),
-    language: z.enum(['en', 'es']),
-    posting_from_env: z.boolean().optional().default(false)
+    language: z.enum(['en', 'es'])
 });
 
 /**
@@ -79,19 +78,6 @@ export const zAutopilotView = z.object({
     history: z.array(zAutopilotEvent),
     label: z.string(),
     waiting_on: z.record(z.string(), z.string())
-});
-
-/**
- * BackfillReport
- *
- * Result of `jobs backfill`.
- */
-export const zBackfillReport = z.object({
-    dry_run: z.boolean(),
-    failed: z.array(z.string()).optional(),
-    from_dict: z.int().optional().default(0),
-    from_metadata: z.int().optional().default(0),
-    written: z.int().optional().default(0)
 });
 
 /**
@@ -289,23 +275,6 @@ export const zAccountPosting = z.object({
     timezone: z.string().optional().default('UTC'),
     unanswered: z.int().optional().default(0),
     waiting: z.int().optional().default(0)
-});
-
-/**
- * ImportReport
- *
- * Result of `posting import` (Dict queue -> Postgres, spec §5.5).
- */
-export const zImportReport = z.object({
-    already: z.int().optional().default(0),
-    by_status: z.record(z.string(), z.int()).optional(),
-    dict_items: z.int().optional().default(0),
-    dry_run: z.boolean(),
-    failed: z.array(z.string()).optional(),
-    from_snapshot: z.int().optional().default(0),
-    imported: z.int().optional().default(0),
-    missing_source: z.array(z.string()).optional(),
-    paused: z.boolean().optional().default(false)
 });
 
 /**
@@ -592,19 +561,6 @@ export const zHttpValidationError = z.object({
 });
 
 /**
- * VerifyReport
- *
- * Dict versus Postgres for one account.
- */
-export const zVerifyReport = z.object({
-    account_id: z.string(),
-    dict_items: z.int().optional().default(0),
-    differences: z.int().optional().default(0),
-    first: z.array(z.string()).optional(),
-    postgres_items: z.int().optional().default(0)
-});
-
-/**
  * CostSummary
  */
 export const zCostSummaryWritable = z.object({
@@ -736,19 +692,6 @@ export const zPostJobJobsPostHeaders = z.object({
  */
 export const zPostJobJobsPostResponse = z.record(z.string(), z.string());
 
-export const zPostJobsBackfillJobsBackfillPostHeaders = z.object({
-    authorization: z.string().nullish()
-});
-
-export const zPostJobsBackfillJobsBackfillPostQuery = z.object({
-    dry_run: z.boolean().optional().default(false)
-});
-
-/**
- * Successful Response
- */
-export const zPostJobsBackfillJobsBackfillPostResponse = zBackfillReport;
-
 export const zGetJobJobsJobIdGetHeaders = z.object({
     authorization: z.string().nullish()
 });
@@ -793,19 +736,6 @@ export const zGetPostingPostingGetHeaders = z.object({
  */
 export const zGetPostingPostingGetResponse = zPostingOverview;
 
-export const zPostPostingImportPostingImportPostHeaders = z.object({
-    authorization: z.string().nullish()
-});
-
-export const zPostPostingImportPostingImportPostQuery = z.object({
-    dry_run: z.boolean().optional().default(false)
-});
-
-/**
- * Successful Response
- */
-export const zPostPostingImportPostingImportPostResponse = zImportReport;
-
 export const zPostPostingRebuildPostingRebuildPostHeaders = z.object({
     authorization: z.string().nullish()
 });
@@ -816,30 +746,6 @@ export const zPostPostingRebuildPostingRebuildPostHeaders = z.object({
  * Successful Response
  */
 export const zPostPostingRebuildPostingRebuildPostResponse = z.record(z.string(), z.int());
-
-export const zPostPostingRestorePostingRestorePostHeaders = z.object({
-    authorization: z.string().nullish()
-});
-
-export const zPostPostingRestorePostingRestorePostQuery = z.object({
-    date: z.string().nullish()
-});
-
-/**
- * Response Post Posting Restore Posting Restore Post
- *
- * Successful Response
- */
-export const zPostPostingRestorePostingRestorePostResponse = z.record(z.string(), z.int());
-
-export const zGetPostingVerifyPostingVerifyGetHeaders = z.object({
-    authorization: z.string().nullish()
-});
-
-/**
- * Successful Response
- */
-export const zGetPostingVerifyPostingVerifyGetResponse = zVerifyReport;
 
 export const zGetSourcesSourcesGetHeaders = z.object({
     authorization: z.string().nullish()

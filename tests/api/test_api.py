@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
 import pytest
@@ -12,7 +11,7 @@ from fastapi.testclient import TestClient
 from clipforge.api.main import ApiContext, create_app
 from clipforge.links import sign
 from clipforge.pipeline.deps import SpawnCall
-from clipforge.posting import keepalive
+from clipforge.posting.outage import set_outage
 from tests.bot.fakes import FakeSender, make_settings, update
 from tests.pipeline.harness import Harness
 from tests.posting.builders import run_channel_job as channel_job
@@ -202,34 +201,23 @@ def test_posting_overview_and_rebuild(harness: Harness) -> None:
     view = client.get("/posting", headers=AUTH).json()
     assert view["channels"][0]["slug"] == "billy-garton"
     assert client.post("/posting/rebuild", headers=AUTH).json() == {"added": 0}
-    assert client.post("/posting/restore").status_code == 401
-    assert client.post("/posting/restore", headers=AUTH).json() == {"restored": 0}
 
 
 def test_posting_rebuild_refuses_during_an_outage(harness: Harness) -> None:
-    keepalive.set_outage(harness.store.kv, "2026-09-20")
+    set_outage(harness.store.kv, "2026-09-20")
     response = _client(harness).post("/posting/rebuild", headers=AUTH)
     assert response.status_code == 409
-    assert "clipforge status --restore 2026-09-20" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "2026-09-20" in detail and "/go" in detail and "restore" not in detail
 
 
-def test_posting_restore_takes_a_date(harness: Harness) -> None:
-    kv = harness.store.kv
-    kv.put("post:job_a:clip_01", "{}")
-    keepalive.snapshot(kv, harness.root, datetime(2026, 9, 20, tzinfo=UTC))
-    kv.delete("post:job_a:clip_01")
-    keepalive.snapshot(kv, harness.root, datetime(2026, 9, 29, tzinfo=UTC))
-    client = _client(harness)
-    assert client.post("/posting/restore", headers=AUTH).json() == {"restored": 0}
-    answer = client.post("/posting/restore?date=2026-09-20", headers=AUTH)
-    assert answer.json() == {"restored": 1}
-    for bad in ("2026-13-01", "yesterday", "../x"):
-        assert client.post(f"/posting/restore?date={bad}", headers=AUTH).status_code == 400
-
-
-def test_posting_import_without_a_database_is_503_and_needs_the_token(harness: Harness) -> None:
-    client = _client(harness)
-    response = client.post("/posting/import", headers=AUTH)
-    assert response.status_code == 503
-    assert response.json() == {"detail": "DATABASE_URL is not configured"}
-    assert client.post("/posting/import").status_code == 401
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("POST", "/posting/import"), ("GET", "/posting/verify"), ("POST", "/jobs/backfill"),
+     ("POST", "/posting/restore")],
+)  # fmt: skip
+def test_the_dict_store_routes_are_gone(harness: Harness, method: str, path: str) -> None:
+    # card 040 (S1 Task 23): the import, verify, backfill and restore routes retired with the
+    # Dict posting store; `/jobs/backfill` must not fall through to `/jobs/{job_id}`
+    response = _client(harness).request(method, path, headers=AUTH)
+    assert response.status_code in (404, 405)

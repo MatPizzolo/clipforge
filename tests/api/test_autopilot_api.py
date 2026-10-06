@@ -85,7 +85,7 @@ def test_dry_run_lists_what_would_be_held_and_writes_nothing(tmp_path: Path, db:
     from tests.dbhelpers import NOW
 
     SourcesRepo(db).create(BILLY_SOURCE, "test", NOW)
-    settings = make_settings(tmp_path, state_reads="postgres")
+    settings = make_settings(tmp_path)
     harness.deps.posting = build_posting(settings, harness.deps.store.kv, db)
     repo = harness.deps.posting.repo
     for n in (1, 2):

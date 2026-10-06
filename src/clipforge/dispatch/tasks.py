@@ -4,8 +4,8 @@ task when it is due. It replaced `posting_tick`; `sweeper` and `posting_daily` s
 Each tick:
 1. folds the ops alerts held over quiet hours or the hourly cap (ADR-45), as `posting_tick` did;
 2. keeps `posting_tick`'s guards: a misconfigured posting setup (`Posting.problem`) is off and
-   alerts, and the outage flag (#217) stops everything until /go or a restore;
-3. reads every `brake:*` key with `get` (activity against the Dict's 7-day expiry, ADR-24);
+   alerts, and the outage flag (#217) stops everything until /go;
+3. reads every `brake:*` key with `get` (activity against the Dict's 7-day expiry);
 4. works out what is due from Dict state only (the schedule copies, the brakes, markers), so
    Postgres is opened only when a task is due and Neon still scales to zero between due times;
 5. runs each due key, claimed set-if-absent as `dispatch:<task>:<key>` so overlapping ticks run
@@ -33,7 +33,7 @@ from clipforge.ops import OpsAlerts
 from clipforge.pipeline.deps import KV
 from clipforge.posting import brake
 from clipforge.posting.backend import Posting
-from clipforge.posting.keepalive import outage_since
+from clipforge.posting.outage import outage_since
 from clipforge.posting.slots import current_slot
 
 log = logging.getLogger(__name__)
@@ -99,12 +99,11 @@ def tick(ctx: DispatchCtx, now: datetime) -> list[str]:
             ctx.ops.alert(f"Posting is off: {posting.problem}", "posting", "problem", now=now)
         return [f"off: {posting.problem}"]
     since = outage_since(ctx.kv)
-    if since is not None:  # kept from posting_tick (#217): nothing goes out until /go or restore
-        return [f"outage since {since}: restore, check /status, then /go"]
-    # the Dict copies in postgres mode; the env account (always assisted) in dict mode
-    schedules = posting.all_schedules()
+    if since is not None:  # kept from posting_tick (#217): nothing goes out until /go
+        return [f"outage since {since}: check /status, then /go"]
+    schedules = posting.all_schedules()  # the Dict copies (#203)
     if not schedules and posting.schedules is not None and ctx.ops is not None:
-        # postgres mode with no schedule copy at all: nothing would ever send (A3, #203)
+        # no schedule copy at all: nothing would ever send (A3, #203)
         ctx.ops.alert("Posting found no schedule copies (posting:schedule:*), so no account "
                       "will send. Run the daily sync, or edit an account, to rewrite them.",
                       "posting", "schedules", path="/accounts", now=now)  # fmt: skip

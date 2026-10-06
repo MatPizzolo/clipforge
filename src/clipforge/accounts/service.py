@@ -17,7 +17,6 @@ from clipforge.db.autopilot import AutopilotRepo
 from clipforge.models import (
     ACCOUNT_ID,
     HANDLE,
-    LEGACY_PLATFORMS,
     Account,
     Autopilot,
     Contract,
@@ -55,7 +54,6 @@ class AccountCreate(Contract):
     language: Literal["en", "es"]
     handle: str = Field(pattern=f"^{HANDLE}$")
     id: str | None = Field(None, pattern=f"^{ACCOUNT_ID}$")
-    posting_from_env: bool = False
 
 
 class AccountEdit(Contract):
@@ -70,21 +68,6 @@ class AccountEdit(Contract):
     publisher_profile: str | None = Field(None, pattern=f"^{PROFILE}$")
     facebook_page_id: str | None = Field(None, pattern=r"^[0-9]{1,32}$")
     clear_publisher: bool = False
-
-
-def env_schedule(settings: Settings) -> PostingSchedule:
-    return PostingSchedule(chat_id=settings.posting_chat_id, timezone=settings.posting_timezone,
-                           slots=list(settings.posting_slots),
-                           hashtags=list(settings.posting_hashtags))  # fmt: skip
-
-
-def env_account(settings: Settings) -> Account:
-    """Dict mode (STATE_READS=dict): account #1 as the POSTING_* settings describe it."""
-    return Account(
-        id=settings.posting_account_id, blueprint="realtalk-clips", blueprint_version=0,
-        kind="clips", language="en", niche="",
-        platforms={p: PlatformProfile() for p in LEGACY_PLATFORMS}, posting=env_schedule(settings),
-    )  # fmt: skip
 
 
 def _checked(schedule: PostingSchedule, settings: Settings) -> PostingSchedule:
@@ -210,7 +193,7 @@ def create_account(
                            f"{blueprint.languages}")  # fmt: skip
     platforms = {p: prof.model_copy(update={"handle": req.handle})
                  for p, prof in blueprint.platform_defaults.items()}  # fmt: skip
-    posting = env_schedule(settings) if req.posting_from_env else PostingSchedule()
+    posting = PostingSchedule()
     try:
         account_id = req.id or f"{blueprint.name}-{req.language}"
         if account_id in RESERVED_IDS:

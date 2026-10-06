@@ -2,7 +2,7 @@
 API_TOKEN (from `.env`); `set-webhook` also needs the Telegram values.
 
     uv run clipforge run --input <url> [--n 5 --len 30-60 --lang en --perm own --credit "..."]
-    uv run clipforge status [<job_id>] [--rebuild|--restore [DATE]]   # a job, or the overview
+    uv run clipforge status [<job_id>] [--rebuild]   # a job, or the posting overview
     uv run clipforge resume <job_id>
     uv run clipforge clip [videos/<channel>/ep.mp4] [--fetch]   # videos/ inbox → jobs
     uv run clipforge set-webhook
@@ -50,11 +50,9 @@ from clipforge.models import (
     Account,
     AutopilotChange,
     AutopilotView,
-    BackfillReport,
     CampaignRules,
     ChannelRef,
     ClipStatus,
-    ImportReport,
     InboxEntry,
     JobInput,
     JobStatus,
@@ -67,7 +65,6 @@ from clipforge.models import (
     SourceEvent,
     SourcePermission,
     Submission,
-    VerifyReport,
 )
 from clipforge.sources import missing_permission_fields, source_problem
 
@@ -75,7 +72,6 @@ _HTTP_URL = re.compile(r"https?://\S+", re.IGNORECASE)
 MAX_NETWORK_ERRORS = 5  # consecutive failed polls before `wait` gives up
 POLL_INTERVAL_S = 15.0  # one status check per waiting job per round (`clip --fetch`)
 NO_DATABASE_DETAIL = "DATABASE_URL is not configured"  # R25 fallback trigger
-NEWEST = "newest"  # `status --restore` with no DATE
 
 
 class Uploader(Protocol):
@@ -200,17 +196,6 @@ class ApiClient:
     def rebuild_posting(self) -> int:
         return int(self._request("POST", "/posting/rebuild").json()["added"])
 
-    def import_posting(self, dry_run: bool) -> ImportReport:
-        path = f"/posting/import?dry_run={'true' if dry_run else 'false'}"
-        return ImportReport.model_validate(self._request("POST", path).json())
-
-    def backfill_jobs(self, dry_run: bool) -> BackfillReport:
-        path = f"/jobs/backfill?dry_run={'true' if dry_run else 'false'}"
-        return BackfillReport.model_validate(self._request("POST", path).json())
-
-    def verify_posting(self) -> VerifyReport:
-        return VerifyReport.model_validate(self._request("GET", "/posting/verify").json())
-
     def autopilot(self, account_id: str) -> AutopilotView:
         path = f"/admin/accounts/{quote(account_id)}/autopilot"
         return AutopilotView.model_validate(self._request("GET", path).json())
@@ -225,10 +210,6 @@ class ApiClient:
         if account_id is not None:
             path += f"?account={quote(account_id)}"
         return PolicyDryRun.model_validate(self._request("GET", path).json())
-
-    def restore_posting(self, day: str | None = None) -> int:
-        path = "/posting/restore" if day is None else f"/posting/restore?date={quote(day)}"
-        return int(self._request("POST", path).json()["restored"])
 
 
 def progress_line(view: JobView) -> str:
@@ -338,26 +319,11 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument(
         "--rebuild", action="store_true", help="re-queue every finished channel job for posting"
     )
-    status.add_argument(
-        "--restore",
-        nargs="?",
-        const=NEWEST,
-        metavar="DATE",
-        help="put back posting keys that expired, from the Volume snapshot of DATE "
-        "(YYYY-MM-DD, UTC; default: the newest)",
-    )
     commands.add_parser("resume").add_argument("job_id")
     commands.add_parser("set-webhook", help="register the Telegram webhook")
     _add_account_parser(commands)
     _add_autopilot_parsers(commands)
     _add_source_parser(commands)
-    posting = commands.add_parser("posting", help="posting queue: move the Dict queue to Postgres")
-    pacts = posting.add_subparsers(dest="action", required=True)
-    pacts.add_parser("import").add_argument("--dry-run", action="store_true")
-    pacts.add_parser("verify")
-    jobs = commands.add_parser("jobs", help="job records")
-    jacts = jobs.add_subparsers(dest="action", required=True)
-    jacts.add_parser("backfill").add_argument("--dry-run", action="store_true")
     return parser
 
 
@@ -369,9 +335,6 @@ def _add_account_parser(commands: argparse._SubParsersAction[argparse.ArgumentPa
     create.add_argument("--lang", required=True, choices=["en", "es"])
     create.add_argument("--handle", required=True)
     create.add_argument("--id")
-    create.add_argument(
-        "--posting-from-env", action="store_true", help="start from the POSTING_* settings"
-    )
     edit = acts.add_parser("edit")
     edit.add_argument("account_id")
     edit.add_argument("--handle", action="append", default=[], metavar="PLATFORM=HANDLE")
@@ -512,22 +475,11 @@ def main(
                 importer = ApiClient(http, settings.api_token.get_secret_value(), "import-toml")
                 return _import_toml(args, importer)
             return _source(args, client)
-        if args.command == "posting":
-            return _posting_migration(args, client)
-        if args.command == "jobs":
-            backfill = client.backfill_jobs(args.dry_run)
-            print(backfill.model_dump_json(indent=2))
-            return 1 if backfill.failed else 0
         if args.command == "status":
             if args.rebuild:
                 print(f"added {client.rebuild_posting()} clip(s) to the posting queue")
-            elif args.restore is not None:
-                day = None if args.restore == NEWEST else args.restore
-                restored = client.restore_posting(day)
-                which = "the newest" if day is None else f"the {day}"
-                print(f"restored {restored} posting key(s) from {which} snapshot")
             elif args.job_id is None:
-                print(posting_overview_text(client.posting(), settings.posting_timezone))
+                print(posting_overview_text(client.posting(), settings.owner_zone()))
             else:
                 print(status_text(client.get_job(args.job_id)))
             return 0
@@ -542,16 +494,6 @@ def main(
     except httpx.HTTPError as exc:
         print(f"network error talking to the API: {type(exc).__name__}", file=sys.stderr)
         return 1
-
-
-def _posting_migration(args: argparse.Namespace, client: ApiClient) -> int:
-    if args.action == "verify":
-        verify = client.verify_posting()
-        print(verify.model_dump_json(indent=2))
-        return 1 if verify.differences > 0 else 0
-    imported = client.import_posting(args.dry_run)
-    print(imported.model_dump_json(indent=2))
-    return 1 if imported.failed else 0
 
 
 def _run(
@@ -895,7 +837,6 @@ def _account(args: argparse.Namespace, client: ApiClient) -> int:
                     language=args.lang,
                     handle=args.handle,
                     id=args.id,
-                    posting_from_env=args.posting_from_env,
                 )
             )
             print(f"created {_account_line(account)}")

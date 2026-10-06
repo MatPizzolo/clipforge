@@ -97,7 +97,7 @@ def _overview_block(view: PostingOverview | AccountPosting, timezone: str, *, se
     if problem is not None:
         lines.append(f"Posting is off: {problem}")
     elif not view.enabled:
-        lines.append("Posting is off (set POSTING_CHAT_ID).")
+        lines.append(POSTING_OFF)
     elif view.paused:
         lines.append(f"Paused. Send /go {account_id} to restart." if several
                      else "Paused. Send /go to restart.")  # fmt: skip
@@ -117,9 +117,8 @@ def posting_overview_text(view: PostingOverview, timezone: str | None = None) ->
     text = _overview_text(view, timezone)
     if view.outage_since is None:
         return text
-    return (f"⚠️ Outage: posting_daily didn't run since {view.outage_since}, so the slots and "
-            "rebuild are stopped. Restore (clipforge status --restore "
-            f"{view.outage_since}), check this, then /go.\n{text}")  # fmt: skip
+    return (f"⚠️ Outage: no posting table snapshot since {view.outage_since}, so the slots "
+            f"and rebuild are stopped. Check this and the queue, then /go.\n{text}")  # fmt: skip
 
 
 def _overview_text(view: PostingOverview, timezone: str | None) -> str:
@@ -136,7 +135,7 @@ def _overview_text(view: PostingOverview, timezone: str | None) -> str:
     return "\n".join(_overview_block(view, zone, several=False))
 
 
-POSTING_OFF = "Posting is off (set POSTING_CHAT_ID)."
+POSTING_OFF = "Posting is off (no posting chat: clipforge account edit <account> --chat <id>)."
 QUEUE_EMPTY = "The queue is empty. Add videos to videos/<channel>/ and run `clipforge clip`."
 SEND_FAILED = "Couldn't send the next clip. Try /next again in a minute."
 PAUSED = "Paused. No clips until you send /go."

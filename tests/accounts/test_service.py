@@ -8,7 +8,6 @@ from clipforge.accounts.service import (
     AccountError,
     create_account,
     edit_account,
-    env_account,
     read_schedules,
     sync_schedules,
 )  # fmt: skip
@@ -40,17 +39,6 @@ def test_create_from_blueprint_sets_handles_and_starts_in_review(
     with pytest.raises(AccountError, match="language"):
         create_account(repo, settings, AccountCreate(
             blueprint="founder-tapes", language="es", handle="x"), NOW)  # fmt: skip
-
-
-def test_posting_from_env_seeds_account_one(db: Database, tmp_path: Path) -> None:
-    settings = make_settings(tmp_path, posting_chat_id=ALLOWED_USER, posting_slots="8:00,13:00",
-                             posting_hashtags="#mindset")  # fmt: skip
-    account = create_account(AccountsRepo(db), settings, AccountCreate(
-        blueprint="realtalk-clips", language="en", handle="realtalk.clipsdaily",
-        posting_from_env=True), NOW)  # fmt: skip
-    assert account.posting.chat_id == ALLOWED_USER and account.posting.slots == ["08:00", "13:00"]
-    assert account.posting.hashtags == ["mindset"]
-    assert env_account(settings).posting == account.posting
 
 
 def test_edit_renames_and_normalizes(db: Database, tmp_path: Path) -> None:

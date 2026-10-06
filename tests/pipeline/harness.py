@@ -12,9 +12,10 @@ from clipforge.jobs import DictJobStore, new_job_id, utcnow
 from clipforge.models import Job, JobInput
 from clipforge.pipeline.deps import MemoryKV, NullVolume, QueueSpawner, RecordingNotifier
 from clipforge.pipeline.steps import Deps, Step, dispatch
-from clipforge.posting.backend import dict_posting
+from clipforge.posting.repo import PostingRepo
 from tests.dbhelpers import make_account
 from tests.pipeline.fakes import FakeStages
+from tests.posting.memory import memory_posting
 
 SOURCE_URL = "https://media.example.com/episode.mp4"
 
@@ -45,9 +46,14 @@ class Harness:
             stages=fake,
             root=root,
             notifier_for=lambda job: notifier,
-            posting=dict_posting(kv, make_account()),
+            posting=memory_posting(kv, make_account()),
         )
         return cls(root, store, spawner, notifier, fake, volume, deps)
+
+    def queue(self) -> PostingRepo:
+        """The posting repo the chain writes to (the in-memory fake unless a test swaps it)."""
+        assert self.deps.posting is not None
+        return self.deps.posting.repo
 
     def submit(self, **options: Any) -> str:
         """Create a job the way service.create_job will (Task 7) and queue its ingest step."""

@@ -24,7 +24,7 @@ from clipforge.posting import actions, brake
 from clipforge.posting.backend import Posting
 from clipforge.posting.daily import repair_brakes
 from tests.bot.fakes import ALLOWED_USER, FakeSender
-from tests.bot.helpers import dict_ctx, two_account_ctx
+from tests.bot.helpers import memory_ctx, two_account_ctx
 from tests.dbhelpers import make_account, seed
 
 T = datetime(2026, 10, 2, 12, tzinfo=UTC)
@@ -140,7 +140,7 @@ def test_pause_an_unknown_account_writes_no_key(tmp_path: Path, db: Database) ->
 
 
 def test_dict_mode_pause_sets_the_brake_and_the_flag(tmp_path: Path) -> None:
-    ctx = dict_ctx(tmp_path)
+    ctx = memory_ctx(tmp_path)
     assert actions.pause(ctx, None, True, f"telegram:{ALLOWED_USER}", T) == messages.PAUSED
     assert brake.braked(ctx.deps.store.kv, RT) and _posting(ctx).repo.paused(RT)
 

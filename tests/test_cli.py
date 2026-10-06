@@ -25,7 +25,7 @@ from clipforge.models import (
     Permission,
     StageName,
 )
-from clipforge.posting import keepalive
+from clipforge.posting.outage import set_outage
 from tests.bot.fakes import FakeRequest, make_settings
 from tests.dbhelpers import BILLY_SOURCE, make_account
 from tests.pipeline.harness import Harness
@@ -527,8 +527,6 @@ def test_status_without_id_prints_the_posting_overview(
     assert out.startswith("Billy Garton Jr. — 1 episodes (1 clipped")
     assert _run(harness, api, "status", "--rebuild") == 0
     assert "added 0 clip(s) to the posting queue" in capsys.readouterr().out
-    assert _run(harness, api, "status", "--restore") == 0
-    assert "restored 0 posting key(s) from the newest snapshot" in capsys.readouterr().out
 
 
 def test_status_rebuild_during_an_outage_exits_1(
@@ -536,33 +534,12 @@ def test_status_rebuild_during_an_outage_exits_1(
 ) -> None:
     """The API's 409 reaches the owner as the outage line, with how to clear it (#220)."""
     channel_job(harness)
-    keepalive.set_outage(harness.store.kv, "2026-09-20")
+    set_outage(harness.store.kv, "2026-09-20")
     assert _run(harness, api, "status", "--rebuild") == 1
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert "HTTP 409: Outage: posting_daily didn't run since 2026-09-20" in captured.err
-    assert "clipforge status --restore 2026-09-20" in captured.err
-
-
-def test_status_restore_takes_an_optional_date(
-    harness: Harness, api: TestClient, capsys: pytest.CaptureFixture[str]
-) -> None:
-    kv = harness.store.kv
-    kv.put("post:job_a:clip_01", "{}")
-    keepalive.snapshot(kv, harness.root, datetime(2026, 9, 20, tzinfo=UTC))
-    kv.delete("post:job_a:clip_01")
-    keepalive.snapshot(kv, harness.root, datetime(2026, 9, 29, tzinfo=UTC))
-    assert _run(harness, api, "status", "--restore") == 0
-    assert "restored 0 posting key(s) from the newest snapshot" in capsys.readouterr().out
-    assert _run(harness, api, "status", "--restore", "2026-09-20") == 0
-    assert "restored 1 posting key(s) from the 2026-09-20 snapshot" in capsys.readouterr().out
-    assert kv.get("post:job_a:clip_01") == "{}"
-    assert _run(harness, api, "status", "--restore", "someday") == 1
-    assert "400" in capsys.readouterr().err
-
-
-ACCOUNT_JSON = make_account().model_dump(mode="json")
-BILLY_JSON = BILLY_SOURCE.model_dump(mode="json")
+    assert "HTTP 409: Outage: no posting table snapshot since 2026-09-20" in captured.err
+    assert "send /go to clear it" in captured.err
 
 
 def _api(
@@ -613,6 +590,10 @@ def test_clip_stops_before_upload_when_api_unreachable(tmp_path: Path) -> None:
     http = httpx.Client(base_url="https://api.example", transport=httpx.MockTransport(refuse))
     assert main(["clip", "--folder", str(folder)], http=http, settings=make_settings(tmp_path),
                 uploader=uploader) == 1 and not uploader.puts  # fmt: skip
+
+
+ACCOUNT_JSON = make_account().model_dump(mode="json")
+BILLY_JSON = BILLY_SOURCE.model_dump(mode="json")
 
 
 def test_clip_takes_credit_and_permission_from_the_source(tmp_path: Path) -> None:
@@ -757,7 +738,7 @@ def test_import_toml_dry_run_real_and_rerun(
 def test_account_create_and_list_print(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     http = _api({("POST", "/accounts"): ACCOUNT_JSON, ("GET", "/accounts"): [ACCOUNT_JSON]})
     assert main(["account", "create", "--blueprint", "realtalk-clips", "--lang", "en",
-                 "--handle", "realtalk.clipsdaily", "--posting-from-env"],
+                 "--handle", "realtalk.clipsdaily"],
                 http=http, settings=make_settings(tmp_path)) == 0  # fmt: skip
     assert main(["account", "list"], http=http, settings=make_settings(tmp_path)) == 0
     out = capsys.readouterr().out
@@ -820,21 +801,17 @@ def test_source_edit_no_expiry_clears_expires_at(tmp_path: Path) -> None:
     assert json.loads(seen[-1].content)["permission"]["expires_at"] is None
 
 
-def test_posting_verify_exits_1_on_differences(tmp_path: Path) -> None:
-    body = {"account_id": "a", "dict_items": 3, "postgres_items": 2, "differences": 1,
-            "first": ["x:clip_01: only in the Dict"]}  # fmt: skip
-    api = _api({("GET", "/posting/verify"): body})
-    assert main(["posting", "verify"], http=api, settings=make_settings(tmp_path)) == 1
-    clean = {**body, "postgres_items": 3, "differences": 0, "first": []}
-    api = _api({("GET", "/posting/verify"): clean})
-    assert main(["posting", "verify"], http=api, settings=make_settings(tmp_path)) == 0
-
-
-def test_posting_import_dry_run_sends_the_flag(tmp_path: Path) -> None:
-    seen: list[httpx.Request] = []
-    api = _api({("POST", "/posting/import"): {"dry_run": True, "failed": ["x"]}}, seen)
-    code = main(["posting", "import", "--dry-run"], http=api, settings=make_settings(tmp_path))
-    assert code == 1 and seen[0].url.params["dry_run"] == "true"
+@pytest.mark.parametrize(
+    "argv",
+    [["posting", "import"], ["posting", "verify"], ["jobs", "backfill"], ["status", "--restore"],
+     ["account", "create", "--blueprint", "b", "--lang", "en", "--handle", "h",
+      "--posting-from-env"]],
+)  # fmt: skip
+def test_the_dict_store_commands_are_gone(tmp_path: Path, argv: list[str]) -> None:
+    # card 040 (S1 Task 23): retired with the Dict posting store and the POSTING_* settings
+    with pytest.raises(SystemExit) as raised:
+        main(argv, http=_api({}), settings=make_settings(tmp_path))
+    assert raised.value.code == 2
 
 
 # ---- S2a (card 014 Task 8): autopilot and the policy dry run

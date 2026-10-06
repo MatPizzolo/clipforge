@@ -136,9 +136,8 @@ def _cap(text: str) -> str:
 
 
 def owner_chat(settings: Settings) -> int | None:
-    """The posting chat, else the first allowed Telegram user (one owner, 08 §2b)."""
-    if settings.posting_chat_id is not None:
-        return settings.posting_chat_id
+    """The first allowed Telegram user (one owner, 08 §2b). It was POSTING_CHAT_ID first until
+    S1 Task 23 removed that setting (card 040)."""
     return settings.telegram_allowed_user_ids[0] if settings.telegram_allowed_user_ids else None
 
 

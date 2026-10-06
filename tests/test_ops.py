@@ -6,11 +6,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from clipforge.ops import MAX_PER_HOUR, OpsAlerts, ops_alerts, owner_chat
-from clipforge.pipeline.deps import MemoryKV, NullVolume, QueueSpawner
+from clipforge.pipeline.deps import MemoryKV
 from clipforge.pipeline.steps import StageName, fail_job
-from clipforge.posting.repo import DualPostingRepo
-from clipforge.runtime import build_deps
 from tests.bot.fakes import ALLOWED_USER, FakeSender, make_settings
 from tests.pipeline.fakes import FakeStages
 from tests.pipeline.harness import Harness
@@ -88,6 +88,15 @@ def test_owner_chat_and_wiring(tmp_path: Path) -> None:
     assert make_settings(tmp_path, owner_timezone="Etc").owner_timezone is None  # a folder
 
 
+def test_the_owner_chat_ignores_a_leftover_posting_chat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # card 040 retired POSTING_CHAT_ID: alerts go to the first allowed user even if it is left
+    monkeypatch.setenv("POSTING_CHAT_ID", "424242")
+    settings = make_settings(tmp_path, telegram_allowed_user_ids=[ALLOWED_USER, 424242])
+    assert owner_chat(settings) == ALLOWED_USER
+
+
 def test_a_failed_job_without_a_notifier_alerts_the_owner(tmp_path: Path) -> None:
     harness = Harness.build(tmp_path)
     ops, sender, _ = _ops()
@@ -114,24 +123,6 @@ def test_a_queueing_failure_alerts_the_owner(tmp_path: Path) -> None:
     harness.deps.posting.repo.add = broken  # type: ignore[method-assign]
     run_channel_job(harness)
     assert any("for posting failed" in text for _, text, _ in sender.messages)
-
-
-def test_build_deps_alerts_on_mirror_failures(tmp_path: Path, db: object) -> None:
-    from clipforge.db.engine import Database
-
-    assert isinstance(db, Database)
-    sender = FakeSender()
-    deps = build_deps(make_settings(tmp_path), kv=MemoryKV(), volume=NullVolume(),
-                      spawner=QueueSpawner(), stages=FakeStages(), sender=sender,
-                      db=db)  # fmt: skip
-    assert deps.ops is not None and deps.posting is not None
-    repo = deps.posting.repo
-    assert isinstance(repo, DualPostingRepo)
-    repo._mirror("set_posted", lambda: (_ for _ in ()).throw(RuntimeError("neon asleep")))
-    assert repo.mirror_failures == 1
-    # sent or held depending on the wall clock; either way the alert was claimed once
-    claims = [k for k in deps.store.kv.keys() if k.startswith("notify:mirror:set_posted:")]  # noqa: SIM118
-    assert len(claims) == 1
 
 
 def test_a_failed_send_does_not_use_up_the_hours_dedupe_key() -> None:

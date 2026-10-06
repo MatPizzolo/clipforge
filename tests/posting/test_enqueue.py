@@ -21,12 +21,12 @@ from clipforge.models import (
     SourcePermission,
 )
 from clipforge.pipeline.deps import MemoryKV
-from clipforge.posting.backend import Posting, build_posting, dict_posting
+from clipforge.posting.backend import Posting, build_posting
 from clipforge.posting.enqueue import ClipFacts, enqueue, enqueue_job, items_for, platforms_for
-from clipforge.posting.repo import DictPostingRepo
 from tests.bot.fakes import make_settings
 from tests.dbhelpers import BILLY_SOURCE, make_account, seed
 from tests.posting.builders import ACCOUNT, T0, item, record
+from tests.posting.memory import MemoryPostingRepo, memory_posting
 
 PLATFORMS = list(LEGACY_PLATFORMS)
 
@@ -43,7 +43,7 @@ def _facts() -> ClipFacts:
 
 
 def test_enqueue_skips_overlapping_moments() -> None:
-    store = DictPostingRepo(MemoryKV(), ACCOUNT)
+    store = MemoryPostingRepo()
     first = [item("clip_01", start=0, end=30), item("clip_02", start=100, end=130)]
     assert enqueue(store, first, PLATFORMS) == 2
     recut = [
@@ -56,7 +56,7 @@ def test_enqueue_skips_overlapping_moments() -> None:
 
 
 def test_recut_brings_back_a_moment_whose_video_went_missing() -> None:
-    store = DictPostingRepo(MemoryKV(), ACCOUNT)
+    store = MemoryPostingRepo()
     gone = item("clip_01", start=0, end=30)
     store.add(gone, list(LEGACY_PLATFORMS))
     store.mark_unavailable(gone.id, T0)
@@ -85,14 +85,14 @@ def test_items_take_account_credit_license_and_sponsorship_from_the_source(tmp_p
 
 
 def test_postgres_mode_needs_a_source_row(tmp_path: Path) -> None:
-    posting = dict_posting(MemoryKV(), make_account())
+    posting = memory_posting(MemoryKV(), make_account())
     strict = dataclasses.replace(posting, requires_source=True)
     assert enqueue_job(strict, _job(), [_facts()], T0, "v") == 0  # skipped, logged
     assert enqueue_job(posting, _job(), [_facts()], T0, "v") == 1  # dict mode: account #1
 
 
 def _posting_with(source: Source, posting: Posting | None = None) -> Posting:
-    posting = posting or dict_posting(MemoryKV(), make_account())
+    posting = posting or memory_posting(MemoryKV(), make_account())
     return dataclasses.replace(posting, source=lambda _id: source, requires_source=True)
 
 
@@ -112,7 +112,7 @@ def test_enqueue_queues_only_covered_platforms(
     narrow = BILLY_SOURCE.model_copy(update={"permission": SourcePermission(
         type="creator_agreement", platforms=[Platform.TIKTOK])})  # fmt: skip
     seed(db, make_account(), sources=[narrow])
-    posting = build_posting(make_settings(tmp_path, state_reads="postgres"), MemoryKV(), db)
+    posting = build_posting(make_settings(tmp_path), MemoryKV(), db)
     assert enqueue_job(posting, _job(), [_facts()], T0, "v") == 1
     [rec] = posting.repo.records("realtalk-clips-en")
     assert rec.platforms == [Platform.TIKTOK] and "doesn't cover" in caplog.text
@@ -125,7 +125,7 @@ def test_item_platforms_are_frozen_when_the_account_changes(tmp_path: Path, db: 
     # card 002 A3: platforms = the account's enabled platforms ∩ the permission, fixed per item
     account = make_account(platforms=[Platform.TIKTOK, Platform.YOUTUBE])
     seed(db, account, sources=[BILLY_SOURCE])
-    posting = build_posting(make_settings(tmp_path, state_reads="postgres"), MemoryKV(), db)
+    posting = build_posting(make_settings(tmp_path), MemoryKV(), db)
     assert enqueue_job(posting, _job(), [_facts()], T0, "v") == 1
     AccountsRepo(db).update(make_account(platforms=list(Platform)), T0)  # Facebook and IG on
     [rec] = posting.repo.records(account.id)

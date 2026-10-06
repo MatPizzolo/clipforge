@@ -1,6 +1,7 @@
-"""The posting queue in Postgres (spec §3, §5.1). Reads rebuild the same PostRecords the Dict
-gave, so queue.py decides the status (ADR-23 rules unchanged). Each write sets only its own
-columns (one writer per column group, ADR-41) and logs a post_events row in its transaction."""
+"""The posting queue in Postgres (spec §3, §5.1), its only store since S1 Task 23 (card 040).
+Reads build the PostRecords queue.py decides the status from (ADR-23 rules unchanged). Each
+write sets only its own columns (one writer per column group, ADR-41) and logs a post_events row
+in its transaction."""
 
 from __future__ import annotations
 
@@ -227,35 +228,3 @@ class SqlPostingRepo:
         reason: str | None = None,
     ) -> None:  # fmt: skip
         AccountsRepo(self.db).set_paused(account_id, on, at, actor, reason)
-
-    # ---- one-off import (Task 20)
-
-    def import_record(self, record: PostRecord, chat_id: int | None) -> bool:
-        """Insert a Dict record as is: item, posts (with posted_at), sends, verdict, unavailable.
-        Skips (False) when the item already exists, so a re-run imports nothing twice."""
-        item = record.item
-        with self.db.begin() as conn:
-            inserted = conn.execute(insert(content_items).values(
-                **_item_row(item),
-                unavailable_at=item.queued_at if record.unavailable else None,
-                verdict_kind=record.verdict.kind if record.verdict else None,
-                verdict_at=record.verdict.at if record.verdict else None,
-                verdict_reason=(record.verdict.reason.value
-                                if record.verdict and record.verdict.reason else None),
-            ).on_conflict_do_nothing().returning(content_items.c.id)).first()  # fmt: skip
-            if inserted is None:
-                return False
-            if item.assets:
-                conn.execute(assets.insert(), [{"item_id": item.id, **a.model_dump(mode="json")}
-                                               for a in item.assets])  # fmt: skip
-            if record.platforms:
-                conn.execute(posts.insert(), [{"item_id": item.id, "platform": p.value,
-                                               "posted_at": record.posted.get(p)}
-                                              for p in record.platforms])  # fmt: skip
-            if record.sends:
-                conn.execute(sends.insert(), [{
-                    "item_id": item.id, "n": s.n, "at": s.at, "slot": s.slot, "chat_id": chat_id,
-                    "message_id": s.message_id, "video_message_id": s.video_message_id,
-                } for s in record.sends])  # fmt: skip
-            _event(conn, item.id, "imported", item.queued_at)
-        return True
