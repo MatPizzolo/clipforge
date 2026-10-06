@@ -73,6 +73,15 @@ Every version in `package.json` is exact. `npm i <pkg>` and `npx shadcn add <com
 node scripts/pin-versions.mjs && npm install   # rewrite each range to the installed version
 ```
 
+Write the lock file with CI's npm, not your local one: some npm 11 releases (11.6.2, for one)
+drop the optional `@emnapi/*` entries that Tailwind's wasm build lists, and CI's `npm ci` then
+fails with `Missing: @emnapi/... from lock file` (log #302). CI's version is the `npm:` line of
+setup-node's "Environment details" (11.19.0 on 2026-10-06):
+
+```bash
+npx -y npm@11.19.0 install          # or `audit fix`; then check with `npx -y npm@11.19.0 ci`
+```
+
 `overrides` pins `js-yaml` to 4.3.2 (the version under `@hey-api/openapi-ts` had three
 high-severity advisories). `shadcn` is a dev dependency: the app only imports its CSS, which
 Tailwind compiles at build time. `npm audit` still reports `braces` (stack exhaustion on deeply
