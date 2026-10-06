@@ -31,3 +31,16 @@ def test_pause_is_runtime_state_not_config(db: Database) -> None:
     repo.set_paused(account.id, True, NOW)
     repo.update(account, NOW)  # an account edit never touches the pause
     assert repo.paused(account.id) is True
+
+
+def test_create_with_a_bad_seed_actor_is_not_an_existing_account(db: Database) -> None:
+    from clipforge.models import hands_on
+
+    account = make_account()
+    with pytest.raises(ValueError, match="not an actor") as caught:
+        AccountsRepo(db).create(account, NOW, autopilot=hands_on(account), actor="api")
+    assert not isinstance(caught.value, AccountExists)
+    assert AccountsRepo(db).get(account.id) is None  # nothing was written
+    AccountsRepo(db).create(account, NOW, autopilot=hands_on(account), actor="cli:mat")
+    with pytest.raises(AccountExists):
+        AccountsRepo(db).create(account, NOW, autopilot=hands_on(account), actor="cli:mat")

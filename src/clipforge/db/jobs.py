@@ -3,21 +3,29 @@
 from __future__ import annotations
 
 import builtins
+from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from clipforge.db.engine import Database
 from clipforge.db.tables import costs, jobs
 from clipforge.models import JobSummary, StageCost, StageName
 
+_TERMINAL = ("done", "failed")
+# how far behind a terminal write may be stamped and still win: wall clocks between containers
+# step by about 1.4 s at most (#143); a write older than this is stale (e.g. a failure from
+# before a resume) and doesn't replace the newer row; one stamped within the window still wins
+CLOCK_SKEW = timedelta(seconds=10)
 _COST_FIELDS = ("wall_s", "gpu_s", "gpu_type", "llm_model", "llm_input_tokens",
                 "llm_output_tokens", "llm_calls", "cached")  # fmt: skip
 
 
 def _summary(row: Any) -> JobSummary:
-    return JobSummary.model_validate(dict(row._mapping))
+    values = dict(row._mapping)
+    values.pop("error", None)  # 0002's jobs.error: S3 adds it to the contract when it writes it
+    return JobSummary.model_validate(values)
 
 
 class JobsRepo:
@@ -25,12 +33,23 @@ class JobsRepo:
         self.db = db
 
     def upsert(self, summary: JobSummary) -> bool:
+        """Newer wins, except that a terminal status (done, failed) replaces a non-terminal one
+        stamped up to CLOCK_SKEW later: a wall clock that steps back between two containers must
+        never leave a finished job `queued` (card 017 item 9, log #143). Returns False when
+        nothing was written."""
         values = summary.model_dump(mode="json")
         statement = insert(jobs).values(**values)
         upsert = statement.on_conflict_do_update(
             index_elements=[jobs.c.job_id],
             set_={k: statement.excluded[k] for k in values if k != "job_id"},
-            where=jobs.c.updated_at <= statement.excluded.updated_at,
+            where=or_(
+                jobs.c.updated_at <= statement.excluded.updated_at,
+                and_(
+                    jobs.c.status.not_in(_TERMINAL),
+                    statement.excluded.status.in_(_TERMINAL),
+                    jobs.c.updated_at <= statement.excluded.updated_at + CLOCK_SKEW,
+                ),
+            ),
         ).returning(jobs.c.job_id)
         with self.db.begin() as conn:
             return conn.execute(upsert).first() is not None

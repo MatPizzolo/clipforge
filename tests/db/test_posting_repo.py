@@ -101,3 +101,38 @@ def test_add_send_writes_one_event(db: Database) -> None:
     repo.add_send(it.id, send(1))
     repo.add_send(it.id, send(1))
     assert _events(db, it.id) == ["sent"]
+
+
+def test_event_writes_the_actor_column_and_data(db: Database) -> None:
+    from sqlalchemy import select
+
+    from clipforge.db.tables import post_events
+    from clipforge.models import LEGACY_PLATFORMS, Platform
+    from tests.posting.builders import T0, item
+
+    repo = _repo(db)
+    it = item()
+    repo.add(it, list(LEGACY_PLATFORMS))
+    repo.set_posted(it.id, Platform.TIKTOK, True, T0, actor="telegram:42")
+    with db.begin() as conn:
+        row = conn.execute(select(post_events.c.actor, post_events.c.data)
+                           .where(post_events.c.kind == "posted")).one()  # fmt: skip
+    assert row.actor == "telegram:42" and row.data["actor"] == "telegram:42"
+
+
+def test_record_reads_the_publish_state(db: Database) -> None:
+    from sqlalchemy import text
+
+    from clipforge.models import LEGACY_PLATFORMS, Platform
+    from tests.posting.builders import item
+
+    repo = _repo(db)
+    it = item()
+    repo.add(it, list(LEGACY_PLATFORMS))
+    record = repo.get(it.id)
+    assert record is not None and record.publish == {}
+    with db.begin() as conn:
+        conn.execute(text("update posts set state = 'scheduled', publisher = 'upload_post'"
+                          " where platform = 'tiktok'"))  # fmt: skip
+    record = repo.get(it.id)
+    assert record is not None and record.publish == {Platform.TIKTOK: "scheduled"}

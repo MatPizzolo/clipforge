@@ -466,3 +466,67 @@ def test_content_item_carries_disclosure_and_assets() -> None:
     )  # fmt: skip
     assert item.ai_disclosure is False and item.sponsored is False
     assert item.producer == "clips" and item.media_kind == "video"
+
+
+# ---- S2 contracts (card 014, plan Task 1)
+
+
+def _s2_account(budget: float = 0.0, kind: str = "clips") -> Account:
+    from clipforge.models import Platform, PlatformProfile
+
+    return Account(id="realtalk-clips-en", blueprint="realtalk-clips", blueprint_version=1,
+                   kind=kind, language="en", niche="podcasts",  # type: ignore[arg-type]
+                   platforms={Platform.TIKTOK: PlatformProfile()},
+                   monthly_budget_usd=budget)  # fmt: skip
+
+
+def test_hands_on_defaults_from_type_when_no_budget() -> None:
+    from clipforge.models import hands_on
+
+    ap = hands_on(_s2_account())
+    assert (ap.preset, ap.review_dial, ap.publish, ap.produce, ap.scale) == (
+        "hands_on", "review", True, False, False)  # fmt: skip
+    assert ap.monthly_cap_usd == 5.0  # clips default, S3 §2.6
+    assert hands_on(_s2_account(kind="avatar")).monthly_cap_usd == 20.0
+
+
+def test_hands_on_uses_budget_when_set() -> None:
+    from clipforge.models import hands_on
+
+    assert hands_on(_s2_account(budget=7.5)).monthly_cap_usd == 7.5
+
+
+def test_account_publisher_defaults_to_none_and_round_trips() -> None:
+    from clipforge.models import PublisherProfile
+
+    a = _s2_account()
+    assert a.publisher is None
+    b = a.model_copy(update={"publisher": PublisherProfile(profile="realtalk-clips-en")})
+    again = Account.model_validate_json(b.model_dump_json())
+    assert again.publisher is not None and again.publisher.profile == "realtalk-clips-en"
+
+
+def test_post_record_publish_defaults_empty_and_item_copy_none() -> None:
+    from clipforge.models import PostRecord
+    from tests.posting.builders import item
+
+    record = PostRecord(item=item())
+    assert record.publish == {} and record.item.post_copy is None
+
+
+def test_item_post_copy_round_trips() -> None:
+    from clipforge.models import Platform, PostCopy
+    from tests.posting.builders import item
+
+    it = item().model_copy(update={"post_copy": {Platform.TIKTOK: PostCopy(text="hi")}})
+    again = ContentItem.model_validate_json(it.model_dump_json())
+    assert again.post_copy == {Platform.TIKTOK: PostCopy(text="hi")}
+
+
+def test_brake_requires_on_flag() -> None:
+    from clipforge.models import Brake
+
+    b = Brake(scope="all", on=False, at=datetime(2026, 10, 2, tzinfo=UTC), actor="telegram:1")
+    assert b.on is False
+    with pytest.raises(ValidationError):
+        Brake(scope="all", at=datetime(2026, 10, 2, tzinfo=UTC), actor="telegram:1")  # type: ignore[call-arg]

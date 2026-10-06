@@ -81,19 +81,20 @@ def _record(
                      key=lambda s: s.n),
         posted={Platform(p.platform): p.posted_at for p in post_rows if p.posted_at is not None},
         verdict=verdict, unavailable=row.unavailable_at is not None,
+        publish={Platform(p.platform): p.state for p in post_rows if p.state != "pending"},
     )  # fmt: skip
 
 
 def _event(conn: Connection, ref: str, kind: str, at: datetime,
            platform: Platform | None = None, actor: str | None = None,
            **data: object) -> None:  # fmt: skip
-    """One post_events row. `actor` goes into `data.actor` (omitted for system writes): S3c's
-    migration 0002 copies exactly that key into a `post_events.actor` column (S3c D3)."""
+    """One post_events row. `actor` goes into the `actor` column (0002) and, for readers of
+    older rows, into `data.actor` too; None for writes nobody made."""
     if actor is not None:
         data["actor"] = actor
     conn.execute(post_events.insert().values(item_id=ref, kind=kind, at=at,
                                              platform=platform.value if platform else None,
-                                             data=data))  # fmt: skip
+                                             data=data, actor=actor))  # fmt: skip
 
 
 class SqlPostingRepo:
@@ -221,9 +222,11 @@ class SqlPostingRepo:
     def paused(self, account_id: str) -> bool:
         return AccountsRepo(self.db).paused(account_id)
 
-    def set_paused(self, account_id: str, on: bool, at: datetime, actor: str | None = None) -> None:
-        # posting_state has no actor column (0001 is frozen): actions.pause logs the actor
-        AccountsRepo(self.db).set_paused(account_id, on, at)
+    def set_paused(
+        self, account_id: str, on: bool, at: datetime, actor: str | None = None,
+        reason: str | None = None,
+    ) -> None:  # fmt: skip
+        AccountsRepo(self.db).set_paused(account_id, on, at, actor, reason)
 
     # ---- one-off import (Task 20)
 

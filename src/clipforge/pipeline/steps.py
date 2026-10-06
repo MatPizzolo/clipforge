@@ -198,9 +198,13 @@ def record_job(
     if deps.jobs_db is None:
         return
     try:
-        deps.jobs_db.upsert(
+        written = deps.jobs_db.upsert(
             summary_of(job, costs=costs, metadata_path=metadata_path, build=deps.build)
         )
+        if not written:
+            # the row holds a newer write (or a terminal one): nothing changed (log #143)
+            log.warning("recording job %s as %s wrote nothing: the row is newer", job.job_id,
+                        job.status.value)  # fmt: skip
         if costs is not None:
             deps.jobs_db.replace_costs(job.job_id, costs)
     except Exception as exc:

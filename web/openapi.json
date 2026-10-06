@@ -83,6 +83,16 @@
           "posting": {
             "$ref": "#/components/schemas/PostingSchedule"
           },
+          "publisher": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublisherProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "review_tier": {
             "default": "review",
             "enum": [
@@ -1284,6 +1294,42 @@
           "at"
         ],
         "title": "Progress",
+        "type": "object"
+      },
+      "PublisherProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "disconnected": {
+            "additionalProperties": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/Platform"
+            },
+            "title": "Disconnected",
+            "type": "object"
+          },
+          "facebook_page_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Facebook Page Id"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "title": "PublisherProfile",
         "type": "object"
       },
       "Source": {
