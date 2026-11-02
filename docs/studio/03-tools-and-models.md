@@ -16,7 +16,7 @@ Research date: 2026-09-29. **Estimates** are marked (est.). Everything is to be 
   - The MMS forced aligner (CC-BY-NC).
   - The FusioniX LoRA for Wan/InfiniteTalk (CC BY-NC-SA). GFPGAN's non-commercial parts. RetinaFace weights converted from InsightFace (pulled in by EchoMimicV3's preview path). `Kim_Vocal_2.onnx` (no license; LongCat's vocal separator). Found in X2, 2026-09-30.
 - **Internal metrics only, never in the product:** SyncNet's `syncnet_v2.model` (no stated license), used with YuNet instead of its unlicensed S3FD detector (X2).
-- **Open, owner ruling needed (log O7):** models pretrained on non-commercial data with permissively licensed weights, e.g. `chinese-wav2vec2-base` (MIT weights, pretrained on WenetSpeech, which is non-commercial). InfiniteTalk and EchoMimic Flash use it; LongCat 1.5 doesn't.
+- **Needs owner review (O7, closed by log #153):** models pretrained on non-commercial data with permissively licensed weights, e.g. `chinese-wav2vec2-base` (MIT weights, pretrained on WenetSpeech, which is non-commercial). InfiniteTalk and EchoMimic Flash use it; LongCat 1.5 doesn't. Such a model is used only with the owner's explicit OK, after it is clearly better in a blind test.
 - **Libraries:** LGPL used unmodified as a dependency is allowed; the allowlist above is for models and vendored code.
 
 ## Media models (self-hosted on Modal)
@@ -30,7 +30,7 @@ Research date: 2026-09-29. **Estimates** are marked (est.). Everything is to be 
 | Persona face | **Z-Image-Turbo** + one **LoRA per persona** (20–40 curated synthetic shots) | Qwen-Image-Edit-**2509** for pose and outfit changes (pin the version; 2.1 is non-commercial); PuLID-FLUX **FaceNet variant** only | Apache-2.0 | L40S (LoRA training: H100) | one-off, ~$1–3 per persona (est.) |
 | Stills | **Qwen-Image-2512 + Lightning 8-step LoRA** (transformer stored in FP8, 928x1664), one model and one style suffix per video and account (X4) | Z-Image-Turbo, 9 steps (faster cold start, a more illustrated look; never mixed with Qwen in one video); FLUX.2 klein **4B** | Apache-2.0 | L40S (L4 in FP8 is slower and dearer: dropped) | Measured in X4, 2026-10-01/02: Qwen **$0.0041 per image** (7.5 s), Z-Image $0.0049 (9.0 s at 1088x1920), Z-Image on L4 FP8 $0.0070 (31.4 s). Cold start Qwen ~160–350 s, Z-Image ~55–160 s. **S5 probe, 2026-10-02** (Qwen + Lightning, FP8 storage, L40S, 40.9 GiB VRAM): cold start 131–174 s, of which loading and fusing the LoRA is 60 s and the FP8 cast 20 s; **64 s from a GPU memory snapshot** (making one: 270–500 s, at least twice after a deploy). S5 stores the LoRA-fused transformer on the Volume instead (estimated 70–85 s cold) Owner preferred Qwen (more realistic) blind. Neither model spells uncommon words reliably: check text by OCR or put it in the overlay |
 | B-roll video (5 s) | **Wan2.2 I2V-A14B + lightx2v 4-step LoRAs**, image-to-video from the line's still, 720x1280 at 16 fps | Wan2.2 TI2V-5B, 50 steps, with VAE tiling (L40S) | Apache-2.0 | H100 | Measured in X4: A14B **$0.09–0.10 per clip** (82–94 s) plus ~$0.30 per cold start (~250–330 s: 126 GB of fp32 weights; store bf16); 5B $0.24 (436 s). Owner preferred A14B in 2 of 3 blind pairs. 16 fps in a 30 fps Timeline was acceptable; no interpolation |
-| Talking head | **InfiniteTalk** (Wan2.1-I2V-14B + audio adapter; head, body and lips; 480p then upscale; audio encoder chinese-wav2vec2-base is MIT, no InsightFace in its requirements). InfiniteTalk and EchoMimic Flash use chinese-wav2vec2-base, pretrained on non-commercial WenetSpeech: open question O7 in 10, so prefer LongCat unless X2 shows a wav2vec model clearly better (log #121, spikes/x2-talking-head.md) | **LongCat-Video-Avatar 1.5** (MIT; no InsightFace; Whisper audio encoder) in a bake-off; **EchoMimicV3** Flash (1.3B, cheap) | Apache-2.0 / MIT / Apache-2.0 | H100 or A100-80 | ~$0.35–0.55 per 30 s at 480p; use it only for presenter segments |
+| Talking head | **None passes yet** (X2, 2026-10-06, owner's blind rating: InfiniteTalk 3.25, LongCat 1.75, EchoMimic 1.0 of 5; best clip "much better lip sync, still not very real"). No talking head in production until a follow-up passes ([spikes/x2-talking-head.md](spikes/x2-talking-head.md) §7, log #320) | Follow-up lead: **InfiniteTalk** + lightx2v 4-step (clearly best, but chinese-wav2vec2-base: needs the owner's explicit OK, O7/#153); O7-safe alternative **LongCat-Video-Avatar 1.5** (over-gestures, mouth too wide); **EchoMimicV3** Flash dropped (chunk seams, weakest sync) | Apache-2.0 / MIT / Apache-2.0 | H100 | Measured in X2 (warm, 480p): InfiniteTalk 20.4 GPU-s per output s (**$0.022/s**), LongCat 19.3 ($0.021/s), EchoMimic 9.9 ($0.011/s); delivery to 1080x1920@30 (RIFE + Real-ESRGAN x4, L40S) $0.007–0.013/s; ~**$0.58 per 20 s clip** generated and delivered, plus a cold start of ~$0.15 (LongCat, ~2 min) to ~$0.33 (InfiniteTalk, ~5 min); peak VRAM 57–61 GB |
 | Face detection | YuNet (existing, MIT) or MediaPipe | — | MIT / Apache | CPU | — |
 
 ## LLM text (paid credits: the only paid AI)
@@ -78,7 +78,7 @@ Results:
 - **Storage:** `pg_database_size` is 8.2 MB (largest tables: `costs` 144 kB, `content_items` 96 kB), against the free tier's 0.5 GB. The Neon console's figure includes history, so it reads higher.
 - **Compute:** not measured yet. Check the console's CU-hours after a week on Postgres; the plan expects scale-to-zero between slots and the daily run, well inside the free tier's 100 CU-h a month.
 
-## Monthly cost model (recomputed 2026-09-29 with verified prices; voice measured in X1 on 2026-09-30, stills, b-roll and music in X4 on 2026-10-02; talking heads are estimates until X2 measures them)
+## Monthly cost model (recomputed 2026-09-29 with verified prices; voice measured in X1 on 2026-09-30, stills, b-roll and music in X4 on 2026-10-02; talking heads measured in X2 on 2026-10-06, though none passes yet)
 
 **Per video, variable cost** (GPU, CPU and LLM; cold starts spread over a daily batch per account):
 
@@ -87,7 +87,7 @@ Results:
 | Podcast clip | ~$0.02 | transcribe + highlights per source hour, split over its clips (measured) |
 | Story (60–90 s, one still per line, voice, music, 0–2 b-roll shots) | ~$0.09 / **~$0.19** / ~$0.29 with 0 / 1 / 2 b-roll shots | TTS ~190 L4-s for ~75 s of unbatched Qwen ($0.042, X1), 8 Qwen-Image stills ($0.033, X4), each Wan2.2 A14B b-roll shot ~$0.10 (X4), music from the account's bed bank (~$0), script, copy and caption key words on Haiku ~$0.011, CPU render ~$0.002, plus cold starts |
 | Band (60–90 s, 6–8 stills or licensed art, voice, no music) | ~$0.09 | as a story without b-roll or music |
-| Avatar (presenter ~8 s plus b-roll) | ~$0.19–0.34 | ~8 s of talking head on H100 (~$0.10–0.15) plus the story costs |
+| Avatar (presenter ~8 s plus b-roll) | ~$0.32–0.47 | ~8 s of talking head on H100 plus delivery (~$0.23, X2) plus the story costs; blocked until a talking head passes (X2) |
 | AI-model carousel / reel | ~$0.03 / ~$0.15 | stills only / plus one Wan2.2 motion clip |
 | Dub | ~$0.08 (story), ~$0.33 (avatar) | new narration on unbatched Qwen (X1) |
 
