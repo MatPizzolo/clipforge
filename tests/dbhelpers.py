@@ -47,3 +47,29 @@ def seed(db: Database, *accounts: Account, sources: Iterable[Source] = ()) -> No
 
         for source in sources:
             SourcesRepo(db).create(source, "test", NOW)
+
+
+def insert_account(
+    db: Database, account_id: str, blueprint: str = "realtalk-clips", kind: str = "clips"
+) -> None:
+    """A minimal account row (no autopilot), for tables that only need the FK."""
+    from sqlalchemy import text
+
+    with db.begin() as conn:
+        conn.execute(text("insert into accounts (id, blueprint, blueprint_version, kind,"
+                          " language, niche, review_tier, monthly_budget_usd, platforms, brand,"
+                          " posting, created_at, updated_at) values (:id, :b, 1, :k, 'en',"
+                          " 'n', 'review', 0, '{}', '{}', '{}', now(), now())"),
+                     {"id": account_id, "b": blueprint, "k": kind})  # fmt: skip
+
+
+def insert_item(db: Database, item_id: str, account: str = "realtalk-clips-en") -> None:
+    """A minimal content_items row with the columns 0001 and 0002 require."""
+    from sqlalchemy import text
+
+    with db.begin() as conn:
+        conn.execute(text("insert into content_items (id, account_id, producer, producer_version,"
+                          " language, media_kind, image_paths, title, hook, score, credits,"
+                          " ai_disclosure, sponsored, cost_usd, queued_at) values (:id, :a,"
+                          " 'clips', 'v', 'en', 'video', '[]', 't', 'h', 0.9, '[]', false, false,"
+                          " 0, now())"), {"id": item_id, "a": account})  # fmt: skip

@@ -56,7 +56,7 @@ Decision: `service.py` (create/get/run job) is the single entry point. The CLI a
 Consequences: One fewer dependency and no local HTTP server. Interfaces stay thin because they still go through one service.
 
 ## ADR-8: Stage cache keys and storage layout
-Date: 2026-09-23 · Status: Accepted
+Date: 2026-09-23 · Status: Accepted; 2026-10-06 (log #564, card 028): `package.STAGE_VERSION` stays 1 although package now writes `versions.hook_rotation` and `clips[].hook_stamp` (additive metadata, keyed per job; a bump would move `producer_version` and open ADR-49's window); HK-2 adds `flag_on` to the package key
 Context: Stages must skip work when their output already exists for the same input (CLAUDE.md rule 1), and Phase 2 wants re-cuts to reuse transcripts and highlight scores across jobs.
 Decision:
 - Key = `sha256(stage name + explicit STAGE_VERSION + canonical JSON of the inputs + prompt/model versions)`, truncated to 16 hex characters (`hashing.cache_key`). The git SHA is recorded in `metadata.json` but is not part of the key, so unrelated commits don't invalidate caches.

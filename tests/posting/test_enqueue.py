@@ -132,3 +132,42 @@ def test_item_platforms_are_frozen_when_the_account_changes(tmp_path: Path, db: 
     assert rec.platforms == [Platform.TIKTOK, Platform.YOUTUBE]
     again = posting.repo.get(rec.item.id)
     assert again is not None and again.platforms == [Platform.TIKTOK, Platform.YOUTUBE]
+
+
+# ---- the hook stamp (ADR-50, HK-1: HOOK_VARIANTS off)
+
+
+def test_flag_off_stamps_the_control_with_the_jobs_weights() -> None:
+    from tests.hooks.builders import entry, rotation
+
+    rot = rotation(entry("hp_ctl", 1.0, control=True), entry("hp_a", 2.0))
+    facts = dataclasses.replace(_facts(), title="Highlight title")
+    [it] = items_for(_job(), [facts], T0, make_account(), BILLY_SOURCE, "clips:x", rotation=rot,
+                     flag_on=False)  # fmt: skip
+    assert it.hook_stamp is not None and it.title == "Highlight title"
+    assert it.hook_stamp.result.pattern_id == "hp_ctl" and it.hook_stamp.result.drawn is False
+    assert it.hook_stamp.result.text == "Highlight title"
+    assert it.hook_stamp.weights == {"hp_ctl@1": 1.0, "hp_a@1": 2.0}
+    assert it.hook_stamp.rotation_id == rot.id
+    assert it.hook == "h"  # highlights' spoken line is untouched
+
+
+def test_flag_off_ignores_a_drawn_result() -> None:
+    from clipforge.models import HookResult
+    from tests.hooks.builders import entry, rotation
+
+    rot = rotation(entry("hp_ctl", 1.0, control=True), entry("hp_a", 2.0))
+    drawn = HookResult(pattern_id="hp_a", version=1, variants=["Why?"], chosen=0, text="Why?",
+                       drawn=True)  # fmt: skip
+    facts = dataclasses.replace(_facts(), hook_result=drawn)
+    [off] = items_for(_job(), [facts], T0, make_account(), BILLY_SOURCE, "v", rotation=rot)
+    assert off.hook_stamp is not None and off.hook_stamp.result.pattern_id == "hp_ctl"
+    assert off.title == "t"
+    [on] = items_for(_job(), [facts], T0, make_account(), BILLY_SOURCE, "v", rotation=rot,
+                     flag_on=True)  # fmt: skip
+    assert on.hook_stamp is not None and on.hook_stamp.result == drawn and on.title == "Why?"
+
+
+def test_no_rotation_no_stamp() -> None:
+    [it] = items_for(_job(), [_facts()], T0, make_account(), BILLY_SOURCE, "v", rotation=None)
+    assert it.hook_stamp is None

@@ -131,6 +131,7 @@ class PipelineStages:
             srt_path=caps.srt_path,
             encoder=video.encoder,
             probe=video.probe,
+            hook=caps.hook,  # None with HOOK_VARIANTS off (ADR-50)
         )
         # `ref` is the render cache's result.json, which holds a RenderedVideo, not this
         # RenderedClip: clip_step writes its own <job>/clips/<clip>.rendered.json (CP3 #2).

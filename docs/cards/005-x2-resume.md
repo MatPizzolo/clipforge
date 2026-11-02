@@ -1,6 +1,6 @@
 # Card 005: X2 — talking-head spike, resume
 
-Status: proposed (only after the owner rules on O7, decision-log Open table)
+Status: sent 2026-10-06 (O7 ruled, log #153)
 Stream: X2 · Branch: `x2/talking-head` · Worktree: `../clipForge-x2`
 Decision-log range: #320–#339
 Model: most capable

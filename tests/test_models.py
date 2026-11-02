@@ -21,6 +21,10 @@ from clipforge.models import (
     CropSegment,
     CropTrack,
     HighlightsResult,
+    HookPatternData,
+    HookResult,
+    HookRotation,
+    HookStamp,
     Job,
     JobInput,
     JobMetadata,
@@ -36,6 +40,7 @@ from clipforge.models import (
     PostingSchedule,
     ProbeInfo,
     RenderedClip,
+    RotationEntry,
     Segment,
     Source,
     SourceMedia,
@@ -530,3 +535,67 @@ def test_brake_requires_on_flag() -> None:
     assert b.on is False
     with pytest.raises(ValidationError):
         Brake(scope="all", at=datetime(2026, 10, 2, tzinfo=UTC), actor="telegram:1")  # type: ignore[call-arg]
+
+
+# ---- hooks (ADR-50)
+
+HOOK_PATTERN = HookPatternData(
+    name="Open question",
+    structure="A question the clip answers",
+    examples={"en": "WHY DID HE WALK AWAY?"},
+    fits=["clips"],
+    max_words=8,
+)
+
+
+def test_rotation_id_is_order_independent_and_weight_sensitive() -> None:
+    a = RotationEntry(pattern_id="hp_aaaaaaaa", version=1, weight=1.0, data=HOOK_PATTERN)
+    b = RotationEntry(pattern_id="hp_bbbbbbbb", version=2, weight=1.0, data=HOOK_PATTERN)
+    r1 = HookRotation(account_id="realtalk-clips-en", entries=[a, b])
+    r2 = HookRotation(account_id="realtalk-clips-en", entries=[b, a])
+    r3 = HookRotation(
+        account_id="realtalk-clips-en", entries=[a, b.model_copy(update={"weight": 2.0})]
+    )
+    assert r1.id == r2.id and r1.id != r3.id and len(r1.id) == 16
+
+
+def test_pattern_fields_are_capped() -> None:
+    with pytest.raises(ValidationError):
+        HookPatternData(name="x" * 41, structure="s", fits=["clips"])
+    with pytest.raises(ValidationError):
+        HookPatternData(name="n", structure="s", fits=["clips"], max_words=11)
+    with pytest.raises(ValidationError):
+        HookPatternData(name="n", structure="s", fits=["clips"], examples={"en": "x" * 121})
+
+
+def test_old_records_still_validate() -> None:
+    # written before HK: no hooks / hook / hook_stamp keys
+    CaptionFiles.model_validate(
+        {
+            "clip_id": "clip_01",
+            "ass_path": "a",
+            "srt_path": "s",
+            "style": "default",
+            "offset_s": 1.0,
+        }
+    )
+    assert JobInput.model_validate({"source_path": "x.mp4", "permission": "own"}).hooks is None
+
+
+def test_control_is_not_part_of_the_versioned_body() -> None:
+    assert "control" not in HookPatternData.model_fields
+
+
+def test_stamp_round_trips() -> None:
+    result = HookResult(
+        pattern_id="hp_aaaaaaaa", version=1, variants=["A", "B"], chosen=1, text="B"
+    )
+    stamp = HookStamp(result=result, rotation_id="0123456789abcdef", weights={"hp_aaaaaaaa@1": 1.0})
+    assert HookStamp.model_validate_json(stamp.model_dump_json()) == stamp
+
+
+def test_job_input_carries_a_rotation_through_json() -> None:
+    entry = RotationEntry(pattern_id="hp_aaaaaaaa", version=1, weight=1.0, data=HOOK_PATTERN)
+    rotation = HookRotation(account_id="realtalk-clips-en", entries=[entry])
+    job_input = JobInput(source_path="x.mp4", permission=Permission.OWN, hooks=rotation)
+    assert JobInput.model_validate_json(job_input.model_dump_json()).hooks == rotation

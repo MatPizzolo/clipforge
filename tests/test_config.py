@@ -188,3 +188,7 @@ def test_s2_settings_defaults() -> None:
 def test_owner_zone_defaults_to_new_york() -> None:
     assert Settings(_env_file=None).owner_zone() == "America/New_York"
     assert Settings(_env_file=None, owner_timezone="UTC").owner_zone() == "UTC"
+
+
+def test_hook_variants_default_off() -> None:
+    assert Settings(_env_file=None).hook_variants is False

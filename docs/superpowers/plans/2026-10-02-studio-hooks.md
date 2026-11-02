@@ -1,5 +1,7 @@
 # Studio HK: the hook library, implementation plan
 
+**Status (2026-10-06):** HK-1 ships as two PRs (card 028, log #563). PR 1 (`hk/library-data`, Tasks 1–2: contracts, the setting, migration 0003, `hooks/freezer.py`) merged as #54. PR 2 (`hk/library`, Tasks 3–6) built on it; it merges after #54 is deployed. HK-2 and HK-3 not started.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build ADR-50's hook library in three deployable parts:
@@ -155,12 +157,12 @@ The five conditions the spec implies but no task's main tests exercise, most lik
   - `Settings.hook_variants: bool = False`
   - `Job.hooks_note: Literal["unavailable"] | None = None` and `Versions.hook_rotation: str | None = None` (Task 5 writes them)
 
-- [ ] **Step 1: Fix the stale `keywords_v1` comments** (the STATUS follow-up; the code loads `keywords_v2`):
+- [x] **Step 1: Fix the stale `keywords_v1` comments** (the STATUS follow-up; the code loads `keywords_v2`):
   - `src/clipforge/stages/captions.py`: the module docstring's "(prompts/keywords_v1.md, ADR-18)" becomes "(prompts/keywords_v2.md, ADR-18, ADR-20)"; `CaptionsDeps.prompt`'s comment "# prompts/keywords_v1.md" becomes "# prompts/keywords_v2.md (keywords_v3 with HOOK_VARIANTS)".
   - `src/clipforge/models.py`: `KeywordsReply`'s docstring becomes "Output of prompts/keywords_v2 (and v3): indices of the clip words to show in color."
   - `tests/stages/test_captions.py`: the section comment "# ---- key words chosen by the LLM (prompts/keywords_v1.md)" says `keywords_v2.md`.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 ```python
 # tests/test_models.py (add)
@@ -205,12 +207,12 @@ def test_hook_variants_default_off() -> None:
     assert Settings(_env_file=None).hook_variants is False
 ```
 
-- [ ] **Step 3: Run and see them fail**
+- [x] **Step 3: Run and see them fail**
 
 Run: `uv run pytest -q tests/test_models.py tests/test_config.py`
 Expected: FAIL (ImportError on the hook contracts).
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 Add the contracts from spec §1 to `models.py` (a `# ---- hooks (ADR-50)` section after the posting contracts, before `ContentItem` so it can reference them). `HookRotation.id`:
 
@@ -223,12 +225,12 @@ def id(self) -> str:
 
 `HookPatternData` validates each `examples` value at most 120 characters (a `field_validator`). Add the optional fields listed under Interfaces. Add `hook_variants: bool = False` to `Settings` with the comment `# HOOK_VARIANTS: clip title variants in captions (ADR-50); off keeps keywords_v2`.
 
-- [ ] **Step 5: Run and see them pass**
+- [x] **Step 5: Run and see them pass**
 
 Run: `uv run pytest -q tests/test_models.py tests/test_config.py tests/stages/test_captions.py`
 Expected: PASS.
 
-- [ ] **Step 6: Check and record**
+- [x] **Step 6: Check and record**
 
 Run `scripts/check.sh --python`, then note the task.
 
@@ -243,7 +245,7 @@ Run `scripts/check.sh --python`, then note the task.
 - Consumes: S2a's `ACTOR_CHECK` string (copy it from `alembic/versions/0002_s2.py` into this migration; migrations never import each other).
 - Produces: `tables.hook_patterns`, `hook_pattern_versions`, `hook_weights`, `hook_freezes`, `hook_ratings`, `hook_events`; `content_items` columns `hook_pattern_id`, `hook_version`, `hook_weights`, `hook_result`, `superseded_by`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/db/test_hooks_tables.py
@@ -322,12 +324,12 @@ def test_head_is_hooks(db) -> None:
 
 The existing `test_round_trip` and `test_tables_match_the_migrations` (empty autogenerate) cover the downgrade and `tables.py` matching the migration.
 
-- [ ] **Step 2: Run and see them fail**
+- [x] **Step 2: Run and see them fail**
 
 Run: `uv run pytest -q tests/db/test_hooks_tables.py tests/db/test_migrations.py`
 Expected: FAIL (relation "hook_patterns" does not exist).
 
-- [ ] **Step 3: Implement the migration**
+- [x] **Step 3: Implement the migration**
 
 ```python
 # alembic/versions/NNNN_hooks.py   (revision = "NNNN", down_revision = <main's head at landing>)
@@ -429,12 +431,12 @@ def downgrade() -> None:
 
 Mirror every table and column in `db/tables.py` (so the empty-autogenerate test passes), and set `EXPECTED_HEAD = "NNNN"`.
 
-- [ ] **Step 4: Run and see them pass**
+- [x] **Step 4: Run and see them pass**
 
 Run: `uv run pytest -q tests/db`
 Expected: PASS.
 
-- [ ] **Step 5: Check and record**
+- [x] **Step 5: Check and record**
 
 Run `scripts/check.sh --python`, then note the task.
 
@@ -454,7 +456,7 @@ Run `scripts/check.sh --python`, then note the task.
   - `control_entry(rotation: HookRotation | None) -> RotationEntry | None` (the entry whose `data.control` is true)
   - `weights_of(rotation: HookRotation) -> dict[str, float]` (`"<pattern_id>@<version>" -> weight`) and `control_stamp(rotation: HookRotation | None, title: str) -> HookStamp | None` (the flag-off stamp: the control entry's id and version, `text=title`, `drawn=False`, the rotation's weights; `None` without a rotation or a control), used by enqueue and package (Task 5)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/hooks/test_rotation.py
@@ -499,12 +501,12 @@ def test_control_entry() -> None:
 
 `tests/hooks/builders.py`: `entry(pid, weight, control=False, version=1) -> RotationEntry` (sets `RotationEntry.control`), `rotation(*entries) -> HookRotation` (account `realtalk-clips-en`), `pattern_pair(pid, status, fits, version=1, control=False) -> tuple[HookPattern, HookPatternVersion]`.
 
-- [ ] **Step 2: Run and see them fail**
+- [x] **Step 2: Run and see them fail**
 
 Run: `uv run pytest -q tests/hooks/test_rotation.py`
 Expected: FAIL (module missing).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # src/clipforge/hooks/rotation.py
@@ -547,12 +549,12 @@ def control_entry(rotation: HookRotation | None) -> RotationEntry | None:
     return next((e for e in rotation.entries if e.control), None)
 ```
 
-- [ ] **Step 4: Run and see them pass**
+- [x] **Step 4: Run and see them pass**
 
 Run: `uv run pytest -q tests/hooks/test_rotation.py`
 Expected: PASS.
 
-- [ ] **Step 5: Check and record**
+- [x] **Step 5: Check and record**
 
 Run `scripts/check.sh --python`, then note the task.
 
@@ -579,7 +581,7 @@ Run `scripts/check.sh --python`, then note the task.
   - `SqlHookFreezer(library: HookLibrary)` implementing `freeze(conn, account_id: str, experiment_id: int) -> None` and `release(conn, account_id: str, experiment_id: int) -> None`;
   - `hooks/seeds.py`: `CLIPS_SEEDS: list[tuple[bool, HookPatternData]]` (control flag, body) (spec §4.1's six) and `seed(library: HookLibrary, account_ids: list[str], now: datetime, *, running: Callable[[str], list[int]] = lambda a: [], freezer: SqlHookFreezer | None = None, dry_run: bool = False) -> dict[str, int]` (patterns written per account; `running(account_id)` returns the account's running experiment ids, through S3c's experiments repo when it's on `main`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/hooks/test_library.py
@@ -705,12 +707,12 @@ def test_seed_examples_fit_max_words_after_cleaning() -> None:
 
 Add the small helpers `approved(lib)`, `version_count`, `last_event`, `open_freeze_count` to `tests/hooks/helpers.py`, and `insert_account(db, id, blueprint=...)` to `tests/dbhelpers.py` if S2's helpers don't have it.
 
-- [ ] **Step 2: Run and see them fail**
+- [x] **Step 2: Run and see them fail**
 
 Run: `uv run pytest -q tests/hooks`
 Expected: FAIL (modules missing).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - `db/hooks.py`: plain SQLAlchemy Core functions taking a `Connection` (`insert_pattern`, `insert_version`, `set_status`, `set_scope`, `upsert_weight`, `insert_event`, `open_freeze_row`, `insert_freeze`, `close_freeze`, `patterns_for(account_id, blueprint)`), so `SqlHookFreezer` can run them on the caller's connection.
 - `HookLibrary` opens `self.db.begin()` per call, validates the actor with `check_actor`, and writes the change and its `hook_events` row in one transaction. Pattern ids: `"hp_" + secrets.token_hex(4)`; `share` raises `HookError` for a blueprint pattern or an account without a blueprint; `set_weight` requires `weight >= 0` and a non-blank reason; `approve` upserts the account's weight row (default 1.0); `retire` upserts it to 0.0 and writes `retired` and `weight` events.
@@ -718,12 +720,12 @@ Expected: FAIL (modules missing).
 - `SqlHookFreezer.freeze(conn, account_id, experiment_id)`: if the account has no `hook_weights` rows, return (no library, nothing to freeze); if an open row exists for this experiment, return; if one exists for another experiment, raise `HookError`; otherwise compute the live rotation **on `conn`** (`resolve` over `patterns_for` read through `conn`), insert it with `frozen_by="system:experiment"` and a `frozen` event with `{"experiment_id": …}`. `release` closes the open row for that experiment (no-op if none) and writes `released`.
 - `hooks/seeds.py`: the six patterns of spec §4.1 as `(control: bool, HookPatternData)` pairs (all `fits=["clips"]`, `max_words=8`, examples `en` and `es`; the control is created with `hook_patterns.control = true` and `structure="Ship the clip's own title unchanged"`; Number + stakes and Bold claim end with "Only numbers and claims said in the clip; no promises." / "Only claims said in the clip; no promises."). `create_draft` takes `control: bool = False`, set once on the pattern row. `seed()` skips accounts that already have any pattern, writes each pattern (status `approved`, version 1, weight 1.0, author `system:migration`, events `seeded`), then for each id in `running(account_id)` calls `freezer.freeze` on the same transaction.
 
-- [ ] **Step 4: Run and see them pass**
+- [x] **Step 4: Run and see them pass**
 
 Run: `uv run pytest -q tests/hooks tests/db`
 Expected: PASS.
 
-- [ ] **Step 5: Check and record**
+- [x] **Step 5: Check and record**
 
 Run `scripts/check.sh --python`, then note the task.
 
@@ -743,7 +745,7 @@ Run `scripts/check.sh --python`, then note the task.
   - `db/posting._item_row` writes `hook_pattern_id`, `hook_version`, `hook_weights`, `hook_result`; the reader fills `ContentItem.hook_stamp` and `superseded_by`;
   - `runtime.build_deps(..., db)` sets `Deps.hooks = HookLibrary(db)` when `db` is not None, and replaces S3c's no-op `HookFreezer` with `SqlHookFreezer(HookLibrary(db))` wherever S3c wires it.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_service.py (add)
@@ -799,12 +801,12 @@ def test_build_deps_wires_the_hook_library_only_with_a_database(settings) -> Non
 
 Use the existing fixtures of each test file (`tests/posting/builders.py`, `tests/pipeline/fakes.py`); add `seeded_account` (an account + source + `seed()`) to `tests/hooks/helpers.py`.
 
-- [ ] **Step 2: Run and see them fail**
+- [x] **Step 2: Run and see them fail**
 
 Run: `uv run pytest -q tests/test_service.py tests/posting/test_enqueue.py tests/db/test_posting_repo.py tests/test_runtime.py`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - `create_job`: set `Job.hooks_note` on failure (it's saved with the job); resolve the account through `deps.posting.source(channel.slug)` → `source.account_id` (in `dict` mode, `deps.posting.default_account_id`), then `job_input.model_copy(update={"hooks": rotation})` before building the `Job`. Wrap the lookup in `try/except Exception` with `log.warning("hook rotation unavailable for %s: %s", account_id, redact(exc))`. The job never fails over it.
 - `enqueue_job` gains `rotation` and `flag_on` parameters and passes them to `items_for`; `_enqueue_posts` passes `job.input.hooks` and `deps.hook_variants` (`build_deps` sets it from `settings.hook_variants`).
@@ -814,12 +816,12 @@ Expected: FAIL.
   - `_weights(rot) = {f"{e.pattern_id}@{e.version}": e.weight for e in rot.entries}`.
 - `db/posting._item_row` adds the four columns from `item.hook_stamp` (`hook_result` = `stamp.result` plus `rotation_id` and `frozen_by`); the reader rebuilds `HookStamp`.
 
-- [ ] **Step 4: Run and see them pass**
+- [x] **Step 4: Run and see them pass**
 
 Run: `uv run pytest -q tests`
 Expected: PASS.
 
-- [ ] **Step 5: Check and record**
+- [x] **Step 5: Check and record**
 
 Run `scripts/check.sh --python`, then note the task.
 
@@ -840,7 +842,7 @@ Run `scripts/check.sh --python`, then note the task.
   - `POST /admin/hooks/seed?dry_run=` `{account_ids?}` (default: every `clips` account) → `{written: {account: n}}`;
   - CLI: `clipforge hooks list <account>`, `show <pattern>`, `add <account> --name --structure --example LANG=TEXT … [--max-words]`, `edit <pattern> [--structure …] --note`, `approve <pattern> --account [--weight]`, `retire <pattern> --account`, `share <pattern>`, `weight <pattern> <w> --account --reason`, `seed [--account] [--dry-run]`, `stats <pattern>` (Task 10 fills it).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/api/test_hooks_api.py
@@ -882,21 +884,21 @@ def test_hooks_seed_dry_run(fake_api, capsys) -> None:
     assert "realtalk-clips-en: 6 patterns (dry run)" in capsys.readouterr().out
 ```
 
-- [ ] **Step 2: Run and see them fail**
+- [x] **Step 2: Run and see them fail**
 
 Run: `uv run pytest -q tests/api/test_hooks_api.py tests/test_cli.py -k hooks`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add the routes to S3's `cli_router` when it's on `main` (S3 plan Task 1), else in `create_app` next to S2's `/admin/*` routes (Global Constraints), in the `/accounts` routes' style (`database()`, `slug()` for account ids, a `pattern_id()` check with `re.fullmatch(r"hp_[0-9a-f]{8}", …)` → 404). Add the `hooks` subparser in `build_parser` and its dispatch in `main`, as `_add_source_parser` does; `ApiClient` gains `hooks_*` methods. Regenerate `web/openapi.json` with the existing export script and `npm --prefix web run gen`.
 
-- [ ] **Step 4: Run and see them pass**
+- [x] **Step 4: Run and see them pass**
 
 Run: `uv run pytest -q tests/api tests/test_cli.py`
 Expected: PASS.
 
-- [ ] **Step 5: Check and record — checkpoint HK-1**
+- [x] **Step 5: Check and record — checkpoint HK-1**
 
 1. Run the full `scripts/check.sh`.
 2. Ask `pr-reviewer` and `migration-reviewer` to review (and `pipeline-reviewer` for Task 5's enqueue change).

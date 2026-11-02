@@ -192,3 +192,16 @@ def test_build_deps_sets_the_derived_producer_version_and_the_build(tmp_path: Pa
     assert deps.build == "abc123"
     assert _deps(tmp_path, git_sha="").build is None
     assert _deps(tmp_path, git_sha=None).build is None
+
+
+def test_build_deps_wires_the_hook_library_only_with_a_database(tmp_path: Path) -> None:
+    from clipforge.db.engine import Database, make_engine
+    from clipforge.hooks.library import HookLibrary
+
+    deps = _deps(tmp_path)
+    assert deps.hooks is None and deps.hook_variants is False
+    db = Database(make_engine("postgresql://u:p@127.0.0.1:1/db"))  # never connected
+    with_db = build_deps(make_settings(tmp_path, hook_variants=True), kv=DictKV(FakeModalDict()),
+                         volume=NullVolume(), spawner=QueueSpawner(), stages=FakeStages(),
+                         sender=None, db=db)  # fmt: skip
+    assert isinstance(with_db.hooks, HookLibrary) and with_db.hook_variants is True
