@@ -18,7 +18,7 @@ Apps de los spikes (`clipforge-x1`, `-x2`, `-x2-dl`, `-x4`): ya no figuraban en 
 
 ## 2. Qué quedó guardado y dónde
 
-Carpeta `~/archivo/clipforge-2026-11-19/` en la Mac del dueño (permisos 700), 2.1 GB, checksums en `SHA256SUMS` (48 archivos). **Es la única copia** (sección 4).
+Carpeta `~/archivo/clipforge-2026-11-19/` en la Mac del dueño (permisos 700), 2.1 GB, checksums en `SHA256SUMS` (48 archivos). Segunda copia liviana en Google Drive desde el 2026-11-19 (sección 4).
 
 | Archivo | Contenido | Verificación |
 |---|---|---|
@@ -46,19 +46,37 @@ No se guardó (regenerable o perdido):
 | Volume `clipforge-jobs` (~2 GB de zips más `cache/`) | intacto | ídem |
 | Dict `clipforge-job-state` | intacto; sus entradas vencen a los 7 días sin uso | $0 |
 | Secret Modal `clipforge-secrets` | intacto; es la única copia de los valores y lo que permite redesplegar | $0 |
-| Neon, proyecto `fragrant-violet-23654229` | intacto; sin la app no recibe conexiones y escala a cero | $0 en Free. **Confirmar el plan en Neon → Billing**; si es Launch, borrarlo antes o bajarlo a Free |
+| Neon, proyecto `fragrant-violet-23654229` | intacto; sin la app no recibe conexiones y escala a cero | $0: plan Free (confirmado 2026-11-19, sección 4) |
 | Bot de Telegram | token vigente; el webhook apunta a la app detenida y no responde | $0 |
 | Repo `MatPizzolo/clipforge` | activo; Dependabot sigue abriendo PRs semanales | $0 |
 | Upload-Post, secretos de GitHub Actions | nunca existieron | $0 |
 
-## 4. Pendiente para cuando se retome
+## 4. Credenciales, segunda copia y borrados
 
-Decisiones ya tomadas (2026-11-19), sin ejecutar:
-1. **Segunda copia** de `~/archivo/clipforge-2026-11-19/` (disco externo o Google Drive, sin `neon.env`) **antes** de los borrados 3 y 4.
-2. Credenciales: revocar la clave de Anthropic de ClipForge (solo si no la comparte otro proyecto); revocar el token del bot en BotFather (`/revoke`, o `/deletebot` para liberar el nombre); borrar las 2 apps OAuth de GitHub del panel; borrar el usuario del proxy Decodo (su contraseña se expuso en un chat) y el token de HF si existe.
-3. **Neon: exportar y borrar.** El export está hecho (sección 2). Falta borrar el proyecto en la consola de Neon y después `neon.env`.
-4. **`clipforge-models`: bajar `refs/x1` y borrar todo.** `refs/x1` está bajado; falta `uv run modal volume delete clipforge-models`.
-5. A decidir: borrar también `clipforge-jobs` y el Dict (el archivo tiene lo que importa), archivar el repo (`gh repo archive MatPizzolo/clipforge`, reversible con `unarchive`; frena Dependabot) y, al final de todo, el secret `clipforge-secrets` y la app detenida.
+### Hecho (2026-11-19, tarde)
+
+| Cuándo (UTC) | Qué | Cómo | Verificación |
+|---|---|---|---|
+| ~17:05 | Credenciales guardadas en `clipforge-secrets` (Anthropic y proxy Decodo) | Prueba efímera con `modal run` (sin deploy) que monta el secret e imprime solo el código HTTP, nunca un valor | Anthropic `GET /v1/models` → **401**; proxy Decodo → **407**. Las dos ya no sirven |
+| ~17:10 | Proxy Decodo (la contraseña se expuso en un chat) | El trial terminó y el dueño cerró la cuenta entera | Dashboard sin usuarios ni cuenta (lo miró el dueño); 407 de arriba. Los docs de `jarvis-idea` que nombran Decodo no tienen credenciales (grep por `usuario:clave@`: 0) |
+| ~17:35 | Clave de Anthropic de ClipForge | El valor del secret ya da 401. La variable `ANTHROPIC_API_KEY` aparece en otros repos de code-dev (`clientes-estudio-abogacia`, `dilo-studio`, `shorts-*`, `old/…`), pero un grep de nombres no dice si comparten el valor; por eso se miró la consola | El dueño revisó console.anthropic.com → Settings → API Keys: no queda ninguna clave de ClipForge activa; 401 de arriba |
+| ~17:15 | Plan de Neon | Lo miró el dueño en Neon → Billing | **Free**: $0 mientras exista |
+| ~17:20 | **Segunda copia (liviana)** en Google Drive, carpeta `clipforge-copia-liviana` (subida por el dueño); copia local en `~/archivo/clipforge-copia-liviana/` (700) | 36 archivos, 407 MB, sin `neon.env`: dump y SQL de Neon, los 3 CSV, los 28 snapshots, `refs/x1` y el zip de la cola (`20260930-b8193698-5ea5`), con su propio `SHA256SUMS` | 36/36 OK contra el `SHA256SUMS` original, en el origen y en la copia local. En Drive: estructura completa y tamaños iguales a los locales (el conector no expone checksums); el dueño dio la subida por buena y decidió no bajarla para verificar los SHA256 en destino |
+
+Fuera de la copia, a propósito: los otros 9 `job.zip` (re-cortes viejos) y el episodio fuente en `uploads/` (274 MB; se le puede volver a pedir al creador). Quedan solo en `~/archivo/clipforge-2026-11-19/`.
+
+### Pendiente
+
+Bloqueado hasta que exista `jarvis-idea/investigacion/C1-contenido.md` (el estudio v2 saca de acá lo que necesita). Cada borrado se muestra y espera el OK del dueño, uno por uno:
+1. Neon: borrar el proyecto `fragrant-violet-23654229` en la consola y después `~/archivo/clipforge-2026-11-19/neon.env`.
+2. C1 confirma que no necesita los 9 job.zip viejos ni el episodio fuente; si los necesita, se copian a Drive antes de borrar clipforge-jobs.
+3. Volumes: `uv run modal volume delete clipforge-models` y `clipforge-jobs`.
+4. Dict `clipforge-job-state` (`uv run modal dict delete`).
+5. Token del bot de Telegram en BotFather (`/revoke`, o `/deletebot` para liberar el nombre) y las 2 apps OAuth de GitHub (Settings → Developer settings → OAuth Apps). Token de HF si existe.
+6. Secret `clipforge-secrets` (`uv run modal secret delete`) y la app detenida (si la CLI de Modal no tiene cómo borrarla, queda stopped a $0).
+7. Archivar el repo: `gh repo archive MatPizzolo/clipforge` (reversible con `unarchive`; frena Dependabot). Va último, porque después ya no se puede pushear este doc.
+
+Con el paso 6 hecho, la sección 5 (volver atrás) deja de valer: solo queda restaurar desde el archivo.
 
 ## 5. Cómo volver atrás
 
